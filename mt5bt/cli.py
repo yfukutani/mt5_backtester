@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import io
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Windowsのコンソールがcp932の場合、Unicode文字（✓等）を出力できないため
+# stdout/stderr を UTF-8 でラップする
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 import click
 from colorama import Fore, Style, init as colorama_init
 from tabulate import tabulate
 
 from .config import load_config, BacktestConfig, find_all_mt5_paths
-from .parser import parse_report, BacktestResult
+from .parser import parse_report, parse_tester_csv, BacktestResult
 from .reporter import generate_html_report, generate_csv_summary
 from .runner import MT5Runner
 from .visualizer import generate_charts
@@ -89,13 +98,16 @@ def run(
     runner = MT5Runner(cfg, xml_report)
     success = runner.run(timeout=timeout)
 
-    if not success or not xml_report.exists():
-        _error("バックテストが失敗したか、レポートが生成されませんでした")
-        _warn(f"MT5ターミナルのログを確認してください")
+    if not success:
+        _error("バックテストが失敗しました")
+        _warn("MT5ターミナルのログを確認してください")
         sys.exit(1)
 
     _ok("バックテスト完了")
-    _process_and_report(cfg, xml_report, report_dir, not no_charts, not no_html, not no_csv, open_report)
+
+    # OnTester()が書き出した結果CSVがあればそちらを使う
+    result_src = runner.result_csv_path if (runner.result_csv_path and runner.result_csv_path.exists()) else None
+    _process_and_report(cfg, result_src or xml_report, report_dir, not no_charts, not no_html, not no_csv, open_report)
 
 
 @cli.command()
@@ -292,7 +304,7 @@ def compare(report_files: tuple[str, ...]) -> None:
 
 def _process_and_report(
     cfg: BacktestConfig,
-    xml_report: Path,
+    source_path: Path,
     report_dir: Path,
     make_charts: bool,
     make_html: bool,
@@ -301,17 +313,21 @@ def _process_and_report(
     top_n: int = 20,
 ) -> None:
     """レポート解析・チャート生成・HTML出力をまとめて行う。"""
-    _info("レポートを解析中...")
+    _info(f"結果を解析中: {source_path.name}")
     try:
-        result = parse_report(xml_report)
-        result.expert = result.expert or cfg.expert
-        result.symbol = result.symbol or cfg.symbol
-        result.period = result.period or cfg.period
+        # OnTester CSVとXML/HTMLを自動判別
+        if source_path.suffix.lower() == ".csv":
+            result = parse_tester_csv(source_path)
+        else:
+            result = parse_report(source_path)
+        result.expert    = result.expert    or cfg.expert
+        result.symbol    = result.symbol    or cfg.symbol
+        result.period    = result.period    or cfg.period
         result.from_date = result.from_date or cfg.from_date
-        result.to_date = result.to_date or cfg.to_date
-        result.deposit = result.deposit or cfg.deposit
+        result.to_date   = result.to_date   or cfg.to_date
+        result.deposit   = result.deposit   or cfg.deposit
     except Exception as e:
-        _error(f"レポート解析エラー: {e}")
+        _error(f"結果解析エラー: {e}")
         return
 
     _print_summary(result)

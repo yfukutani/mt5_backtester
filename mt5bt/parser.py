@@ -63,6 +63,51 @@ class BacktestResult:
         return self.net_profit / self.max_dd_abs
 
 
+def parse_tester_csv(csv_path: Path) -> BacktestResult:
+    """OnTester()が書き出したCSV（key,value形式）を解析する。"""
+    result = BacktestResult()
+    mapping = {
+        "net_profit":      ("net_profit",      float),
+        "gross_profit":    ("gross_profit",     float),
+        "gross_loss":      ("gross_loss",       float),
+        "profit_factor":   ("profit_factor",    float),
+        "expected_payoff": ("expected_payoff",  float),
+        "sharpe_ratio":    ("sharpe_ratio",     float),
+        "max_dd_abs":      ("max_dd_abs",       float),
+        "max_dd_pct":      ("max_dd_pct",       float),
+        # recovery_factor は計算プロパティ（net_profit / max_dd_abs）なのでスキップ
+        "total_trades":    ("total_trades",     int),
+        "win_trades":      ("win_trades",       int),
+        "loss_trades":     ("loss_trades",      int),
+        "initial_deposit": ("deposit",          float),
+        "final_balance":   ("final_balance",    float),
+    }
+
+    for enc in ("utf-8", "utf-8-sig", "cp932", "latin-1"):
+        try:
+            text = csv_path.read_text(encoding=enc)
+            break
+        except (UnicodeDecodeError, ValueError):
+            text = ""
+
+    for line in text.splitlines():
+        parts = line.strip().split(",", 1)
+        if len(parts) != 2:
+            continue
+        key, val = parts[0].strip(), parts[1].strip()
+        if key in mapping:
+            attr, conv = mapping[key]
+            try:
+                setattr(result, attr, conv(val))
+            except (ValueError, TypeError):
+                pass
+
+    if result.total_trades > 0 and result.win_trades >= 0:
+        result.win_rate = result.win_trades / result.total_trades * 100
+
+    return result
+
+
 def parse_report(report_path: Path) -> BacktestResult:
     """MT5レポートファイルを解析する。XMLとHTMLの両方に対応。"""
     suffix = report_path.suffix.lower()
