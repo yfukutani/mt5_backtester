@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# 結果ファイル
+results/
+
+# テスト生成物
+tests/*.html
+tests/*.csv
+tests/charts/
+
+# 環境
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
