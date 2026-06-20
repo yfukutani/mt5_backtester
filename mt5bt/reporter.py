@@ -1,0 +1,245 @@
+"""HTMLレポートとCSVサマリーの生成。"""
+
+from __future__ import annotations
+
+import csv
+from datetime import datetime
+from pathlib import Path
+
+from jinja2 import Environment, BaseLoader
+
+from .parser import BacktestResult
+
+_TEMPLATE = """<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>MT5バックテストレポート - {{ result.expert }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+  .header { background: #1565C0; color: white; padding: 24px 32px; }
+  .header h1 { font-size: 24px; margin-bottom: 4px; }
+  .header .meta { font-size: 14px; opacity: 0.8; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 32px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
+  .card .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+  .card .value { font-size: 28px; font-weight: bold; margin-top: 4px; }
+  .card .value.positive { color: #2E7D32; }
+  .card .value.negative { color: #C62828; }
+  .section { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 2px 4px rgba(0,0,0,.08); margin-bottom: 24px; }
+  .section h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; border-bottom: 2px solid #E3F2FD; padding-bottom: 8px; color: #1565C0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  .stat-row .key { color: #555; }
+  .stat-row .val { font-weight: 600; }
+  .charts { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  .charts img { width: 100%; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #E3F2FD; color: #1565C0; padding: 10px 12px; text-align: left; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover td { background: #fafafa; }
+  .footer { text-align: center; padding: 24px; color: #aaa; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>MT5 バックテストレポート — {{ result.expert }}</h1>
+  <div class="meta">{{ result.symbol }} | {{ result.period }} | {{ result.from_date }} ～ {{ result.to_date }} | 生成: {{ generated_at }}</div>
+</div>
+<div class="container">
+
+  <!-- KPIカード -->
+  <div class="cards">
+    <div class="card">
+      <div class="label">純利益</div>
+      <div class="value {% if result.net_profit >= 0 %}positive{% else %}negative{% endif %}">
+        {{ "%.2f"|format(result.net_profit) }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">プロフィットファクター</div>
+      <div class="value {% if result.profit_factor >= 1.5 %}positive{% elif result.profit_factor >= 1.0 %}{% else %}negative{% endif %}">
+        {{ "%.2f"|format(result.profit_factor) }}
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">最大DD</div>
+      <div class="value negative">{{ "%.2f"|format(result.max_dd_pct) }}%</div>
+    </div>
+    <div class="card">
+      <div class="label">勝率</div>
+      <div class="value {% if result.win_rate >= 50 %}positive{% else %}negative{% endif %}">
+        {{ "%.1f"|format(result.win_rate) }}%
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">総取引数</div>
+      <div class="value">{{ result.total_trades }}</div>
+    </div>
+    <div class="card">
+      <div class="label">リカバリーファクター</div>
+      <div class="value {% if result.recovery_factor >= 3 %}positive{% elif result.recovery_factor >= 1 %}{% else %}negative{% endif %}">
+        {{ "%.2f"|format(result.recovery_factor) }}
+      </div>
+    </div>
+  </div>
+
+  <!-- 詳細統計 -->
+  <div class="section">
+    <h2>詳細統計</h2>
+    <div class="stats-grid">
+      <div>
+        {% for row in profit_stats %}
+        <div class="stat-row"><span class="key">{{ row[0] }}</span><span class="val">{{ row[1] }}</span></div>
+        {% endfor %}
+      </div>
+      <div>
+        {% for row in trade_stats %}
+        <div class="stat-row"><span class="key">{{ row[0] }}</span><span class="val">{{ row[1] }}</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- チャート -->
+  {% if chart_paths %}
+  <div class="section">
+    <h2>パフォーマンスチャート</h2>
+    <div class="charts">
+      {% for chart in chart_paths %}
+      <img src="{{ chart }}" alt="chart">
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 最適化結果 -->
+  {% if opt_table %}
+  <div class="section">
+    <h2>最適化結果（上位{{ opt_table|length }}件）</h2>
+    <table>
+      <tr>{% for col in opt_columns %}<th>{{ col }}</th>{% endfor %}</tr>
+      {% for row in opt_table %}
+      <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+<div class="footer">Generated by MT5 Backtester CLI | {{ generated_at }}</div>
+</body>
+</html>
+"""
+
+
+def generate_html_report(
+    result: BacktestResult,
+    output_path: Path,
+    chart_paths: list[Path] | None = None,
+) -> Path:
+    """HTML形式のレポートを生成する。"""
+    env = Environment(loader=BaseLoader())
+    tmpl = env.from_string(_TEMPLATE)
+
+    def fmt(v: float, decimals: int = 2) -> str:
+        return f"{v:,.{decimals}f}"
+
+    profit_stats = [
+        ("初期入金", fmt(result.deposit)),
+        ("最終残高", fmt(result.final_balance)),
+        ("純利益", fmt(result.net_profit)),
+        ("総利益", fmt(result.gross_profit)),
+        ("総損失", fmt(result.gross_loss)),
+        ("プロフィットファクター", fmt(result.profit_factor)),
+        ("期待損益", fmt(result.expected_payoff)),
+        ("シャープレシオ", fmt(result.sharpe_ratio)),
+        ("最大絶対DD", fmt(result.max_dd_abs)),
+        ("最大相対DD", f"{fmt(result.max_dd_pct)}%"),
+        ("リカバリーファクター", fmt(result.recovery_factor)),
+    ]
+
+    trade_stats = [
+        ("総取引数", str(result.total_trades)),
+        ("勝ちトレード", str(result.win_trades)),
+        ("負けトレード", str(result.loss_trades)),
+        ("勝率", f"{fmt(result.win_rate, 1)}%"),
+        ("平均利益", fmt(result.avg_profit)),
+        ("平均損失", fmt(result.avg_loss)),
+        ("最大連勝", str(result.max_consecutive_wins)),
+        ("最大連敗", str(result.max_consecutive_losses)),
+    ]
+
+    # 最適化結果（上位30件）
+    opt_table = []
+    opt_columns = []
+    if not result.optimization_results.empty:
+        df = result.optimization_results
+        opt_columns = list(df.columns)
+        # 最後の列（スコア列）で降順ソート
+        numeric_cols = df.select_dtypes(include="number").columns
+        if len(numeric_cols) > 0:
+            df = df.sort_values(by=numeric_cols[-1], ascending=False)
+        top = df.head(30)
+        opt_table = [
+            [f"{v:.4g}" if isinstance(v, float) else str(v) for v in row]
+            for row in top.values
+        ]
+
+    # チャートを相対パスに変換
+    rel_charts: list[str] = []
+    if chart_paths:
+        report_dir = output_path.parent
+        for cp in chart_paths:
+            try:
+                rel_charts.append(str(cp.relative_to(report_dir)).replace("\\", "/"))
+            except ValueError:
+                rel_charts.append(str(cp).replace("\\", "/"))
+
+    html = tmpl.render(
+        result=result,
+        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        profit_stats=profit_stats,
+        trade_stats=trade_stats,
+        chart_paths=rel_charts,
+        opt_table=opt_table,
+        opt_columns=opt_columns,
+    )
+
+    output_path.write_text(html, encoding="utf-8")
+    return output_path
+
+
+def generate_csv_summary(result: BacktestResult, output_path: Path) -> Path:
+    """CSV形式のサマリーを生成する。"""
+    rows = [
+        ["項目", "値"],
+        ["EA名", result.expert],
+        ["シンボル", result.symbol],
+        ["期間", result.period],
+        ["開始日", result.from_date],
+        ["終了日", result.to_date],
+        ["初期入金", result.deposit],
+        ["最終残高", result.final_balance],
+        ["純利益", result.net_profit],
+        ["総利益", result.gross_profit],
+        ["総損失", result.gross_loss],
+        ["プロフィットファクター", result.profit_factor],
+        ["期待損益", result.expected_payoff],
+        ["シャープレシオ", result.sharpe_ratio],
+        ["最大絶対DD", result.max_dd_abs],
+        ["最大相対DD%", result.max_dd_pct],
+        ["リカバリーファクター", result.recovery_factor],
+        ["総取引数", result.total_trades],
+        ["勝ちトレード数", result.win_trades],
+        ["負けトレード数", result.loss_trades],
+        ["勝率%", result.win_rate],
+    ]
+
+    with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerows(rows)
+
+    return output_path

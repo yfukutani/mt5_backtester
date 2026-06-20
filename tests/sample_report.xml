@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Report>
+  <summary>
+    <NetProfit>1523.45</NetProfit>
+    <GrossProfit>3210.80</GrossProfit>
+    <GrossLoss>-1687.35</GrossLoss>
+    <ProfitFactor>1.90</ProfitFactor>
+    <ExpectedPayoff>12.34</ExpectedPayoff>
+    <SharpeRatio>1.42</SharpeRatio>
+    <MaxDrawdown>421.30</MaxDrawdown>
+    <MaxDrawdownPercent>4.21</MaxDrawdownPercent>
+    <TotalTrades>123</TotalTrades>
+    <WinTrades>79</WinTrades>
+    <LossTrades>44</LossTrades>
+    <FinalBalance>11523.45</FinalBalance>
+  </summary>
+  <Deal time="2023.01.05 10:00" symbol="USDJPY" type="buy" volume="0.01" price="131.50" profit="0" balance="10000.00" comment="open"/>
+  <Deal time="2023.01.05 15:30" symbol="USDJPY" type="sell" volume="0.01" price="131.98" profit="48.00" balance="10048.00" comment="tp"/>
+  <Deal time="2023.01.06 09:15" symbol="USDJPY" type="buy" volume="0.01" price="132.10" profit="0" balance="10048.00" comment="open"/>
+  <Deal time="2023.01.06 14:00" symbol="USDJPY" type="sell" volume="0.01" price="131.80" profit="-30.00" balance="10018.00" comment="sl"/>
+  <Deal time="2023.01.09 10:30" symbol="USDJPY" type="buy" volume="0.01" price="131.60" profit="0" balance="10018.00" comment="open"/>
+  <Deal time="2023.01.09 16:45" symbol="USDJPY" type="sell" volume="0.01" price="132.20" profit="60.00" balance="10078.00" comment="tp"/>
+</Report>

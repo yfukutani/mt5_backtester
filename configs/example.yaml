@@ -1,0 +1,54 @@
+# ===================================================
+# MT5 バックテスト設定サンプル
+# ===================================================
+
+# MT5ターミナルのパス（省略時は自動検出）
+# mt5_path: "C:/Program Files/MetaTrader 5/terminal64.exe"
+
+# ---- EA設定 ----------------------------------------
+expert: "MACD Sample"          # EAファイル名（.ex5なし）
+symbol: "USDJPY"               # 通貨ペア
+period: "H1"                   # 時間足: M1/M5/M15/M30/H1/H4/D1/W1/MN1
+from_date: "2023.01.01"        # 開始日
+to_date:   "2024.12.31"        # 終了日
+
+# ---- 口座設定 ----------------------------------------
+deposit:  10000                # 初期入金
+currency: "USD"                # 通貨
+leverage: 100                  # レバレッジ
+
+# ---- テストモデル ----------------------------------------
+# every_tick        : 全ティック（最も精密、最も遅い）
+# control_points    : コントロールポイント
+# open_prices       : 始値のみ（最速）（推奨）
+# math_calculations : 数学計算
+# every_tick_real   : 実ティックデータ使用
+model: "open_prices"
+
+# ---- EAパラメータ（固定値）----------------------------
+parameters:
+  TakeProfit:  50
+  StopLoss:    30
+  LotSize:     0.01
+
+# ---- 最適化設定 ----------------------------------------
+optimize:
+  enabled:   false            # trueにすると最適化モードで実行
+  criterion: "profit_factor"  # 最適化基準:
+                              #   balance / balance_maxdd / profit_factor
+                              #   expected_payoff / drawdown_pct / sharpe / custom
+
+  # 最適化するパラメータの範囲（enabled: true の場合に有効）
+  parameters:
+    TakeProfit:
+      from: 30
+      to:   200
+      step: 10
+    StopLoss:
+      from: 10
+      to:   100
+      step: 10
+
+# ---- 出力設定 ----------------------------------------
+report_dir:  "results"        # 結果保存ディレクトリ
+report_name: ""               # 空白の場合は日時自動付与
