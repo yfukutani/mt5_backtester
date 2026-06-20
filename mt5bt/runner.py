@@ -78,7 +78,8 @@ class MT5Runner:
         if cfg.optimize_enabled and cfg.optimize_parameters:
             opt_mode = 1  # 遅い最適化（全結果）
 
-        ini = configparser.ConfigParser()
+        ini = configparser.RawConfigParser()
+        ini.optionxform = str  # キーの大文字小文字を保持（MT5は大文字キーを期待）
         ini["Tester"] = {
             "Expert": cfg.expert,
             "Symbol": cfg.symbol,
