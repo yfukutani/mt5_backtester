@@ -149,7 +149,7 @@ class MT5Runner:
                 # 文字列パラメータ: value のみ
                 lines.append(f"{name}={value}")
             elif isinstance(value, bool):
-                v = "true" if value else "false"
+                v = 1 if value else 0
                 lines.append(f"{name}={v}||{v}||0||1||N")
             elif isinstance(value, int):
                 lines.append(f"{name}={value}||{value}||{value}||{value}||N")
