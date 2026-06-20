@@ -1,0 +1,30 @@
+# RSI逆張りEA バックテスト設定（最良設定・固定）
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "RSI_Reversal"
+symbol:    "USDJPY"
+period:    "H1"
+from_date: "2024.01.01"
+to_date:   "2025.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  MA_Period:               200
+  RSI_Period:              14
+  RSI_OverboughtExtreme:   75.0
+  RSI_Overbought:          72.5
+  RSI_OversoldExtreme:     27.5
+  RSI_Oversold:            30.0
+  LotSize:                 0.01
+  StopLoss_Pips:           50
+  TakeProfit_Pips:         100
+  MagicNumber:             20260603
+  ResultFileName:          "rsi_reversal_result.csv"
+
+report_dir:  "results"
+report_name: "RSI_Reversal_USDJPY_H1_2024_2025_MA200_OB75_72_OS27_30"
