@@ -103,6 +103,14 @@ class MT5Runner:
             if self.mql5_files_dir:
                 self._result_csv_candidates.append(self.mql5_files_dir / str(result_file_name))
 
+        # 前回の結果CSVを削除（古い結果を誤読しないように）
+        for p in self._result_csv_candidates:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+
         # SETファイルはMT5の標準パス Profiles\Tester\ に書き込む
         set_path: Optional[Path] = None
         if self.mql5_files_dir:
