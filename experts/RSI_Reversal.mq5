@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
 //|  RSI_Reversal.mq5                                                |
-//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.2               |
+//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.3               |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "2.20"
+#property version   "2.30"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -35,6 +35,11 @@ input double LotSize         = 0.01;
 input int    StopLoss_Pips   = 50;
 input int    TakeProfit_Pips = 100;
 input int    MagicNumber     = 20260603;
+
+input group "=== 時間帯フィルター（GMT基準） ==="
+input bool UseTimeFilter   = false; // 時間帯フィルターを使用する
+input int  FilterStartHour = 8;     // エントリー許可開始時刻（GMT時）
+input int  FilterEndHour   = 20;    // エントリー許可終了時刻（GMT時）
 
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
@@ -69,7 +74,8 @@ int OnInit()
     }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(10);
-    Print("RSI_Reversal v2.2 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF");
+    Print("RSI_Reversal v2.3 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF",
+          " | TimeFilter=", UseTimeFilter ? StringFormat("ON(%d-%d GMT)", FilterStartHour, FilterEndHour) : "OFF");
     return INIT_SUCCEEDED;
 }
 
@@ -238,10 +244,19 @@ void OnTick()
             dp_sell = (close_prev <= neck_sell);
     }
 
+    // 時間帯フィルター（GMT基準）
+    bool in_time = true;
+    if(UseTimeFilter)
+    {
+        MqlDateTime gmt;
+        TimeGMT(gmt);
+        in_time = (gmt.hour >= FilterStartHour && gmt.hour < FilterEndHour);
+    }
+
     // 最終エントリー条件（RSI/BB はMA200フィルター付き、DPは単独）
     // RSI/BB/DoublePattern 全てMA200フィルター適用
-    bool entry_buy  = uptrend   && (rsi_buy  || bb_buy  || dp_buy);
-    bool entry_sell = downtrend && (rsi_sell || bb_sell || dp_sell);
+    bool entry_buy  = in_time && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
+    bool entry_sell = in_time && downtrend && (rsi_sell || bb_sell || dp_sell);
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);

@@ -1,5 +1,6 @@
 # RSI + BB 逆張りEA — EURUSD H1（固定設定）
-# EA v2.1: (RSIゾーン脱出) OR (BB2.5σ外→内回復) + MA200トレンドフィルター
+# EA v2.3: (RSIゾーン脱出) OR (BB2.5σ外→内回復) + MA200トレンドフィルター
+# 最適パラメータ: SL=45 / TP=105 (RR 1:2.33) — TPスイープ・SLスイープ検証済み
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "RSI_Reversal"
@@ -23,9 +24,16 @@ parameters:
   RSI_Overbought:          72.5
   RSI_OversoldExtreme:     27.5
   RSI_Oversold:            30.0
+  UseDoublePattern:        false
+  Swing_Lookback:          3
+  DP_Pattern_Bars:         60
+  DP_Tolerance_ATR:        0.5
+  UseTimeFilter:           false
+  FilterStartHour:         8
+  FilterEndHour:           20
   LotSize:                 0.01
-  StopLoss_Pips:           50
-  TakeProfit_Pips:         100
+  StopLoss_Pips:           45
+  TakeProfit_Pips:         105
   MagicNumber:             20260605
   ResultFileName:          "rsi_bb_eurusd_result.csv"
 
