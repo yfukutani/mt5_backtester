@@ -1,6 +1,7 @@
 # RSI + BB 逆張りEA — USDJPY H1（固定設定）
-# EA v2.3: (RSIゾーン脱出) OR (BB2.5σ外→内回復) + MA200トレンドフィルター
+# EA v2.5: (RSIゾーン脱出) OR (BB2.5σ外→内回復) + MA200トレンドフィルター
 # 最適パラメータ: SL=45 / TP=105 (RR 1:2.33) — TPスイープ・SLスイープ検証済み
+# v2.5追加パラメータ: UseATRStopLoss(OFF), UseADXFilter(OFF) — いずれも検証済みで効果なし
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "RSI_Reversal"
@@ -31,6 +32,12 @@ parameters:
   UseTimeFilter:           false
   FilterStartHour:         8
   FilterEndHour:           20
+  UseATRStopLoss:          false
+  ATR_SL_Multiplier:       1.5
+  ATR_RR_Ratio:            2.0
+  UseADXFilter:            false
+  ADX_Period:              14
+  ADX_Threshold:           25.0
   LotSize:                 0.01
   StopLoss_Pips:           45
   TakeProfit_Pips:         105

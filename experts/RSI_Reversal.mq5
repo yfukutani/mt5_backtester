@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
 //|  RSI_Reversal.mq5                                                |
-//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.3               |
+//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.5               |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "2.30"
+#property version   "2.50"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -36,6 +36,16 @@ input int    StopLoss_Pips   = 50;
 input int    TakeProfit_Pips = 100;
 input int    MagicNumber     = 20260603;
 
+input group "=== ATRベース動的SL/TP ==="
+input bool   UseATRStopLoss    = false; // ATRベースの動的SLを使用する（trueで固定SL/TPを無視）
+input double ATR_SL_Multiplier = 1.5;  // SL距離 = ATR × この倍率
+input double ATR_RR_Ratio      = 2.0;  // TP距離 = SL距離 × このRR比
+
+input group "=== ADXフィルター ==="
+input bool   UseADXFilter  = false; // ADXフィルターを使用する（強トレンド時エントリー禁止）
+input int    ADX_Period     = 14;   // ADX期間
+input double ADX_Threshold = 25.0;  // この値以上は強トレンドと判断してスキップ
+
 input group "=== 時間帯フィルター（GMT基準） ==="
 input bool UseTimeFilter   = false; // 時間帯フィルターを使用する
 input int  FilterStartHour = 8;     // エントリー許可開始時刻（GMT時）
@@ -50,6 +60,7 @@ int    rsi_handle;
 int    ma_handle;
 int    bb_handle;
 int    atr_handle;
+int    adx_handle;
 double pip_value;
 
 bool rsi_was_overbought = false;
@@ -65,16 +76,20 @@ int OnInit()
     ma_handle  = iMA(_Symbol, PERIOD_CURRENT, MA_Period, 0, MA_Method, PRICE_CLOSE);
     bb_handle  = iBands(_Symbol, PERIOD_CURRENT, BB_Period, 0, BB_Deviation, PRICE_CLOSE);
     atr_handle = iATR(_Symbol, PERIOD_CURRENT, 14);
+    adx_handle = iADX(_Symbol, PERIOD_CURRENT, ADX_Period);
 
     if(rsi_handle == INVALID_HANDLE || ma_handle == INVALID_HANDLE ||
-       bb_handle  == INVALID_HANDLE || atr_handle == INVALID_HANDLE)
+       bb_handle  == INVALID_HANDLE || atr_handle == INVALID_HANDLE ||
+       adx_handle == INVALID_HANDLE)
     {
         Print("インジケーターハンドルの作成に失敗しました");
         return INIT_FAILED;
     }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(10);
-    Print("RSI_Reversal v2.3 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF",
+    Print("RSI_Reversal v2.5 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF",
+          " | ATR-SL=", UseATRStopLoss ? StringFormat("ON(x%.1f RR%.1f)", ATR_SL_Multiplier, ATR_RR_Ratio) : "OFF",
+          " | ADX=", UseADXFilter ? StringFormat("ON(<%g)", ADX_Threshold) : "OFF",
           " | TimeFilter=", UseTimeFilter ? StringFormat("ON(%d-%d GMT)", FilterStartHour, FilterEndHour) : "OFF");
     return INIT_SUCCEEDED;
 }
@@ -86,6 +101,7 @@ void OnDeinit(const int reason)
     IndicatorRelease(ma_handle);
     IndicatorRelease(bb_handle);
     IndicatorRelease(atr_handle);
+    IndicatorRelease(adx_handle);
 }
 
 //+------------------------------------------------------------------+
@@ -244,6 +260,16 @@ void OnTick()
             dp_sell = (close_prev <= neck_sell);
     }
 
+    // ADXフィルター（強トレンド時はエントリー禁止）
+    bool adx_ok = true;
+    if(UseADXFilter)
+    {
+        double adx_buf[];
+        ArraySetAsSeries(adx_buf, true);
+        if(CopyBuffer(adx_handle, 0, 1, 1, adx_buf) < 1) return;
+        adx_ok = (adx_buf[0] < ADX_Threshold);
+    }
+
     // 時間帯フィルター（GMT基準）
     bool in_time = true;
     if(UseTimeFilter)
@@ -255,16 +281,25 @@ void OnTick()
 
     // 最終エントリー条件（RSI/BB はMA200フィルター付き、DPは単独）
     // RSI/BB/DoublePattern 全てMA200フィルター適用
-    bool entry_buy  = in_time && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
-    bool entry_sell = in_time && downtrend && (rsi_sell || bb_sell || dp_sell);
+    bool entry_buy  = adx_ok && in_time && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
+    bool entry_sell = adx_ok && in_time && downtrend && (rsi_sell || bb_sell || dp_sell);
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);
 
-    double ask     = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    double bid     = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    double sl_dist = StopLoss_Pips   * pip_value;
-    double tp_dist = TakeProfit_Pips * pip_value;
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double sl_dist, tp_dist;
+    if(UseATRStopLoss)
+    {
+        sl_dist = atr * ATR_SL_Multiplier;
+        tp_dist = sl_dist * ATR_RR_Ratio;
+    }
+    else
+    {
+        sl_dist = StopLoss_Pips   * pip_value;
+        tp_dist = TakeProfit_Pips * pip_value;
+    }
 
     // 買いエントリー
     if(entry_buy && !has_buy)
