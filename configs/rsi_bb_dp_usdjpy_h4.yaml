@@ -1,6 +1,7 @@
 # RSI + BB + ダブルパターン逆張りEA — USDJPY H4（固定設定）
-# EA v2.3: (RSIゾーン脱出) OR (BB2.5σ外→内回復) OR (ダブルトップ/ボトム) + MA200フィルター
+# EA v2.8: (RSIゾーン脱出) OR (BB2.5σ外→内回復) OR (ダブルトップ/ボトム) + MA200フィルター
 # 最適パラメータ: SL=50 / TP=110 (RR 1:2.2) — TPスイープ・SLスイープ検証済み
+# 検証済み・全OFFが最良: UseATRStopLoss / UseADXFilter / UseVolatilityFilter / UseBreakeven / UseTrailingStop
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "RSI_Reversal"
@@ -28,9 +29,22 @@ parameters:
   Swing_Lookback:          3
   DP_Pattern_Bars:         100
   DP_Tolerance_ATR:        0.5
+  UseTrailingStop:         false
+  Trail_Start_Pips:        30
+  Trail_Stop_Pips:         20
+  UseBreakeven:            false
+  BE_Trigger_Pips:         25
+  UseVolatilityFilter:     false
+  ATR_Min_Pips:            25.0
   UseTimeFilter:           false
   FilterStartHour:         8
   FilterEndHour:           20
+  UseATRStopLoss:          false
+  ATR_SL_Multiplier:       1.5
+  ATR_RR_Ratio:            2.0
+  UseADXFilter:            false
+  ADX_Period:              14
+  ADX_Threshold:           25.0
   LotSize:                 0.01
   StopLoss_Pips:           50
   TakeProfit_Pips:         110

@@ -1,0 +1,34 @@
+# 押し目買い/戻り売り トレンドフォローEA — USDJPY H1
+# PullbackTrend v1.0: MA200方向 + EMA20/50トレンド + EMA20押し目反発
+# 目標プロファイル: 勝率60% / RR1.5
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "PullbackTrend"
+symbol:    "USDJPY"
+period:    "H1"
+from_date: "2024.01.01"
+to_date:   "2025.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:          200
+  FastEMA_Period:          20
+  SlowEMA_Period:          50
+  RequireBullishCandle:    true
+  UseATRStops:             true
+  ATR_Period:              14
+  ATR_SL_Mult:             1.5
+  RR_Ratio:                1.5
+  StopLoss_Pips:           30
+  TakeProfit_Pips:         45
+  LotSize:                 0.01
+  MagicNumber:             20260622
+  ResultFileName:          "pullback_usdjpy_h1_result.csv"
+
+report_dir:  "results"
+report_name: "PullbackTrend_USDJPY_H1_2024_2025"

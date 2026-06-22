@@ -1,9 +1,9 @@
 //+------------------------------------------------------------------+
 //|  RSI_Reversal.mq5                                                |
-//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.3               |
+//|  RSI逆張り + BB2.5σ OR + ダブルトップ/ボトム v2.8               |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "2.30"
+#property version   "2.80"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -36,6 +36,29 @@ input int    StopLoss_Pips   = 50;
 input int    TakeProfit_Pips = 100;
 input int    MagicNumber     = 20260603;
 
+input group "=== トレーリングストップ ==="
+input bool UseTrailingStop   = false; // トレーリングストップを使用する
+input int  Trail_Start_Pips  = 25;   // この含み益（pips）に達したらトレーリング開始
+input int  Trail_Stop_Pips   = 15;   // 現在価格からのSL距離（pips）
+
+input group "=== ブレークイーブン（損益分岐点移動） ==="
+input bool UseBreakeven      = false; // ブレークイーブン移動を使用する
+input int  BE_Trigger_Pips   = 20;   // この含み益（pips）に達したらSLを建値に移動
+
+input group "=== ボラティリティフィルター（ATR下限） ==="
+input bool   UseVolatilityFilter = false; // ATR下限フィルターを使用する（低ボラ時エントリー禁止）
+input double ATR_Min_Pips        = 8.0;  // 最低ATR（pips単位）。これ未満はエントリーしない
+
+input group "=== ATRベース動的SL/TP ==="
+input bool   UseATRStopLoss    = false; // ATRベースの動的SLを使用する（trueで固定SL/TPを無視）
+input double ATR_SL_Multiplier = 1.5;  // SL距離 = ATR × この倍率
+input double ATR_RR_Ratio      = 2.0;  // TP距離 = SL距離 × このRR比
+
+input group "=== ADXフィルター ==="
+input bool   UseADXFilter  = false; // ADXフィルターを使用する（強トレンド時エントリー禁止）
+input int    ADX_Period     = 14;   // ADX期間
+input double ADX_Threshold = 25.0;  // この値以上は強トレンドと判断してスキップ
+
 input group "=== 時間帯フィルター（GMT基準） ==="
 input bool UseTimeFilter   = false; // 時間帯フィルターを使用する
 input int  FilterStartHour = 8;     // エントリー許可開始時刻（GMT時）
@@ -50,6 +73,7 @@ int    rsi_handle;
 int    ma_handle;
 int    bb_handle;
 int    atr_handle;
+int    adx_handle;
 double pip_value;
 
 bool rsi_was_overbought = false;
@@ -65,16 +89,23 @@ int OnInit()
     ma_handle  = iMA(_Symbol, PERIOD_CURRENT, MA_Period, 0, MA_Method, PRICE_CLOSE);
     bb_handle  = iBands(_Symbol, PERIOD_CURRENT, BB_Period, 0, BB_Deviation, PRICE_CLOSE);
     atr_handle = iATR(_Symbol, PERIOD_CURRENT, 14);
+    adx_handle = iADX(_Symbol, PERIOD_CURRENT, ADX_Period);
 
     if(rsi_handle == INVALID_HANDLE || ma_handle == INVALID_HANDLE ||
-       bb_handle  == INVALID_HANDLE || atr_handle == INVALID_HANDLE)
+       bb_handle  == INVALID_HANDLE || atr_handle == INVALID_HANDLE ||
+       adx_handle == INVALID_HANDLE)
     {
         Print("インジケーターハンドルの作成に失敗しました");
         return INIT_FAILED;
     }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(10);
-    Print("RSI_Reversal v2.3 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF",
+    Print("RSI_Reversal v2.8 起動 | DoublePattern=", UseDoublePattern ? "ON" : "OFF",
+          " | Trail=", UseTrailingStop ? StringFormat("ON(start=%d,stop=%d)", Trail_Start_Pips, Trail_Stop_Pips) : "OFF",
+          " | BE=", UseBreakeven ? StringFormat("ON(%dpips)", BE_Trigger_Pips) : "OFF",
+          " | VolFilter=", UseVolatilityFilter ? StringFormat("ON(ATR>=%gpips)", ATR_Min_Pips) : "OFF",
+          " | ATR-SL=", UseATRStopLoss ? StringFormat("ON(x%.1f RR%.1f)", ATR_SL_Multiplier, ATR_RR_Ratio) : "OFF",
+          " | ADX=", UseADXFilter ? StringFormat("ON(<%g)", ADX_Threshold) : "OFF",
           " | TimeFilter=", UseTimeFilter ? StringFormat("ON(%d-%d GMT)", FilterStartHour, FilterEndHour) : "OFF");
     return INIT_SUCCEEDED;
 }
@@ -86,6 +117,7 @@ void OnDeinit(const int reason)
     IndicatorRelease(ma_handle);
     IndicatorRelease(bb_handle);
     IndicatorRelease(atr_handle);
+    IndicatorRelease(adx_handle);
 }
 
 //+------------------------------------------------------------------+
@@ -183,6 +215,10 @@ void OnTick()
     if(current_bar_time == last_bar_time) return;
     last_bar_time = current_bar_time;
 
+    // トレーリングストップ・ブレークイーブンチェック（新しいバーごとに評価）
+    if(UseTrailingStop) CheckTrailingStop();
+    if(UseBreakeven)    CheckBreakeven();
+
     // インジケーター値（前確定足）
     double rsi_buf[], ma_buf[], bb_upper[], bb_lower[], atr_buf[];
     ArraySetAsSeries(rsi_buf,  true);
@@ -244,6 +280,16 @@ void OnTick()
             dp_sell = (close_prev <= neck_sell);
     }
 
+    // ADXフィルター（強トレンド時はエントリー禁止）
+    bool adx_ok = true;
+    if(UseADXFilter)
+    {
+        double adx_buf[];
+        ArraySetAsSeries(adx_buf, true);
+        if(CopyBuffer(adx_handle, 0, 1, 1, adx_buf) < 1) return;
+        adx_ok = (adx_buf[0] < ADX_Threshold);
+    }
+
     // 時間帯フィルター（GMT基準）
     bool in_time = true;
     if(UseTimeFilter)
@@ -253,18 +299,35 @@ void OnTick()
         in_time = (gmt.hour >= FilterStartHour && gmt.hour < FilterEndHour);
     }
 
+    // ボラティリティフィルター（ATR下限）
+    bool vol_ok = true;
+    if(UseVolatilityFilter)
+    {
+        double atr_pips = atr / pip_value;
+        vol_ok = (atr_pips >= ATR_Min_Pips);
+    }
+
     // 最終エントリー条件（RSI/BB はMA200フィルター付き、DPは単独）
     // RSI/BB/DoublePattern 全てMA200フィルター適用
-    bool entry_buy  = in_time && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
-    bool entry_sell = in_time && downtrend && (rsi_sell || bb_sell || dp_sell);
+    bool entry_buy  = adx_ok && in_time && vol_ok && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
+    bool entry_sell = adx_ok && in_time && vol_ok && downtrend && (rsi_sell || bb_sell || dp_sell);
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);
 
-    double ask     = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-    double bid     = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-    double sl_dist = StopLoss_Pips   * pip_value;
-    double tp_dist = TakeProfit_Pips * pip_value;
+    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+    double sl_dist, tp_dist;
+    if(UseATRStopLoss)
+    {
+        sl_dist = atr * ATR_SL_Multiplier;
+        tp_dist = sl_dist * ATR_RR_Ratio;
+    }
+    else
+    {
+        sl_dist = StopLoss_Pips   * pip_value;
+        tp_dist = TakeProfit_Pips * pip_value;
+    }
 
     // 買いエントリー
     if(entry_buy && !has_buy)
@@ -294,6 +357,81 @@ void OnTick()
                   " close=", close_prev, " neck=", DoubleToString(neck_sell, _Digits));
         if(rsi_sell) rsi_was_overbought = false;
         if(bb_sell)  price_above_bb     = false;
+    }
+}
+
+//+------------------------------------------------------------------+
+void CheckTrailingStop()
+{
+    double start_dist = Trail_Start_Pips * pip_value;
+    double stop_dist  = Trail_Stop_Pips  * pip_value;
+
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(PositionGetSymbol(i) != _Symbol) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+
+        double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+        double current_sl = PositionGetDouble(POSITION_SL);
+        double current_tp = PositionGetDouble(POSITION_TP);
+        ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+
+        if(pos_type == POSITION_TYPE_BUY)
+        {
+            double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+            if(bid - open_price < start_dist) continue; // 開始トリガー未達
+            double new_sl = NormalizeDouble(bid - stop_dist, _Digits);
+            if(new_sl > current_sl) // SLを引き上げる方向のみ
+                trade.PositionModify(ticket, new_sl, current_tp);
+        }
+        else if(pos_type == POSITION_TYPE_SELL)
+        {
+            double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+            if(open_price - ask < start_dist) continue; // 開始トリガー未達
+            double new_sl = NormalizeDouble(ask + stop_dist, _Digits);
+            if(current_sl == 0 || new_sl < current_sl) // SLを引き下げる方向のみ
+                trade.PositionModify(ticket, new_sl, current_tp);
+        }
+    }
+}
+
+//+------------------------------------------------------------------+
+void CheckBreakeven()
+{
+    double be_dist = BE_Trigger_Pips * pip_value;
+
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(PositionGetSymbol(i) != _Symbol) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+
+        double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+        double current_sl = PositionGetDouble(POSITION_SL);
+        double current_tp = PositionGetDouble(POSITION_TP);
+        ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+
+        if(pos_type == POSITION_TYPE_BUY)
+        {
+            if(current_sl >= open_price) continue; // すでにBE以上
+            double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+            if(bid - open_price >= be_dist)
+            {
+                double new_sl = NormalizeDouble(open_price, _Digits);
+                trade.PositionModify(ticket, new_sl, current_tp);
+            }
+        }
+        else if(pos_type == POSITION_TYPE_SELL)
+        {
+            if(current_sl > 0 && current_sl <= open_price) continue; // すでにBE以下
+            double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+            if(open_price - ask >= be_dist)
+            {
+                double new_sl = NormalizeDouble(open_price, _Digits);
+                trade.PositionModify(ticket, new_sl, current_tp);
+            }
+        }
     }
 }
 
