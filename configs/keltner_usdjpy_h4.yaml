@@ -1,0 +1,37 @@
+# ケルトナーチャネル・ブレイク トレンドフォローEA — USDJPY H4
+# KeltnerBreakout v1.0: EMA20±ATR×1.5 チャネルブレイク + MA200方向 + ADX>=22.5
+# 構成比較済み（過去5年 2021.06-2026.06）: +23,295円 / 勝率39.2% / PF1.23
+# 注: PullbackTrend(+43,341円/PF1.44)が上位。本EAは補助候補。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "KeltnerBreakout"
+symbol:    "USDJPY"
+period:    "H4"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  EMA_Period:              20
+  ATR_Period:              14
+  ChannelMult:             1.5
+  TrendMA_Period:          200
+  UseADXFilter:            true
+  ADX_Period:              14
+  ADX_Threshold:           22.5
+  UseATRStops:             true
+  ATR_SL_Mult:             2.0
+  RR_Ratio:                2.0
+  StopLoss_Pips:           40
+  TakeProfit_Pips:         80
+  LotSize:                 0.01
+  MagicNumber:             20260625
+  ResultFileName:          "keltner_usdjpy_h4_result.csv"
+
+report_dir:  "results"
+report_name: "KeltnerBreakout_USDJPY_H4"
