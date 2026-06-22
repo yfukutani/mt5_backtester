@@ -1,0 +1,40 @@
+# 押し目買い/戻り売り トレンドフォローEA — USDJPY H4（最適化済み最終構成）
+# PullbackTrend v1.1: MA200方向 + EMA20/50トレンド + EMA20押し目反発
+# 最適化結果（過去5年 2021.06-2026.06）: +43,341円 / 勝率44.2% / 実効RR1.81 / PF1.44
+# パラメータ最適化・年度別ロバスト性検証済み（RR2.0がRR3.0より安定）
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "PullbackTrend"
+symbol:    "USDJPY"
+period:    "H4"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:          200
+  FastEMA_Period:          20
+  SlowEMA_Period:          50
+  RequireBullishCandle:    true
+  UsePullbackQuality:      true
+  UseMomentumConfirm:      true
+  UseADXFilter:            true
+  ADX_Period:              14
+  ADX_Threshold:           22.5
+  UseATRStops:             true
+  ATR_Period:              14
+  ATR_SL_Mult:             2.0
+  RR_Ratio:                2.0
+  StopLoss_Pips:           30
+  TakeProfit_Pips:         45
+  LotSize:                 0.01
+  MagicNumber:             20260622
+  ResultFileName:          "pullback_usdjpy_h4_result.csv"
+
+report_dir:  "results"
+report_name: "PullbackTrend_USDJPY_H4_optimized"
