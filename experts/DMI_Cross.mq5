@@ -1,10 +1,11 @@
 //+------------------------------------------------------------------+
 //|  DMI_Cross.mq5                                                   |
-//|  ADX強トレンド + DIクロス 順張りEA v1.0                         |
+//|  ADX強トレンド + DIクロス 順張りEA v1.1                         |
 //|  +DI/-DIのクロスをトレンド方向に取る（戦略#15）                 |
+//|  v1.1: ADX傾き・DI乖離幅フィルターを追加                        |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -13,6 +14,11 @@
 input group "=== DMI/ADX設定 ==="
 input int    ADX_Period    = 14;    // ADX/DMI期間
 input double ADX_Threshold = 22.5;  // ADXがこの値以上の強トレンドのみ
+
+input group "=== クロス品質フィルター ==="
+input bool   UseADXSlope   = false; // ADX上昇中（トレンド加速）のクロスのみ（検証で取引激減のためOFF）
+input bool   UseDISpread   = false; // +DI/-DIの乖離が閾値以上のクロスのみ（検証で純利益減のためOFF）
+input double DI_Min_Spread = 3.0;   // クロス時に必要な+DI/-DI乖離幅
 
 input group "=== トレンドフィルター ==="
 input int            TrendMA_Period = 200;  // 大局トレンドMA（この方向のみエントリー）
@@ -61,7 +67,9 @@ int OnInit()
 
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(10);
-    Print("DMI_Cross v1.0 起動 | ADX=", ADX_Period, " 閾値=", DoubleToString(ADX_Threshold, 1),
+    Print("DMI_Cross v1.1 起動 | ADX=", ADX_Period, " 閾値=", DoubleToString(ADX_Threshold, 1),
+          " | ADX傾き=", UseADXSlope ? "ON" : "OFF",
+          " | DI乖離=", UseDISpread ? StringFormat("ON(>=%.1f)", DI_Min_Spread) : "OFF",
           " | MAフィルター=", UseMAFilter ? StringFormat("ON(%d)", TrendMA_Period) : "OFF",
           " | Stops=", UseATRStops ? StringFormat("ATR(x%.1f RR%.1f)", ATR_SL_Mult, RR_Ratio)
                                    : StringFormat("Fixed(SL%d TP%d)", StopLoss_Pips, TakeProfit_Pips));
@@ -99,6 +107,7 @@ void OnTick()
     if(CopyBuffer(trendma_handle, 0, 1, 1, trendma_buf) < 1) return;
 
     double adx        = adx_buf[0];      // shift=1
+    double adx_prev2  = adx_buf[1];      // ADX shift=2（傾き判定用）
     double plus_prev  = plus_buf[0];     // +DI shift=1
     double minus_prev = minus_buf[0];    // -DI shift=1
     double plus_prev2 = plus_buf[1];     // +DI shift=2
@@ -119,8 +128,15 @@ void OnTick()
     bool uptrend   = !UseMAFilter || (close_prev > trendma);
     bool downtrend = !UseMAFilter || (close_prev < trendma);
 
-    bool entry_buy  = cross_up   && strong && uptrend;
-    bool entry_sell = cross_down && strong && downtrend;
+    // ADX傾きフィルター（トレンド加速中のクロスのみ）
+    bool adx_rising = !UseADXSlope || (adx > adx_prev2);
+
+    // DI乖離幅フィルター（拮抗した弱いクロスを除外）
+    bool spread_buy  = !UseDISpread || ((plus_prev  - minus_prev) >= DI_Min_Spread);
+    bool spread_sell = !UseDISpread || ((minus_prev - plus_prev)  >= DI_Min_Spread);
+
+    bool entry_buy  = cross_up   && strong && uptrend   && adx_rising && spread_buy;
+    bool entry_sell = cross_down && strong && downtrend && adx_rising && spread_sell;
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);

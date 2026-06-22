@@ -1,10 +1,11 @@
 //+------------------------------------------------------------------+
 //|  PullbackTrend.mq5                                               |
-//|  押し目買い / 戻り売り トレンドフォローEA v1.1                  |
+//|  押し目買い / 戻り売り トレンドフォローEA v1.2                  |
 //|  目標プロファイル: 勝率60% / RR1.5                              |
+//|  v1.2: MA200傾きによる環境フィルター（強トレンド限定）を追加    |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -25,6 +26,11 @@ input group "=== トレンド強度フィルター（ADX） ==="
 input bool   UseADXFilter  = true;  // ADXによる強トレンドフィルターを使用する
 input int    ADX_Period    = 14;
 input double ADX_Threshold = 25.0;  // ADXがこの値以上の強トレンドのみエントリー
+
+input group "=== 環境フィルター（MA200傾き） ==="
+input bool   UseTrendStrength  = false; // MA200の傾きで強トレンド環境のみに限定する
+input int    MA_Slope_Lookback = 20;    // MA200の傾きを測るバー数
+input double MA_Slope_Min_ATR  = 0.5;   // この傾き（lookback本でATR×係数）以上で強トレンドと判断
 
 input group "=== ストップ（ATRベース） ==="
 input bool   UseATRStops    = true;  // ATRベースのSL/TPを使用する
@@ -111,7 +117,8 @@ void OnTick()
     ArraySetAsSeries(slowema_buf, true);
     ArraySetAsSeries(atr_buf,     true);
 
-    if(CopyBuffer(trendma_handle, 0, 1, 1, trendma_buf) < 1) return;
+    int trendma_need = UseTrendStrength ? (MA_Slope_Lookback + 2) : 1;
+    if(CopyBuffer(trendma_handle, 0, 1, trendma_need, trendma_buf) < trendma_need) return;
     if(CopyBuffer(fastema_handle, 0, 1, 1, fastema_buf) < 1) return;
     if(CopyBuffer(slowema_handle, 0, 1, 1, slowema_buf) < 1) return;
     if(CopyBuffer(atr_handle,     0, 1, 1, atr_buf)     < 1) return;
@@ -120,6 +127,16 @@ void OnTick()
     double fastema = fastema_buf[0];
     double slowema = slowema_buf[0];
     double atr     = atr_buf[0];
+
+    // 環境フィルター: MA200の傾き（lookback本での変化量）をATRで正規化
+    bool env_up = true, env_down = true;
+    if(UseTrendStrength)
+    {
+        double ma_slope = trendma - trendma_buf[MA_Slope_Lookback];
+        double thresh   = MA_Slope_Min_ATR * atr;
+        env_up   = (ma_slope >=  thresh);  // MA200が明確に上昇 → 買い許可
+        env_down = (ma_slope <= -thresh);  // MA200が明確に下降 → 売り許可
+    }
 
     double close_prev = iClose(_Symbol, PERIOD_CURRENT, 1);
     double open_prev  = iOpen(_Symbol,  PERIOD_CURRENT, 1);
@@ -167,8 +184,8 @@ void OnTick()
         adx_ok = (adx_buf[0] >= ADX_Threshold);
     }
 
-    bool entry_buy  = armed_buy  && uptrend   && (close_prev > fastema) && bullish && momentum_buy  && adx_ok;
-    bool entry_sell = armed_sell && downtrend && (close_prev < fastema) && bearish && momentum_sell && adx_ok;
+    bool entry_buy  = armed_buy  && uptrend   && (close_prev > fastema) && bullish && momentum_buy  && adx_ok && env_up;
+    bool entry_sell = armed_sell && downtrend && (close_prev < fastema) && bearish && momentum_sell && adx_ok && env_down;
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);
