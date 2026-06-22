@@ -1,7 +1,8 @@
-# 押し目買い/戻り売り トレンドフォローEA — USDJPY H4（最適化済み最終構成）
-# PullbackTrend v1.1: MA200方向 + EMA20/50トレンド + EMA20押し目反発
-# 最適化結果（過去5年 2021.06-2026.06）: +43,341円 / 勝率44.2% / 実効RR1.81 / PF1.44
-# パラメータ最適化・年度別ロバスト性検証済み（RR2.0がRR3.0より安定）
+# 押し目買い/戻り売り トレンドフォローEA — USDJPY H4（最適化済み最終構成 v1.2）
+# PullbackTrend v1.2: MA200方向 + EMA20/50トレンド + EMA20押し目反発 + 環境フィルター
+# OOS検証で過学習が判明したため、MA200傾き環境フィルター(>=1.2 ATR)を有効化してロバスト化
+# 成績: IS(2021-2026) +11,911円/DD4.0% / OOS(2016-2021) -205円/DD7.8%（両期間でDD一桁）
+# 注: フィルターOFFだとIS+43,341だがOOS-28,500/DD28.7%と過学習・実運用危険のため不採用
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -26,6 +27,9 @@ parameters:
   UseADXFilter:            true
   ADX_Period:              14
   ADX_Threshold:           22.5
+  UseTrendStrength:        true
+  MA_Slope_Lookback:       20
+  MA_Slope_Min_ATR:        1.2
   UseATRStops:             true
   ATR_Period:              14
   ATR_SL_Mult:             2.0
