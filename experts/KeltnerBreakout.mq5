@@ -1,10 +1,11 @@
 //+------------------------------------------------------------------+
 //|  KeltnerBreakout.mq5                                             |
-//|  ケルトナーチャネル・ブレイク トレンドフォローEA v1.0          |
+//|  ケルトナーチャネル・ブレイク トレンドフォローEA v1.1          |
 //|  EMA±ATR チャネルのブレイクで順張り（戦略#11）                  |
+//|  v1.1: ブレイク&リテストエントリーを追加                        |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -14,6 +15,10 @@ input group "=== ケルトナーチャネル ==="
 input int    EMA_Period     = 20;   // チャネル中心のEMA期間
 input int    ATR_Period     = 14;   // チャネル幅のATR期間
 input double ChannelMult    = 2.0;  // チャネル幅 = ATR × この倍率
+
+input group "=== ブレイク&リテスト ==="
+input bool UseRetest           = false; // ブレイク後、境界へのリテスト反発を待ってエントリー（検証で逆効果のためデフォルトOFF）
+input int  Retest_Timeout_Bars = 10;    // ブレイクからこのバー数以内にリテストがなければ無効化
 
 input group "=== トレンドフィルター ==="
 input int            TrendMA_Period = 200;  // 大局トレンドMA（この方向のみエントリー）
@@ -46,6 +51,9 @@ int    trendma_handle;
 int    adx_handle;
 double pip_value;
 
+bool armed_long = false, armed_short = false; // ブレイク検出後のリテスト待ち状態
+int  arm_count_long = 0, arm_count_short = 0; // ブレイクからの経過バー数
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
@@ -65,8 +73,9 @@ int OnInit()
 
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(10);
-    Print("KeltnerBreakout v1.0 起動 | EMA=", EMA_Period, " ATR=", ATR_Period,
+    Print("KeltnerBreakout v1.1 起動 | EMA=", EMA_Period, " ATR=", ATR_Period,
           " ChMult=", DoubleToString(ChannelMult, 1), " TrendMA=", TrendMA_Period,
+          " | Retest=", UseRetest ? StringFormat("ON(timeout=%d)", Retest_Timeout_Bars) : "OFF",
           " | ADX=", UseADXFilter ? StringFormat("ON(>=%.1f)", ADX_Threshold) : "OFF",
           " | Stops=", UseATRStops ? StringFormat("ATR(x%.1f RR%.1f)", ATR_SL_Mult, RR_Ratio)
                                    : StringFormat("Fixed(SL%d TP%d)", StopLoss_Pips, TakeProfit_Pips));
@@ -108,6 +117,8 @@ void OnTick()
 
     double close_prev  = iClose(_Symbol, PERIOD_CURRENT, 1);
     double close_prev2 = iClose(_Symbol, PERIOD_CURRENT, 2);
+    double low_prev    = iLow(_Symbol,   PERIOD_CURRENT, 1);
+    double high_prev   = iHigh(_Symbol,  PERIOD_CURRENT, 1);
 
     // ケルトナーチャネル境界
     double upper_prev  = ema_prev  + atr_prev  * ChannelMult;
@@ -133,8 +144,29 @@ void OnTick()
         adx_ok = (adx_buf[0] >= ADX_Threshold);
     }
 
-    bool entry_buy  = uptrend   && break_up   && adx_ok;
-    bool entry_sell = downtrend && break_down && adx_ok;
+    bool entry_buy = false, entry_sell = false;
+    if(UseRetest)
+    {
+        // ブレイクでアーム（方向確定、リテスト待ち）
+        if(break_up   && uptrend   && adx_ok) { armed_long = true;  arm_count_long = 0;  armed_short = false; }
+        if(break_down && downtrend && adx_ok) { armed_short = true; arm_count_short = 0; armed_long = false; }
+
+        // 経過カウント・タイムアウト・トレンド崩れで解除
+        if(armed_long)  arm_count_long++;
+        if(armed_short) arm_count_short++;
+        if(arm_count_long  > Retest_Timeout_Bars || !uptrend)   armed_long  = false;
+        if(arm_count_short > Retest_Timeout_Bars || !downtrend) armed_short = false;
+
+        // リテスト: ブレイク足の次足以降、境界へ戻り（タッチ）→終値が境界の外で引け直す（反発）
+        entry_buy  = armed_long  && arm_count_long  >= 1 && (low_prev  <= upper_prev) && (close_prev > upper_prev) && adx_ok;
+        entry_sell = armed_short && arm_count_short >= 1 && (high_prev >= lower_prev) && (close_prev < lower_prev) && adx_ok;
+    }
+    else
+    {
+        // v1.0互換: ブレイク即エントリー
+        entry_buy  = uptrend   && break_up   && adx_ok;
+        entry_sell = downtrend && break_down && adx_ok;
+    }
 
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);
@@ -163,6 +195,7 @@ void OnTick()
         if(trade.Buy(LotSize, _Symbol, ask, sl, tp, "KeltnerBuy"))
             Print("[BUY] close=", close_prev, " upper=", DoubleToString(upper_prev, _Digits),
                   " atr=", DoubleToString(atr_prev, _Digits));
+        armed_long = false;
     }
 
     // 売りエントリー
@@ -174,6 +207,7 @@ void OnTick()
         if(trade.Sell(LotSize, _Symbol, bid, sl, tp, "KeltnerSell"))
             Print("[SELL] close=", close_prev, " lower=", DoubleToString(lower_prev, _Digits),
                   " atr=", DoubleToString(atr_prev, _Digits));
+        armed_short = false;
     }
 }
 
