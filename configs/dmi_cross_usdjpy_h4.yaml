@@ -1,0 +1,35 @@
+# ADX強トレンド + DIクロス 順張りEA — USDJPY H4
+# DMI_Cross v1.0: +DI/-DIクロス + ADX>=25 + MA200方向
+# 構成比較済み（過去5年 2021.06-2026.06）: +13,667円 / 勝率37.9% / PF1.16
+# 注: 3戦略中最弱。PullbackTrend(+43,341)・Keltner(+23,295)が上位。記録用。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "DMI_Cross"
+symbol:    "USDJPY"
+period:    "H4"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  ADX_Period:              14
+  ADX_Threshold:           25.0
+  TrendMA_Period:          200
+  UseMAFilter:             true
+  UseATRStops:             true
+  ATR_Period:              14
+  ATR_SL_Mult:             2.0
+  RR_Ratio:                2.0
+  StopLoss_Pips:           40
+  TakeProfit_Pips:         80
+  LotSize:                 0.01
+  MagicNumber:             20260626
+  ResultFileName:          "dmi_cross_usdjpy_h4_result.csv"
+
+report_dir:  "results"
+report_name: "DMI_Cross_USDJPY_H4"
