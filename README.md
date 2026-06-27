@@ -58,6 +58,7 @@ mt5bt list-results
 | `mt5bt report <xml/csv>` | 既存のレポートからHTML/CSV/チャートを再生成 | `--open` `--no-charts` |
 | `mt5bt list-results` | 保存済み結果を一覧表示（PF・DD・勝率など） | `--dir`（結果ディレクトリ） |
 | `mt5bt compare <xml...>` | 複数のバックテスト結果を比較表示 | — |
+| `mt5bt portfolio <config...>` | 複数EAを実行し合算エクイティから真のポートフォリオDDを算出 | `--timeout` |
 | `mt5bt list-terminals` | インストール済みMT5ターミナルを検出 | — |
 
 ```bash
@@ -66,7 +67,12 @@ mt5bt run configs/rsi_bb_reversal.yaml --timeout 7200 --open
 mt5bt optimize configs/example.yaml --top 30
 mt5bt report results/MyEA/report.xml --open
 mt5bt compare results/run1/report.xml results/run2/report.xml
+mt5bt portfolio configs/pullback_usdjpy_h4.yaml configs/pullback_gbpjpy_h4.yaml configs/pairtrade_eurusd_gbpusd.yaml
 ```
+
+> `portfolio` は各EAの全dealの損益を時系列で合算し、ポートフォリオ全体の最大ドローダウン・
+> 純利益・分散効果（単独DD合計との差）を算出する。各EAは自前の配分資金を持つ独立サブ口座として扱う。
+> EA側に取引明細を書き出す`EquityLogFile`入力が必要（同梱EAは対応済み）。
 
 ---
 

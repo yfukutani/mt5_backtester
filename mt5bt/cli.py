@@ -302,6 +302,123 @@ def compare(report_files: tuple[str, ...]) -> None:
     click.echo(tabulate(rows, headers=headers, tablefmt="rounded_outline"))
 
 
+@cli.command("portfolio")
+@click.argument("config_files", nargs=-1, type=click.Path(exists=True), required=True)
+@click.option("--timeout", default=1800, show_default=True, help="各バックテストのタイムアウト秒数")
+def portfolio(config_files: tuple[str, ...], timeout: int) -> None:
+    """複数EA configを実行し、合算エクイティカーブから真のポートフォリオDDを算出する。
+
+    各EAの全dealの損益を時系列で合算し、ポートフォリオ全体の最大ドローダウン・
+    純利益を計算する。各EAは自前の配分資金（deposit）を持つ独立サブ口座として扱い、
+    合計資金に対するDDを出す。低相関なEAほどポートフォリオDDが単独DDの和より小さくなる。
+
+    \b
+    例:
+      mt5bt portfolio configs/pullback_usdjpy_h4.yaml configs/pullback_gbpjpy_h4.yaml \\
+                      configs/pairtrade_eurusd_gbpusd.yaml
+    """
+    import pandas as pd
+
+    def _curve_dd(deposit: float, df: "pd.DataFrame") -> tuple[float, float]:
+        s = df.sort_values("time")["profit"].cumsum() + deposit
+        eq = pd.concat([pd.Series([deposit]), s], ignore_index=True)
+        rm = eq.cummax()
+        d = rm - eq
+        return float(d.max()), float((d / rm).max() * 100)
+
+    legs: list[tuple[str, float, "pd.DataFrame"]] = []
+    total_deposit = 0.0
+
+    for i, cf in enumerate(config_files):
+        try:
+            cfg = load_config(cf)
+        except Exception as e:
+            _error(f"設定読み込みエラー {cf}: {e}")
+            sys.exit(1)
+
+        eq_name = f"pf_eq_{i}.csv"
+        cfg.parameters["EquityLogFile"] = eq_name
+        name = cfg.report_name or f"{cfg.expert}_{cfg.symbol}_{i}"
+        _info(f"[{i + 1}/{len(config_files)}] {name} を実行中...")
+
+        report_dir = Path(cfg.report_dir) / f"_portfolio_{i}"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        runner = MT5Runner(cfg, report_dir / "report.xml")
+
+        eq_candidates = [d / eq_name for d in runner._tester_files_dirs]
+        if runner.mql5_files_dir:
+            eq_candidates.append(runner.mql5_files_dir / eq_name)
+        for p in eq_candidates:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+
+        if not runner.run(timeout=timeout):
+            _error(f"{name} のバックテストが失敗しました")
+            sys.exit(1)
+
+        eq_path = next((p for p in eq_candidates if p.exists() and p.stat().st_size > 0), None)
+        if eq_path is None:
+            _error(f"{name} のエクイティログが見つかりません。EAが最新版（EquityLogFile対応）か確認してください。")
+            sys.exit(1)
+
+        df = pd.read_csv(eq_path)
+        df.columns = [c.strip().lower() for c in df.columns]
+        df["time"] = pd.to_numeric(df["time"], errors="coerce")
+        df["profit"] = pd.to_numeric(df["profit"], errors="coerce")
+        df = df.dropna(subset=["time", "profit"])
+        legs.append((name, cfg.deposit, df))
+        total_deposit += cfg.deposit
+        _ok(f"{name}: {len(df)} deals / 純利益 {df['profit'].sum():,.0f}")
+
+    if not legs:
+        _error("有効なEAがありません")
+        sys.exit(1)
+
+    # 合算エクイティカーブ（全dealを時系列でプール）
+    all_deals = pd.concat([leg[2][["time", "profit"]] for leg in legs], ignore_index=True)
+    all_deals = all_deals.sort_values("time").reset_index(drop=True)
+    equity = pd.concat([pd.Series([total_deposit]),
+                        total_deposit + all_deals["profit"].cumsum()], ignore_index=True)
+    running_max = equity.cummax()
+    dd_series = running_max - equity
+    max_dd_abs = float(dd_series.max())
+    max_dd_pct = float((dd_series / running_max).max() * 100)
+    net = float(all_deals["profit"].sum())
+
+    # 各EA単独のDD（分散効果の比較用）
+    single_dds = [_curve_dd(dep, df)[0] for (_, dep, df) in legs]
+    sum_single_dd = sum(single_dds)
+
+    click.echo("")
+    click.echo(Fore.CYAN + Style.BRIGHT + "━━━━━━ ポートフォリオ合算結果 ━━━━━━" + Style.RESET_ALL)
+    leg_rows = []
+    for (n, dep, df), sdd in zip(legs, single_dds):
+        leg_rows.append([n, f"{dep:,.0f}", len(df), f"{df['profit'].sum():,.0f}", f"{sdd:,.0f}"])
+    click.echo(tabulate(leg_rows, headers=["EA", "配分資金", "取引数", "純利益", "単独DD(額)"],
+                        tablefmt="rounded_outline"))
+    click.echo("")
+
+    net_color = (Fore.GREEN if net >= 0 else Fore.RED) + f"{net:,.0f}" + Style.RESET_ALL
+    div_effect = "-"
+    if sum_single_dd > 0:
+        div_effect = (Fore.GREEN + f"-{sum_single_dd - max_dd_abs:,.0f}"
+                      f"（{(1 - max_dd_abs / sum_single_dd) * 100:.0f}%減）" + Style.RESET_ALL)
+    summary = [
+        ["合計配分資金",        f"{total_deposit:,.0f}"],
+        ["ポートフォリオ純利益", net_color],
+        ["最大DD（額）",        Fore.RED + f"{max_dd_abs:,.0f}" + Style.RESET_ALL],
+        ["最大DD（%）",         Fore.RED + f"{max_dd_pct:.2f}%" + Style.RESET_ALL],
+        ["リターン/最大DD",     f"{(net / max_dd_abs):.2f}" if max_dd_abs else "-"],
+        ["単独DDの単純和",      f"{sum_single_dd:,.0f}"],
+        ["分散効果（DD削減）",   div_effect],
+    ]
+    click.echo(tabulate(summary, tablefmt="plain"))
+    click.echo("")
+
+
 def _process_and_report(
     cfg: BacktestConfig,
     source_path: Path,
