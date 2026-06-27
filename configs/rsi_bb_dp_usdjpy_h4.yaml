@@ -46,6 +46,7 @@ parameters:
   ADX_Period:              14
   ADX_Threshold:           25.0
   LotSize:                 0.01
+  UseRiskSizing:           false   # 固定維持。逆張りは複利でDD爆発・PF劣化（docs/position_sizing.md）
   StopLoss_Pips:           50
   TakeProfit_Pips:         110
   MagicNumber:             20260610

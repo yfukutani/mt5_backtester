@@ -21,6 +21,7 @@ parameters:
   Exit_Z:          0.0
   Stop_Z:          5.0
   LotSize:         0.01
+  UseRiskSizing:   false   # 固定維持。複利サイズアップはテール発散で破綻リスク（docs/position_sizing.md）
   MagicNumber:     20260629
   ResultFileName:  "pairtrade_result.csv"
 

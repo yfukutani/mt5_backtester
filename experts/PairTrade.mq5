@@ -24,6 +24,10 @@ input group "=== トレード設定 ==="
 input double LotSize     = 0.01;
 input int    MagicNumber = 20260629;
 
+input group "=== ポジションサイジング（資産連動・複利） ==="
+input bool   UseRiskSizing = false;    // ON: 資産連動でロットをスケール（複利）。価格SLが無いため資産比例方式。
+input double RefDeposit    = 100000.0; // 基準資金。LotSizeはこの資金額での基準ロット。
+
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
 
@@ -130,15 +134,16 @@ void OpenPair(bool long_spread)
     double secAsk  = SymbolInfoDouble(SecondSymbol, SYMBOL_ASK);
     double secBid  = SymbolInfoDouble(SecondSymbol, SYMBOL_BID);
 
+    double lot = CalcLotPair();
     if(long_spread)
     {
-        trade.Buy(LotSize, _Symbol, mainAsk, 0, 0, "PairMain");
-        trade.Sell(LotSize, SecondSymbol, secBid, 0, 0, "PairSecond");
+        trade.Buy(lot, _Symbol, mainAsk, 0, 0, "PairMain");
+        trade.Sell(lot, SecondSymbol, secBid, 0, 0, "PairSecond");
     }
     else
     {
-        trade.Sell(LotSize, _Symbol, mainBid, 0, 0, "PairMain");
-        trade.Buy(LotSize, SecondSymbol, secAsk, 0, 0, "PairSecond");
+        trade.Sell(lot, _Symbol, mainBid, 0, 0, "PairMain");
+        trade.Buy(lot, SecondSymbol, secAsk, 0, 0, "PairSecond");
     }
 }
 
@@ -166,6 +171,27 @@ void CloseAll()
                 trade.PositionClose(ticket);
         }
     }
+}
+
+//+------------------------------------------------------------------+
+// 資産連動の複利ロット計算: lot = LotSize × (equity / RefDeposit)。
+// UseRiskSizing=false なら固定LotSizeを返す（既存挙動と完全一致）。
+double CalcLotPair()
+{
+    if(!UseRiskSizing)
+        return LotSize;
+
+    double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+    double refDep = (RefDeposit > 0.0) ? RefDeposit : 100000.0;
+    double lot    = LotSize * (equity / refDep);
+
+    double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double maxLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double stepLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    if(stepLot > 0.0)
+        lot = MathFloor(lot / stepLot) * stepLot;
+    lot = MathMax(minLot, MathMin(maxLot, lot));
+    return lot;
 }
 
 //+------------------------------------------------------------------+

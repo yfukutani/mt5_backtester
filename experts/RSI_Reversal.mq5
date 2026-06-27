@@ -37,6 +37,10 @@ input int    StopLoss_Pips   = 50;
 input int    TakeProfit_Pips = 100;
 input int    MagicNumber     = 20260603;
 
+input group "=== ポジションサイジング（リスクベース） ==="
+input bool   UseRiskSizing = false; // ON: 資産のRiskPercent%をSL距離でリスクするロットを動的計算（複利）
+input double RiskPercent   = 1.0;   // 1取引あたりのリスク（口座資産に対する%）
+
 input group "=== トレーリングストップ ==="
 input bool UseTrailingStop   = false; // トレーリングストップを使用する
 input int  Trail_Start_Pips  = 25;   // この含み益（pips）に達したらトレーリング開始
@@ -353,7 +357,7 @@ void OnTick()
         double tp = NormalizeDouble(ask + tp_dist, _Digits);
         string reason = dp_buy ? (rsi_buy || bb_buy ? "RSI/BB+DP" : "DoubleBottom")
                                 : (rsi_buy ? (bb_buy ? "RSI+BB" : "RSI") : "BB");
-        if(trade.Buy(LotSize, _Symbol, ask, sl, tp, reason))
+        if(trade.Buy(CalcLot(sl_dist), _Symbol, ask, sl, tp, reason))
             Print("[BUY] reason=", reason, " RSI=", DoubleToString(rsi,1),
                   " close=", close_prev, " neck=", DoubleToString(neck_buy, _Digits));
         if(rsi_buy) rsi_was_oversold = false;
@@ -368,7 +372,7 @@ void OnTick()
         double tp = NormalizeDouble(bid - tp_dist, _Digits);
         string reason = dp_sell ? (rsi_sell || bb_sell ? "RSI/BB+DP" : "DoubleTop")
                                  : (rsi_sell ? (bb_sell ? "RSI+BB" : "RSI") : "BB");
-        if(trade.Sell(LotSize, _Symbol, bid, sl, tp, reason))
+        if(trade.Sell(CalcLot(sl_dist), _Symbol, bid, sl, tp, reason))
             Print("[SELL] reason=", reason, " RSI=", DoubleToString(rsi,1),
                   " close=", close_prev, " neck=", DoubleToString(neck_sell, _Digits));
         if(rsi_sell) rsi_was_overbought = false;
@@ -473,6 +477,37 @@ void ClosePositions(ENUM_POSITION_TYPE type)
            PositionGetInteger(POSITION_TYPE)  == type)
             trade.PositionClose(ticket);
     }
+}
+
+//+------------------------------------------------------------------+
+// リスクベースのロット計算: 資産のRiskPercent%をSL距離でリスクする。
+// UseRiskSizing=false なら固定LotSizeを返す（既存挙動と完全一致）。
+double CalcLot(double sl_dist_price)
+{
+    if(!UseRiskSizing || sl_dist_price <= 0.0)
+        return LotSize;
+
+    double equity    = AccountInfoDouble(ACCOUNT_EQUITY);
+    double riskMoney = equity * RiskPercent / 100.0;
+
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    if(tickValue <= 0.0 || tickSize <= 0.0)
+        return LotSize;
+
+    double moneyPerLot = (sl_dist_price / tickSize) * tickValue;
+    if(moneyPerLot <= 0.0)
+        return LotSize;
+
+    double lot = riskMoney / moneyPerLot;
+
+    double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double maxLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+    double stepLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    if(stepLot > 0.0)
+        lot = MathFloor(lot / stepLot) * stepLot;
+    lot = MathMax(minLot, MathMin(maxLot, lot));
+    return lot;
 }
 
 //+------------------------------------------------------------------+
