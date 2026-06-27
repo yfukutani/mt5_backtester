@@ -1,0 +1,47 @@
+# 押し目買い/戻り売り トレンドフォローEA — GBPJPY H4（円ペアポートフォリオ）
+# PullbackTrend v1.2: MA200方向 + EMA20/50トレンド + EMA20押し目反発 + 環境フィルター
+# 環境フィルターON必須（OFFだとOOS壊滅）。円ペアポートフォリオの一角。
+# 成績(固定): IS(2021-2026)+491/DD8.3% / OOS(2016-2021)+8,423/DD8.6% / Full+8,914（両期間プラス）
+# サイジング: リスク2%採用。全期間 固定+8,914 → risk2% +17,263(1.9倍)/PF1.16→1.18、DD8.6%→11.6%。
+#   PF>1の真のエッジがあるためサイジングが有効（docs/position_sizing.md）。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "PullbackTrend"
+symbol:    "GBPJPY"
+period:    "H4"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:          200
+  FastEMA_Period:          20
+  SlowEMA_Period:          50
+  RequireBullishCandle:    true
+  UsePullbackQuality:      true
+  UseMomentumConfirm:      true
+  UseADXFilter:            true
+  ADX_Period:              14
+  ADX_Threshold:           22.5
+  UseTrendStrength:        true
+  MA_Slope_Lookback:       20
+  MA_Slope_Min_ATR:        1.2
+  UseATRStops:             true
+  ATR_Period:              14
+  ATR_SL_Mult:             2.0
+  RR_Ratio:                2.0
+  StopLoss_Pips:           50
+  TakeProfit_Pips:         110
+  LotSize:                 0.01
+  UseRiskSizing:           true
+  RiskPercent:             2.0
+  MagicNumber:             20260627
+  ResultFileName:          "pullback_gbpjpy_h4_result.csv"
+
+report_dir:  "results"
+report_name: "PullbackTrend_GBPJPY_H4"
