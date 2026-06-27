@@ -1,3 +1,4 @@
+# ⚠️ レガシー: 旧RSI逆張り設定（USDJPY H1）。ロバスト構成は configs/rsi_robust_*.yaml を使用。
 # RSI逆張りEA バックテスト設定（最良設定・固定）
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 

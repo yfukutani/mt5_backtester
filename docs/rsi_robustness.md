@@ -207,3 +207,32 @@ RSI_Reversal（range≤0.3）と PullbackTrend円ペアの合算（年度別）:
 > - 全期間2016-2026 合算 +38,073、相関ほぼゼロで分散効果あり  
 >  
 > 当初目標（勝率60%/RR1.5）は両立不可だったが、**ロバストで分散の効いた実用的なEAポートフォリオ**という、より価値ある到達点を得た。
+
+---
+
+## ロバストRSI構成をmainに正式化（2026.06.27）
+
+ロバストRSI 2チャートの本番configをmainに整備し、`mt5bt portfolio`で再検証した。
+
+| config | 構成 | 純利益 | 単独DD |
+|---|---|---|---|
+| `configs/rsi_robust_usdjpy_h4.yaml` | RSI+BB+DP, range≤0.2, SL50/TP110, 固定 | +8,492 | 17,436 |
+| `configs/rsi_robust_eurusd_h1.yaml` | RSI+BB, range≤0.2, SL45/TP105, 固定 | +6,180 | 13,616 |
+
+### 2チャート合算（`mt5bt portfolio`実測）
+
+| 指標 | 値 |
+|---|---|
+| 純利益 | +14,672 |
+| 最大DD | 25,747（11.89%） |
+| リターン/最大DD | 0.57 |
+| 分散効果 | DD -5,305（17%減） |
+
+> **両チャートとも全期間プラスを再現**（EURUSD H1はdoc値+3,308を上回る+6,180）。
+> USDJPY H1は除外（H1はノイズでレンジ判別不可、doc通り）。
+> **固定ロット維持**（逆張りは複利でDD爆発、docs/position_sizing.md）。
+> RSI単体のreturn/DD=0.57は控えめだが、この構成の価値は収益でなく**PullbackTrendとの低相関（+0.028）**。
+> トレンド枠（PullbackTrend円ペア）と相補的にレンジ局面を担う独立収益源。
+>
+> 旧config（`rsi_bb_dp_usdjpy_h4` / `rsi_bb_eurusd` / `rsi_bb_reversal` / `rsi_reversal`）は
+> 2024-2025期間に最適化した過学習版で、全期間ではマイナス。レガシーとして保持（実運用は上記robust版を使う）。
