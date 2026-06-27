@@ -1,0 +1,47 @@
+# 押し目買い/戻り売り トレンドフォローEA — GOLD(XAUUSD) H4（トレンド枠・FXと低相関）
+# PullbackTrend v1.2: MA200方向 + EMA20/50 + EMA20押し目反発 + 環境フィルター
+# 成績(固定, 全期間2016-2026): +168,661 / PF1.86 / DD17.5% / 勝ち越し6/11年。
+# ⚠️ 利益の94%が2025-2026の金パラボリック上昇に集中。鵜呑み禁物（凪年は薄利、トレンド年に大きく取る）。
+#   ただし凪年も出血せず（2016-2024で+10,828、OOSプラス）＝環境フィルターが機能。FXと低相関の分散枠。
+# サイジング: 固定。GOLDは0.01ロットでも1取引≈6%リスク（contract大）で既に高リスク、最小ロット制約で
+#   risk%サイジング不可（docs/position_sizing.md）。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "PullbackTrend"
+symbol:    "GOLD"
+period:    "H4"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:          200
+  FastEMA_Period:          20
+  SlowEMA_Period:          50
+  RequireBullishCandle:    true
+  UsePullbackQuality:      true
+  UseMomentumConfirm:      true
+  UseADXFilter:            true
+  ADX_Period:              14
+  ADX_Threshold:           22.5
+  UseTrendStrength:        true
+  MA_Slope_Lookback:       20
+  MA_Slope_Min_ATR:        1.2
+  UseATRStops:             true
+  ATR_Period:              14
+  ATR_SL_Mult:             2.0
+  RR_Ratio:                2.0
+  StopLoss_Pips:           50
+  TakeProfit_Pips:         110
+  LotSize:                 0.01
+  UseRiskSizing:           false
+  MagicNumber:             20260640
+  ResultFileName:          "pullback_gold_h4_result.csv"
+
+report_dir:  "results"
+report_name: "PullbackTrend_GOLD_H4"
