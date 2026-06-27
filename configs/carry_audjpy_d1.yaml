@@ -5,7 +5,9 @@
 #   頑健性: OOS(2016-2021)+8,163/PF1.98、IS(2021-2026)+27,248/PF3.06 ＝両期間プラス。
 # H4トレンド/逆張りEAと別メカニズム（D1長期保有）で低相関の独立収益源。
 # ⚠️ MT5テスターは現在スワップ率を全履歴に適用するため、スワップ収益は近似（スポットP&Lは正確）。
-# サイジング: 当面固定。滑らか＆高PFのため将来サイズアップ候補（資産連動複利）。
+# サイジング: 資産連動複利0.05採用。固定+36,233 → 複利0.05 +220,819（PF2.93→2.82維持）。
+#   キャリーは滑らか＆高PFでレバレッジ耐性が高い（RSI/Pairと違いPF維持）。
+#   ⚠️ スワップ近似のため高レバほど不確実性増。保守的にするなら LotSize=0.03（+113,915/DD17.5%）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "Carry"
@@ -23,8 +25,8 @@ model: "open_prices"
 parameters:
   TrendMA_Period:      200
   RequirePositiveSwap: true
-  LotSize:             0.01
-  UseRiskSizing:       false
+  LotSize:             0.05
+  UseRiskSizing:       true
   RefDeposit:          100000.0
   MagicNumber:         20260650
   ResultFileName:      "carry_audjpy_d1_result.csv"
