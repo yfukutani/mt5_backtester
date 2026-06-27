@@ -1,0 +1,33 @@
+# キャリートレード（スワップ収集）— AUDJPY D1（別軸の収益源）
+# Carry v1.0: D1のMA200上で買い長期保有、割れで決済。スワップ＋順張りトレンドを取る。
+# AUDはRBA金利>BOJ金利が一貫し、キャリーが全サイクルで機能（経済的合理性）。
+# 成績(固定, 全期間): +36,233 / PF2.93 / DD7.3% / 36取引。
+#   頑健性: OOS(2016-2021)+8,163/PF1.98、IS(2021-2026)+27,248/PF3.06 ＝両期間プラス。
+# H4トレンド/逆張りEAと別メカニズム（D1長期保有）で低相関の独立収益源。
+# ⚠️ MT5テスターは現在スワップ率を全履歴に適用するため、スワップ収益は近似（スポットP&Lは正確）。
+# サイジング: 当面固定。滑らか＆高PFのため将来サイズアップ候補（資産連動複利）。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "Carry"
+symbol:    "AUDJPY"
+period:    "D1"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:      200
+  RequirePositiveSwap: true
+  LotSize:             0.01
+  UseRiskSizing:       false
+  RefDeposit:          100000.0
+  MagicNumber:         20260650
+  ResultFileName:      "carry_audjpy_d1_result.csv"
+
+report_dir:  "results"
+report_name: "Carry_AUDJPY_D1"
