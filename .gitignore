@@ -9,6 +9,10 @@ build/
 # 結果ファイル
 results/
 
+# 検証用の一時config・ログ（使い捨て）
+configs/*_tmp.yaml
+compile_log.txt
+
 # テスト生成物
 tests/*.html
 tests/*.csv
