@@ -128,7 +128,7 @@ report_name: ""             # 空ならEA名＋日時を自動付与
 ```
 mt5_backtester/
 ├── mt5bt/                  # CLIパッケージ
-│   ├── cli.py             # CLIエントリポイント（clickベース・6コマンド）
+│   ├── cli.py             # CLIエントリポイント（clickベース・7コマンド）
 │   ├── config.py          # YAML読込・MT5パス自動検出・各種マッピング
 │   ├── runner.py          # MT5ターミナルをINI+SETで制御
 │   ├── parser.py          # XML / HTML / OnTester CSV のパーサー
@@ -148,20 +148,38 @@ mt5_backtester/
 
 | EA | 戦略 | 主な対象 |
 |---|---|---|
-| **RSI_Reversal** | RSI + ボリンジャーバンド + ダブルパターン逆張り（MA200フィルター） | USDJPY/EURUSD H1, USDJPY H4 |
-| **PullbackTrend** | MA200方向 + EMA20/50トレンド + EMA20押し目反発（順張り） | USDJPY H1/H4 |
+| **RSI_Reversal** | RSI + ボリンジャーバンド + ダブルパターン逆張り（MA200 + レンジ環境フィルター） | USDJPY H4, EURUSD H1 |
+| **PullbackTrend** | MA200方向 + EMA20/50トレンド + EMA20押し目反発（順張り + 傾き環境フィルター） | USDJPY/GBPJPY/AUDJPY H4, GOLD H4 |
 | **KeltnerBreakout** | ケルトナーチャネル（EMA20±ATR×1.5）ブレイク + MA200 + ADX | USDJPY H4 |
 | **DMI_Cross** | +DI/-DIクロス + ADX≥25 + MA200方向（順張り） | USDJPY H4 |
 | **PairTrade** | EUR-GBPスプレッドのz-score平均回帰（マーケットニュートラル） | EURUSD/GBPUSD H1 |
-| **Carry** | D1のMA200上で買い長期保有しスワップ＋順張りを取る（キャリー） | AUDJPY D1 |
+| **Carry** | D1のMA200上で買い長期保有しスワップ＋順張りを取る（キャリー・別軸） | AUDJPY D1 |
+
+> 全EAに動的ポジションサイジング（`UseRiskSizing` / `RiskPercent`、デフォルトOFF）を実装。
+> サイジングが有効に効くのは「真のエッジ（PF>1）＋滑らかなカーブ」を持つEAのみで、
+> 逆張り・マーケットニュートラルは固定ロットが最適（詳細: [docs/position_sizing.md](docs/position_sizing.md)）。
 
 > EA の `.mq5` ソースは MT5 の `MQL5/Experts/` にコピーしてコンパイルし、生成された `.ex5` をバックテストで使用します。
 
 ### 本番ポートフォリオ
 
-トレンド・レンジ・中立の低相関6チャートで構成する本番運用構成と合算成績は
-[docs/portfolio.md](docs/portfolio.md) を参照（全期間 純利益+86,725 / 最大DD5.50% / 分散効果61%減）。
-各検証の詳細は `docs/` 配下（research_log / position_sizing / rsi_robustness / pair_trade）。
+トレンド・レンジ・中立・キャリーという**異質な収益源**を低相関で組み合わせた分散ポートフォリオ。
+全成績は `mt5bt portfolio`（全期間 2016-2026、全dealの時系列合算）実測。詳細・設計原則は
+[docs/portfolio.md](docs/portfolio.md) を参照。
+
+| 構成 | 純利益 | 最大DD% | リターン/DD | 分散効果 |
+|---|---|---|---|---|
+| コア6チャート（PB×3 / RSI×2 / Pair） | +86,725 | 5.50% | 2.51 | 61%減 |
+| +GOLD（7チャート） | +255,386 | 4.42% | 7.85 | 71%減 |
+| +Carry（8チャート・本番） | +476,205 | 5.27% | 10.85 | 72%減 |
+
+> **本番デプロイ（総資金25万・リスクパリティ配分・7枠）**: 各枠の単独DDに比例配分。
+> 純利益 +383,409 / 最大DD 11.62% / リターン/DD 10.94 / 資本利回り10年 +153%（年率約9.8%）。
+> 配分をCarryに寄せると純利益は増えるが効率（リターン/DD）は悪化するため、リスクパリティが最適解。
+>
+> ⚠️ GOLDの伸びは2025-2026の金相場、Carryはスワップ近似に支えられた額面で、将来の保証ではない。
+
+各検証の詳細は `docs/` 配下（research_log / position_sizing / rsi_robustness / pair_trade / carry / portfolio）。
 
 ---
 
