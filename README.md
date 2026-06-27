@@ -156,6 +156,12 @@ mt5_backtester/
 
 > EA の `.mq5` ソースは MT5 の `MQL5/Experts/` にコピーしてコンパイルし、生成された `.ex5` をバックテストで使用します。
 
+### 本番ポートフォリオ
+
+トレンド・レンジ・中立の低相関6チャートで構成する本番運用構成と合算成績は
+[docs/portfolio.md](docs/portfolio.md) を参照（全期間 純利益+86,725 / 最大DD5.50% / 分散効果61%減）。
+各検証の詳細は `docs/` 配下（research_log / position_sizing / rsi_robustness / pair_trade）。
+
 ---
 
 ## 補助スクリプト
