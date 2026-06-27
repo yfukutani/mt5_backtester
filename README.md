@@ -153,6 +153,7 @@ mt5_backtester/
 | **KeltnerBreakout** | ケルトナーチャネル（EMA20±ATR×1.5）ブレイク + MA200 + ADX | USDJPY H4 |
 | **DMI_Cross** | +DI/-DIクロス + ADX≥25 + MA200方向（順張り） | USDJPY H4 |
 | **PairTrade** | EUR-GBPスプレッドのz-score平均回帰（マーケットニュートラル） | EURUSD/GBPUSD H1 |
+| **Carry** | D1のMA200上で買い長期保有しスワップ＋順張りを取る（キャリー） | AUDJPY D1 |
 
 > EA の `.mq5` ソースは MT5 の `MQL5/Experts/` にコピーしてコンパイルし、生成された `.ex5` をバックテストで使用します。
 
