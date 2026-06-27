@@ -1,0 +1,40 @@
+# ボラ・スクイーズ・ブレイクアウト（クライシスアルファ別軸） — USDJPY H4
+# VolBreakout v1.0: Donchian(20)ブレイク + ATRチャンデリア・トレーリング + スクイーズ・フィルター
+# 別軸候補②の検証で、多市場では頑健でなかったが USDJPY スクイーズON のみ正のエッジ（正スキュー）。
+# 成績(固定, 全期間2016-2026): +16,501 / PF1.15 / DD16.3% / 勝率32.3% / 313取引。
+# 価値: 本番8枠に追加すると純利益+16,501・ポートフォリオDD 4.59%→4.28%（低下）・リターン/DD 11.37→12.27。
+#   低相関の正EV枠としてブックのリスク調整リターンを改善（mt5bt portfolio実測）。
+# ⚠️ 留保: 利益が2022(+19,217)/2024(+17,499)の2年に集中（集中リスク）。単一市場依存。
+#   open_pricesモデルの楽観（ブレイクのスリッページ/スプレッドで実運用は目減りの可能性）。
+# 詳細・検証経緯: docs/vol_breakout.md
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "VolBreakout"
+symbol:    "USDJPY"
+period:    "H4"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  Channel_Period:   20
+  AllowLong:        true
+  AllowShort:       true
+  UseSqueezeFilter: true
+  Squeeze_Lookback: 50
+  Squeeze_Factor:   1.0
+  ATR_Period:       14
+  ATR_SL_Mult:      2.0
+  Trail_Mult:       3.0
+  LotSize:          0.01
+  UseRiskSizing:    false
+  MagicNumber:      20260680
+  ResultFileName:   "vbo_usdjpy_h4_result.csv"
+
+report_dir:  "results"
+report_name: "VolBreakout_USDJPY_H4"
