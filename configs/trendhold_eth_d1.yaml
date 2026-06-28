@@ -1,0 +1,35 @@
+# 暗号資産トレンド（長期保有）— ETHUSD D1（無相関の別軸・新アセットクラス）
+# Carry EAを流用: D1のMA200上で買い長期保有、割れで決済。スワップ条件OFF＝純トレンド保有。
+# 暗号資産は激しいチョップで押し目/ブレイク系のストップが刈られ全滅したが、ストップ無しの
+# 長期保有(最小1パラメータ=過学習リスク最小)はETHの構造(大相場を保有し弱気相場はMA200割れで回避)に合致。
+# 成績(固定0.05, 2017-2026): +15,816 / PF2.29 / DD5.0% / 30取引。PF不変でサイジング耐性良好。
+#   頑健性: OOS(2017-2021) PF4.68 / IS(2021-2026) PF1.79 ＝両半期プラス（BTCはOOS負けで不可）。
+# 低相関: 本番ブックに追加で純利益増＋ポートフォリオDD低下（FX/GOLDと無相関）。詳細: docs/crypto_trend.md
+# ⚠️ 単一資産ETH依存・取引30と薄め・暗号CFDの財務コスト/週末ギャップ/規制リスクは未モデル。
+#   ETH単体のreturn/DD≈2.7はブック分散済(≈10.5)より低く、効率最大は小サイズ(0.02-0.03)。重レバの
+#   収益エンジンではなく「効率を上げる中小サイズの分散枠」。推奨0.03-0.05。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "Carry"
+symbol:    "ETHUSD"
+period:    "D1"
+from_date: "2017.01.01"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:      200
+  RequirePositiveSwap: false
+  LotSize:             0.05
+  UseRiskSizing:       false
+  RefDeposit:          100000.0
+  MagicNumber:         20260710
+  ResultFileName:      "trendhold_eth_d1_result.csv"
+
+report_dir:  "results"
+report_name: "TrendHold_ETHUSD_D1"
