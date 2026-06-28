@@ -1,11 +1,20 @@
 # 最終ポートフォリオ構成（本番運用リファレンス）
 
-**更新日:** 2026.06.27
+**更新日:** 2026.06.28
 **検証:** `mt5bt portfolio`（全dealの時系列合算）/ 全期間 2016-2026 / 各EA配分資金100,000
 
-トレンド・レンジ・中立の3種・低相関6チャートで構成する分散ポートフォリオ。
+トレンド・レンジ・中立・キャリー・ボラブレイク・暗号トレンドの低相関収益源で構成する分散ポートフォリオ。
 各検証の詳細は [research_log.md](research_log.md) / [position_sizing.md](position_sizing.md) /
-[rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) を参照。
+[rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) /
+[vol_breakout.md](vol_breakout.md) / [crypto_trend.md](crypto_trend.md) /
+[model_validation.md](model_validation.md) / [leverage_design.md](leverage_design.md) /
+[rejected_strategies.md](rejected_strategies.md) を参照。
+
+> 📌 **2026.06.28 確定:** 別軸探索の末、新たに **VolBreakout USDJPY**（クライシスアルファ）と
+> **ETH trend-hold**（暗号トレンド）の2枠を採用。両者とも OOS/IS 両半期プラス＋低相関を実測で確認。
+> モデル妥当性は `every_tick` で再検証済み（[model_validation.md](model_validation.md)）。多数の戦略を
+> 検証・棄却し、**新規無相関源の探索は収穫逓減に到達**（[rejected_strategies.md](rejected_strategies.md)）。
+> **運用ルール: 新戦略は OOS/IS 両期間プラスを必須ゲートとする。**
 
 ## 構成（6チャート）
 
@@ -19,9 +28,21 @@
 | 中立 | PairTrade EUR/GBP H1 | `pairtrade_eurusd_gbpusd.yaml` | 固定 | 20260629 | +12,340 | 12,284 |
 | 順張り(上振れ) | PullbackTrend GOLD H4 | `pullback_gold_h4.yaml` | 固定 | 20260640 | +168,661 | 21,654 |
 | 別軸(キャリー) | Carry AUDJPY D1 | `carry_audjpy_d1.yaml` | 複利0.05 | 20260650 | +220,819 | 48,196 |
+| 別軸(ボラブレイク) | VolBreakout USDJPY H4 | `vbo_usdjpy_h4.yaml` | 固定 | 20260680 | +16,501 | 16,978 |
+| 別軸(暗号トレンド) | TrendHold ETHUSD D1 | `trendhold_eth_d1.yaml` | 固定0.05 | 20260710 | +15,816 | 5,000 |
 
 > 注: `pullback_usdjpy_h4.yaml` は本番configが2021起点のIS構成。上表のUSDJPY純利益は
-> 期間を揃えた全期間(2016-2026)版での値。
+> 期間を揃えた全期間(2016-2026)版での値。純利益は open_prices 値（every_tick 実効値は
+> [model_validation.md](model_validation.md) 参照、特に Carry は -33% の +149,032 で見ること）。
+
+> 💡 **VolBreakout USDJPY は「クライシスアルファ」枠:** ボラ圧縮後のブレイクを取る正スキュー戦略。
+> 多市場では頑健でないが USDJPY のみ正のエッジ（PF1.15）。ブックに追加で純利益増＋ポートフォリオDD低下＝
+> 低相関の正EV源。利益は2022/2024に集中（集中リスク）。詳細: [vol_breakout.md](vol_breakout.md)。
+
+> 💡 **TrendHold ETHUSD は「暗号トレンド」枠（無相関別軸）:** Carry EA流用のD1 MA200長期保有。FX/GOLDと
+> 価格ドライバーが別＝構造的に無相関。両半期プラス（OOS PF4.68 / IS PF1.79）、高PF2.29でサイジング耐性良好。
+> ブックに追加で純利益増＋ポートフォリオDD低下（低相関）。⚠️ 単一資産ETH依存（他コインは般化せず）・
+> 暗号CFDの財務コスト/週末ギャップ/規制リスク未モデル。効率最大は小サイズ、推奨0.03-0.05。詳細: [crypto_trend.md](crypto_trend.md)。
 
 > 💡 **Carry AUDJPY D1 は「別軸」第1号:** D1のMA200上で買い長期保有しスワップ＋順張りを取る、
 > H4トレンド/逆張りとは別メカニズムの収益源。頑健（OOS2016-2021 +8,163/PF1.98、IS +27,248/PF3.06、
@@ -96,6 +117,40 @@
 > リターン/DD10.85。⚠️ GOLDの金相場＋キャリーのレバレッジ（スワップ近似）に支えられた額面で将来保証ではないが、
 > 両枠ともOOSプラスで崩れず、DD5.27%＝さらなる拡大余力も残る。保守化するならキャリーをLotSize=0.03に。
 
+## every_tick 再検証＋新枠追加（実効ベースライン・2026.06.28）
+
+増レバ前に「増幅する前のエッジが本物か」を確定するため、全枠を `open_prices`→`every_tick`（バー内ティック
+再現）で再検証（[model_validation.md](model_validation.md)）。大半はエッジ維持、**Carryのみ-33%**（+220,819→
+**+149,032**、複利が約定差を増幅）。**純利益は約-15%減るが最大DD%はほぼ不変＝リスクprofileは頑健。**
+
+そのうえで新枠 VolBreakout USDJPY・ETH trend-hold を追加（each 100k）。
+
+| 構成（every_tick） | 純利益 | 最大DD額 | 最大DD% | リターン/DD |
+|---|---|---|---|---|
+| 9枠（既存8＋VBO USDJPY） | +423,559〜498,401※ | 40,140 | 4.27% | 10.55 |
+| **10枠（＋ETH trend-hold 0.02）** | **+430,254** | **39,811** | **3.80%** | **10.81** |
+
+> ※9枠の純利益は構成（VBO含む/含まず）で異なる。**ETH 0.02 を加えると純利益増＋ポートフォリオ絶対DDが
+> 低下（40,140→39,811）＝低相関の理想的追加。** ただし ETH 単体の return/DD（≈2.7）はブック分散済（≈10.5）
+> より低く、効率最大は小サイズ（0.02-0.03）。増やすほど純利益は増えるが効率は希釈（0.10で RD9.33）。
+> **ETH/VBO とも「効率を上げる中小サイズの分散枠」であって重レバの収益エンジンではない。**
+
+## 月利フロンティアと増レバの限界（[leverage_design.md](leverage_design.md)）
+
+**レバレッジは純利益と最大DDを同率で動かしリターン/DD比を改善しない。** 月利目標と必要DDは数式で固定：
+**必要DD% ＝ 0.72 ÷（年間リターン/DD比）**。現状ブック（比≈1.05〜1.3）では：
+
+| 月利目標 | 必要な最大DD | 評価 |
+|---|---|---|
+| 1% | 約9〜11% | ≈ 現状デプロイ |
+| 2% | 約18〜23% | 現実的射程 |
+| 3% | 約27〜34% | 攻め |
+| 6% | 約55〜68% | 高破綻リスク |
+
+> 増レバで綺麗にスケールするのは **PB USDJPY のみ**（Carryは効率悪化、GBPJPY/VBOは固定維持）。
+> **月利6%はレバ水準に依らず最大DD55-68%を伴い、現実的射程は月利2-3%（年率30-45%）。**
+> フロンティアを押し出す唯一の道は無相関源の増強だが、探索は収穫逓減に到達（VBO/ETHの2枠のみ生存）。
+
 ## 本番デプロイ構成（総資金25万・リスクパリティ配分）
 
 上記は各EAを100k独立サブ口座とした名目評価。**実運用は1口座**で回すため、合算DD（分散で圧縮）に
@@ -153,10 +208,15 @@ mt5bt portfolio \
   configs/pullback_audjpy_h4.yaml \
   configs/rsi_robust_usdjpy_h4.yaml \
   configs/rsi_robust_eurusd_h1.yaml \
-  configs/pairtrade_eurusd_gbpusd.yaml
+  configs/pairtrade_eurusd_gbpusd.yaml \
+  configs/pullback_gold_h4.yaml \
+  configs/carry_audjpy_d1.yaml \
+  configs/vbo_usdjpy_h4.yaml \
+  configs/trendhold_eth_d1.yaml
 ```
 
-（USDJPY PBを全期間で揃える場合は from_date を 2016.06.21 にした版を使う）
+（USDJPY PBを全期間で揃える場合は from_date を 2016.06.21 にした版を使う。実効値は各configの
+`model` を `every_tick` にして再検証——[model_validation.md](model_validation.md)）
 
 ## 設計原則（検証で確立した知見）
 
@@ -165,12 +225,17 @@ mt5bt portfolio \
 | サイジングは「真のエッジ(PF>1)＋滑らかなカーブ」のEAのみ | PullbackTrend(順張り)は増益＋PF改善。RSI(逆張り)はDD爆発、PairTrade(中立)は破綻、AUDJPY(PF1.0)は負転落 |
 | 逆張り・中立・エッジ無しは固定ロット | 複利レバレッジがDDを増幅 or ボラドラッグでマイナス化 |
 | ロバスト化は環境フィルターで | PB=MA200傾き≥1.2（強トレンド時）、RSI=傾き≤0.2（レンジ時）。過学習を克服し全期間プラス |
-| 分散は「異質な収益源」で | トレンド/レンジ/中立。同種(Keltner/DMI 相関0.58)は冗長。AUD/NZD(無相関だが負け期待値)は不採用 |
+| 分散は「異質な収益源」で | トレンド/レンジ/中立/キャリー/ボラブレイク/暗号。同種(Keltner/DMI 相関0.58)は冗長。AUD/NZD(無相関だが負け期待値)は不採用 |
 | 最適化は追わない | パラメータ最適化のスパイクは過剰最適化。OOS検証必須 |
+| 新戦略は OOS/IS 両期間プラスが必須ゲート | 多くの戦略が「2021-26のみ機能」の時間不安定で脱落。全期間+でも直近レジームだけの産物なら不採用（[rejected_strategies.md](rejected_strategies.md)） |
+| 増レバはリターン/DDを上げない | net/DDを同率で動かすだけ。月利6%はレバ非依存でDD55-68%。フロンティア改善は無相関源の増強のみ |
 
 ## MT5での運用
 
 各チャートに対応EAをアタッチ（MagicNumberが異なるため独立動作）。
-- PullbackTrend: USDJPY/GBPJPY は `UseRiskSizing=true, RiskPercent=2.0`、AUDJPY は固定。
+- PullbackTrend: USDJPY/GBPJPY は `UseRiskSizing=true, RiskPercent=2.0`、AUDJPY/GOLD は固定。
 - RSI_Reversal: 両チャートとも `UseRangeFilter=true, Range_Slope_Max_ATR=0.2`、固定ロット。
 - PairTrade: EURUSD（主）/GBPUSD（従）、固定ロット。
+- Carry: AUDJPY D1、複利0.05（`UseRiskSizing=true, LotSize=0.05`）。
+- VolBreakout: USDJPY H4、固定ロット（`vbo_usdjpy_h4.yaml`）。
+- TrendHold（暗号）: ETHUSD D1、Carry EA流用（`RequirePositiveSwap=false`）、固定0.05（`trendhold_eth_d1.yaml`）。
