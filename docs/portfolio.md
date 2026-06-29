@@ -25,6 +25,7 @@
 | ~~順張り~~ | ~~PullbackTrend AUDJPY H4~~（**デプロイ除外**） | `pullback_audjpy_h4.yaml` | 固定 | 20260628 | +44 | 8,826 |
 | 逆張り | RSI_Reversal USDJPY H4 | `rsi_robust_usdjpy_h4.yaml` | 固定 | 20260610 | +8,492 | 17,436 |
 | 逆張り | RSI_Reversal EURUSD H1 | `rsi_robust_eurusd_h1.yaml` | 固定 | 20260605 | +6,180 | 13,616 |
+| 逆張り(レンジ強化) | RSI_Reversal GBPUSD H4 | `rsi_robust_gbpusd_h4.yaml` | 固定 | 20260774 | +14,213 | 5,476 |
 | 中立 | PairTrade EUR/GBP H1 | `pairtrade_eurusd_gbpusd.yaml` | 固定 | 20260629 | +12,340 | 12,284 |
 | 順張り(上振れ) | PullbackTrend GOLD H4 | `pullback_gold_h4.yaml` | 固定 | 20260640 | +168,661 | 21,654 |
 | 別軸(キャリー) | Carry AUDJPY D1 | `carry_audjpy_d1.yaml` | 複利0.05 | 20260650 | +220,819 | 48,196 |
@@ -128,7 +129,14 @@
 | 構成（every_tick） | 純利益 | 最大DD額 | 最大DD% | リターン/DD |
 |---|---|---|---|---|
 | 9枠（既存8＋VBO USDJPY） | +423,559〜498,401※ | 40,140 | 4.27% | 10.55 |
-| **10枠（＋ETH trend-hold 0.02）** | **+430,254** | **39,811** | **3.80%** | **10.81** |
+| 10枠（＋ETH trend-hold 0.02） | +430,254 | 39,811 | 3.80% | 10.81 |
+| **11枠（＋RSI GBPUSD・レンジ強化）** | **+445,792** | **36,387** | **3.05%** | **12.25** |
+
+> **レンジ枠強化（2026.06.28）:** トレンド偏重のブックに対し、実証済みRSI_Reversal（レンジ逆張り）を
+> GBPUSD H4へ横展開して採用（OOS PF1.58 / IS PF1.21 ＝両半期+、111取引でコスト頑健）。**純利益+14kを
+> 足しながら絶対DDが低下（39,811→36,387）・リターン/DD 10.81→12.25（最高）。** レンジ局面でトレンド枠の
+> 出血を相殺する低相関枠。横展開した他ドルストレート（AUDUSD/USDCHF/NZDUSD）はOOS/ISゲートで脱落、
+> GBPUSDのみ採用。専用EA不要（RSI_Reversal流用、`UseDoublePattern=false`）。
 
 > ※9枠の純利益は構成（VBO含む/含まず）で異なる。**ETH 0.02 を加えると純利益増＋ポートフォリオ絶対DDが
 > 低下（40,140→39,811）＝低相関の理想的追加。** ただし ETH 単体の return/DD（≈2.7）はブック分散済（≈10.5）
