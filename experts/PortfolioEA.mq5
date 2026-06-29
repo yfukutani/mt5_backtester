@@ -23,6 +23,7 @@ input bool En_PB_AUDJPY  = false;  // 死に枠（デプロイ除外）。既定
 input bool En_PB_GOLD    = true;
 input bool En_RSI_USDJPY = true;
 input bool En_RSI_EURUSD = true;
+input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
 input bool En_PAIR       = true;
 input bool En_CARRY      = true;
 input bool En_VBO        = true;
@@ -126,6 +127,9 @@ int OnInit()
    // 6. RSI EURUSD H1 (DP OFF, SL45/TP105)
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
      x.useDP=false; x.dpBars=60; x.slPips=45; x.tpPips=105; AddSleeve(x); }
+   // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
+   { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
+     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
