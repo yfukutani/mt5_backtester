@@ -161,6 +161,9 @@ mt5_backtester/
 
 > EA の `.mq5` ソースは MT5 の `MQL5/Experts/` にコピーしてコンパイルし、生成された `.ex5` をバックテストで使用します。
 
+> 📊 **プロジェクト現状サマリー（到達点・年別成績・結論の集約）**: [docs/project_status.md](docs/project_status.md)
+> **1チャートで全枠を稼働する統合EA**: [docs/portfolio_ea.md](docs/portfolio_ea.md)（`experts/PortfolioEA.mq5`）
+
 ### 本番ポートフォリオ
 
 トレンド・レンジ・中立・キャリーという**異質な収益源**を低相関で組み合わせた分散ポートフォリオ。
