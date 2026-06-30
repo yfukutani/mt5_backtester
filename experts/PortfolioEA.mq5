@@ -33,6 +33,23 @@ input group "=== 全体設定 ==="
 input bool   MasterEnable  = true;   // 全枠の発注を一括停止できる安全スイッチ
 input double GlobalLotMult = 1.0;    // 全枠のロットに掛ける倍率（資金規模調整用）
 
+input group "=== per-sleeve ロット倍率（増レバ配分用・既定1.0で不変） ==="
+input double Mult_PB_USDJPY  = 1.0;
+input double Mult_PB_GBPJPY  = 1.0;
+input double Mult_PB_GOLD    = 1.0;
+input double Mult_RSI_USDJPY = 1.0;
+input double Mult_RSI_EURUSD = 1.0;
+input double Mult_RSI_GBPUSD = 1.0;
+input double Mult_PAIR       = 1.0;
+input double Mult_CARRY      = 1.0;
+input double Mult_VBO        = 1.0;
+input double Mult_ETH        = 1.0;
+
+input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分資金固定） ==="
+input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
+input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
+input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -79,6 +96,9 @@ struct SLEEVE
    int             trendPeriod; bool reqPosSwap;
    // VBO
    int             channel; bool useSqueeze; int sqLB; double sqFactor; double trailMult;
+   // 増レバ配分（deploy）
+   double          lotMult;   // per-sleeve ロット倍率
+   double          refCap;    // risk%/複利の基準資金（0=口座equity）
 };
 
 SLEEVE S[32];
@@ -104,16 +124,16 @@ int OnInit()
 
    // 1. PB USDJPY (risk2%)
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; AddSleeve(x); }
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY; AddSleeve(x); }
    // 2. PB GBPJPY (risk2%)
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; AddSleeve(x); }
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }
    // 4. PB GOLD (固定)
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
-     x.useRisk=false; x.lot=0.01; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
    SLEEVE rs = z;
@@ -123,33 +143,33 @@ int OnInit()
 
    // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
-     x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; AddSleeve(x); }
+     x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL45/TP105)
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=45; x.tpPips=105; AddSleeve(x); }
+     x.useDP=false; x.dpBars=60; x.slPips=45; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
-     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; AddSleeve(x); }
+     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_GBPUSD; AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
      x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
-     x.lookback=200; x.entryZ=4.0; x.exitZ=0.0; x.stopZ=5.0; AddSleeve(x); }
+     x.lookback=200; x.entryZ=4.0; x.exitZ=0.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
 
    // 8. Carry AUDJPY D1 (複利0.05, スワップ条件ON)
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol="AUDJPY"; x.tf=PERIOD_D1;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
-     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; AddSleeve(x); }
+     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
    { SLEEVE x=z; x.enabled=En_VBO; x.strat=ST_VBO; x.symbol="USDJPY"; x.tf=PERIOD_H4;
      x.magic=20260680; x.lot=0.01; x.useRisk=false; x.channel=20;
-     x.useSqueeze=true; x.sqLB=50; x.sqFactor=1.0; x.atrSLmult=2.0; x.trailMult=3.0; AddSleeve(x); }
+     x.useSqueeze=true; x.sqLB=50; x.sqFactor=1.0; x.atrSLmult=2.0; x.trailMult=3.0; x.lotMult=Mult_VBO; AddSleeve(x); }
 
    // 10. 暗号トレンド ETHUSD D1 (Carryロジック, スワップ条件OFF, 固定0.05)
    { SLEEVE x=z; x.enabled=En_ETH; x.strat=ST_CARRY; x.symbol="ETHUSD"; x.tf=PERIOD_D1;
      x.magic=20260710; x.trendPeriod=200; x.reqPosSwap=false;
-     x.useRisk=false; x.lot=0.05; x.refDeposit=100000; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
    for(int i=0;i<NS;i++)
@@ -200,6 +220,7 @@ void ZeroSleeve(SLEEVE &x)
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
+   x.lotMult=1.0; x.refCap=0.0;
 }
 
 int CountEnabled(){ int c=0; for(int i=0;i<NS;i++) if(S[i].enabled) c++; return c; }
@@ -273,24 +294,25 @@ double LotRisk(int i, double slDistPrice)
    double base;
    if(!S[i].useRisk || slDistPrice<=0) base=S[i].lot;
    else{
-      double eq=AccountInfoDouble(ACCOUNT_EQUITY);
+      // refCap>0なら配分資金固定でサイズ（口座共有時の過大化を防ぐ）、0なら口座equity
+      double eq=(S[i].refCap>0.0) ? S[i].refCap : AccountInfoDouble(ACCOUNT_EQUITY);
       double rm=eq*S[i].riskPct/100.0;
       double tv=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_VALUE);
       double ts=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_SIZE);
       if(tv<=0||ts<=0){ base=S[i].lot; }
       else{ double mpl=(slDistPrice/ts)*tv; base=(mpl>0)?rm/mpl:S[i].lot; }
    }
-   return Clamp(S[i].symbol, base*GlobalLotMult);
+   return Clamp(S[i].symbol, base*GlobalLotMult*S[i].lotMult);
 }
 double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
 {
    double base=S[i].lot;
    if(S[i].useRisk){
-      double eq=AccountInfoDouble(ACCOUNT_EQUITY);
+      double eq=(S[i].refCap>0.0) ? S[i].refCap : AccountInfoDouble(ACCOUNT_EQUITY);
       double rd=(S[i].refDeposit>0)?S[i].refDeposit:100000.0;
       base=S[i].lot*(eq/rd);
    }
-   return Clamp(sym, base*GlobalLotMult);
+   return Clamp(sym, base*GlobalLotMult*S[i].lotMult);
 }
 double GetBuf(int h,int idx)
 {
