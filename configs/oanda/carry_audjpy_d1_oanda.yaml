@@ -1,0 +1,33 @@
+# OANDA版 — Carry AUDJPY（判定D1・執行H1）（ベース: configs/carry_audjpy_d1.yaml）
+# ⚠️ OANDA-Japanサーバーは D1始値(00:00) の成行が "market closed" で全失敗するため、
+#    チャート(執行)をH1にし、トレンド判定TFを D1(SignalTimeframe=16408=PERIOD_D1) に分離。
+#    これで判定は従来どおりD1・約定は市場開場中のH1始値で成立する。
+#    （XM版 configs/carry_audjpy_d1.yaml は period=D1・SignalTimeframe既定=PERIOD_CURRENT で不変）
+# ⚠️ スワップ収益はOANDAのスワップ率に依存（スポットP&Lは正確、スワップはテスター近似）。
+# 事前: OANDAのMetaEditorで experts/Carry.mq5 をコンパイルしておく。
+mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
+
+expert:    "Carry"
+symbol:    "AUDJPY"
+period:    "H1"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:      200
+  SignalTimeframe:     16408   # PERIOD_D1。判定はD1のMA200・D1終値で従来と同一
+  RequirePositiveSwap: true
+  LotSize:             0.05
+  UseRiskSizing:       true
+  RefDeposit:          100000.0
+  MagicNumber:         20260650
+  ResultFileName:      "carry_audjpy_d1_oanda_result.csv"
+
+report_dir:  "results"
+report_name: "Carry_AUDJPY_D1_OANDA"
