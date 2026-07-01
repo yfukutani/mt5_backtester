@@ -16,12 +16,18 @@
 > 検証・棄却し、**新規無相関源の探索は収穫逓減に到達**（[rejected_strategies.md](rejected_strategies.md)）。
 > **運用ルール: 新戦略は OOS/IS 両期間プラスを必須ゲートとする。**
 
+> 📌 **2026.07.02 追加改善:** PullbackTrend USDJPY/GBPJPYに**マルチタイムフレーム合流フィルター**
+> （上位足D1のトレンド方向とH4方向の一致を要求）を採用。USDJPY純利益+53%・OOSがマイナスからプラスに
+> 転換、GBPJPYも改善。GOLDには効果がないため不採用（既定OFF）。詳細: [mtf_confluence.md](mtf_confluence.md)。
+> 下記の構成表・合算値は本改善**適用前**の数値（USDJPY/GBPJPY単体は新値に更新済み、ポートフォリオ全体の
+> 再計算は今後実施）。
+
 ## 構成（6チャート）
 
 | 役割 | EA | config | サイジング | Magic | 純利益 | 単独DD |
 |---|---|---|---|---|---|---|
-| 順張り | PullbackTrend USDJPY H4 | `pullback_usdjpy_h4.yaml` | risk2% | 20260622 | +42,406 | 23,152 |
-| 順張り | PullbackTrend GBPJPY H4 | `pullback_gbpjpy_h4.yaml` | risk2% | 20260627 | +17,263 | 13,404 |
+| 順張り(MTF合流) | PullbackTrend USDJPY H4 | `pullback_usdjpy_h4.yaml` | risk2% | 20260622 | +60,616※ | 12,390 |
+| 順張り(MTF合流) | PullbackTrend GBPJPY H4 | `pullback_gbpjpy_h4.yaml` | risk2% | 20260627 | +18,337 | 13,378 |
 | ~~順張り~~ | ~~PullbackTrend AUDJPY H4~~（**デプロイ除外**） | `pullback_audjpy_h4.yaml` | 固定 | 20260628 | +44 | 8,826 |
 | 逆張り | RSI_Reversal USDJPY H4 | `rsi_robust_usdjpy_h4.yaml` | 固定 | 20260610 | +8,492 | 17,436 |
 | 逆張り | RSI_Reversal EURUSD H1 | `rsi_robust_eurusd_h1.yaml` | 固定 | 20260605 | +6,180 | 13,616 |
@@ -32,9 +38,10 @@
 | 別軸(ボラブレイク) | VolBreakout USDJPY H4 | `vbo_usdjpy_h4.yaml` | 固定 | 20260680 | +16,501 | 16,978 |
 | 別軸(暗号トレンド) | TrendHold ETHUSD D1 | `trendhold_eth_d1.yaml` | 固定0.05 | 20260710 | +15,816 | 5,000 |
 
-> 注: `pullback_usdjpy_h4.yaml` は本番configが2021起点のIS構成。上表のUSDJPY純利益は
-> 期間を揃えた全期間(2016-2026)版での値。純利益は open_prices 値（every_tick 実効値は
-> [model_validation.md](model_validation.md) 参照、特に Carry は -33% の +149,032 で見ること）。
+> 注: `pullback_usdjpy_h4.yaml` は本番configが2021起点のIS構成。※上表のUSDJPY純利益+60,616・単独DD12,390は
+> **IS期間(2021-2026)のみ**の値（本番configと同じ期間、MTF合流フィルター込みrisk2%）。GBPJPYは全期間
+> (2016-2026)の値。純利益は open_prices 値（every_tick 実効値は [model_validation.md](model_validation.md)
+> 参照、特に Carry は -33% の +149,032 で見ること）。MTF合流フィルターの詳細は [mtf_confluence.md](mtf_confluence.md)。
 
 > 💡 **VolBreakout USDJPY は「クライシスアルファ」枠:** ボラ圧縮後のブレイクを取る正スキュー戦略。
 > 多市場では頑健でないが USDJPY のみ正のエッジ（PF1.15）。ブックに追加で純利益増＋ポートフォリオDD低下＝

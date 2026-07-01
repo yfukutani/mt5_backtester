@@ -1,10 +1,14 @@
-# 押し目買い/戻り売り トレンドフォローEA — USDJPY H4（最適化済み最終構成 v1.2）
+# 押し目買い/戻り売り トレンドフォローEA — USDJPY H4（最適化済み最終構成 v1.3）
 # PullbackTrend v1.2: MA200方向 + EMA20/50トレンド + EMA20押し目反発 + 環境フィルター
 # OOS検証で過学習が判明したため、MA200傾き環境フィルター(>=1.2 ATR)を有効化してロバスト化
-# 成績: IS(2021-2026) +11,911円/DD4.0% / OOS(2016-2021) -205円/DD7.8%（両期間でDD一桁）
-# 注: フィルターOFFだとIS+43,341だがOOS-28,500/DD28.7%と過学習・実運用危険のため不採用
+# 成績(MTFフィルター前): IS(2021-2026) +11,911円/DD4.0% / OOS(2016-2021) -205円/DD7.8%
+# 注: 環境フィルターOFFだとIS+43,341だがOOS-28,500/DD28.7%と過学習・実運用危険のため不採用
+# v1.3: マルチタイムフレーム合流フィルター(UseHigherTFFilter)を追加採用。上位足(D1)のMA200トレンドが
+#   H4と一致する場合のみエントリー許可。固定ロット全期間+11,706→+17,890(+53%)、OOSが-205→+836に転換
+#   （プラスに改善）、DD7.75%→6.16%に低下。GOLDでは効果なし(-4.5%)のため既定は本枠のみで採用。
+#   詳細: docs/rejected_strategies.md（新規戦略候補#9の検証記録）
 # サイジング: リスク2%動的サイジング採用（docs/position_sizing.md）。
-#   全期間 固定+11,706 → risk2% +42,406（3.6倍）/PF1.21→1.35、DD7.75%→21.1%。シグナル不変。
+#   MTFフィルター込み risk2%: +60,616/PF1.67/DD7.90%（旧risk2% +42,406/PF1.35/DD21.1%から大幅改善）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -41,6 +45,9 @@ parameters:
   LotSize:                 0.01
   UseRiskSizing:           true
   RiskPercent:             2.0
+  UseHigherTFFilter:       true
+  HigherTF:                16408
+  HigherTF_MA:             200
   MagicNumber:             20260622
   ResultFileName:          "pullback_usdjpy_h4_result.csv"
 

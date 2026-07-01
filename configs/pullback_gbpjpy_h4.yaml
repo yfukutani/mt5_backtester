@@ -1,9 +1,14 @@
 # 押し目買い/戻り売り トレンドフォローEA — GBPJPY H4（円ペアポートフォリオ）
 # PullbackTrend v1.2: MA200方向 + EMA20/50トレンド + EMA20押し目反発 + 環境フィルター
 # 環境フィルターON必須（OFFだとOOS壊滅）。円ペアポートフォリオの一角。
-# 成績(固定): IS(2021-2026)+491/DD8.3% / OOS(2016-2021)+8,423/DD8.6% / Full+8,914（両期間プラス）
-# サイジング: リスク2%採用。全期間 固定+8,914 → risk2% +17,263(1.9倍)/PF1.16→1.18、DD8.6%→11.6%。
-#   PF>1の真のエッジがあるためサイジングが有効（docs/position_sizing.md）。
+# 成績(MTFフィルター前, 固定): IS(2021-2026)+491/DD8.3% / OOS(2016-2021)+8,423/DD8.6% / Full+8,914
+# v1.3: マルチタイムフレーム合流フィルター(UseHigherTFFilter)を追加採用。上位足(D1)のMA200トレンドが
+#   H4と一致する場合のみエントリー許可。固定ロット全期間+8,914→+9,924(+11%)、DD8.63%→7.74%に低下。
+#   ISは+491のまま不変(D1/H4が常に一致=フィルター非発動)、OOSは+8,423→+9,433に改善。
+#   詳細: docs/rejected_strategies.md（新規戦略候補#9の検証記録）
+# サイジング: リスク2%採用。MTFフィルター込み risk2%: +18,337/PF1.20/DD10.74%
+#   （旧risk2% +17,263/PF1.18/DD11.6%から改善）。PF>1の真のエッジがあるためサイジングが有効
+#   （docs/position_sizing.md）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -40,6 +45,9 @@ parameters:
   LotSize:                 0.01
   UseRiskSizing:           true
   RiskPercent:             2.0
+  UseHigherTFFilter:       true
+  HigherTF:                16408
+  HigherTF_MA:             200
   MagicNumber:             20260627
   ResultFileName:          "pullback_gbpjpy_h4_result.csv"
 

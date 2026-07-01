@@ -83,6 +83,8 @@ struct SLEEVE
    // PB 環境フィルター・ADX
    bool            useTrend; double slopeMinATR; int slopeLB;
    bool            useADX;   double adxThr;
+   // PB マルチタイムフレーム合流フィルター
+   bool            useHigherTF; ENUM_TIMEFRAMES higherTF; int higherTFMA; int hHigherTrend;
    // PB 状態
    bool            armedBuy, armedSell;
    // RSI
@@ -122,12 +124,14 @@ int OnInit()
    pb.useTrend=true; pb.slopeMinATR=1.2; pb.slopeLB=20;
    pb.useADX=true; pb.adxThr=22.5;
 
-   // 1. PB USDJPY (risk2%)
+   // 1. PB USDJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY; AddSleeve(x); }
-   // 2. PB GBPJPY (risk2%)
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
+   // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY; AddSleeve(x); }
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }
@@ -187,6 +191,8 @@ int OnInit()
          S[i].hSlow =iMA(S[i].symbol,S[i].tf,50,0,MODE_EMA,PRICE_CLOSE);
          S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
          S[i].hADX  =iADX(S[i].symbol,S[i].tf,14);
+         if(S[i].useHigherTF)
+            S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
       } else if(S[i].strat==ST_RSI){
          S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
@@ -212,6 +218,7 @@ void ZeroSleeve(SLEEVE &x)
    x.hATR=INVALID_HANDLE; x.hADX=INVALID_HANDLE; x.hRSI=INVALID_HANDLE; x.hBB=INVALID_HANDLE;
    x.useATRstops=false; x.atrSLmult=0; x.rr=0; x.slPips=0; x.tpPips=0;
    x.useTrend=false; x.slopeMinATR=0; x.slopeLB=20; x.useADX=false; x.adxThr=0;
+   x.useHigherTF=false; x.higherTF=PERIOD_D1; x.higherTFMA=200; x.hHigherTrend=INVALID_HANDLE;
    x.armedBuy=false; x.armedSell=false;
    x.bbDev=2.0; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
    x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
@@ -356,8 +363,17 @@ void ProcPullback(int i)
    bool adx_ok=true;
    if(S[i].useADX){ double a=GetBuf(S[i].hADX,0); if(a==EMPTY_VALUE) return; adx_ok=(a>=S[i].adxThr); }
 
-   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up;
-   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down;
+   // マルチタイムフレーム合流: 上位足のトレンド方向がH4の方向と一致する場合のみ許可
+   bool higher_ok_buy=true, higher_ok_sell=true;
+   if(S[i].useHigherTF){
+      double hb2=GetBuf(S[i].hHigherTrend,0); if(hb2==EMPTY_VALUE) return;
+      double higher_close=iClose(sym,S[i].higherTF,1);
+      higher_ok_buy  = (higher_close > hb2);
+      higher_ok_sell = (higher_close < hb2);
+   }
+
+   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy;
+   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell;
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
    double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
