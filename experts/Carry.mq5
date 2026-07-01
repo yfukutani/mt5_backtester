@@ -14,6 +14,11 @@
 input group "=== トレンド判定 ==="
 input int            TrendMA_Period = 200;       // 大局トレンドMA（この上で買い保有）
 input ENUM_MA_METHOD TrendMA_Method = MODE_SMA;
+// トレンド判定の時間足。既定 PERIOD_CURRENT＝チャートTF（XM検証はD1チャートで不変）。
+// 執行はチャートTFの新バーで行うため、判定D1・執行H1のように分離できる。
+// OANDA-Japanサーバーは D1始値(00:00) の成行が "market closed" で失敗するため、
+// チャートをH1にし SignalTimeframe=D1(PERIOD_D1) にすると市場開場中の時刻で約定できる。
+input ENUM_TIMEFRAMES SignalTimeframe = PERIOD_CURRENT;
 
 input group "=== キャリー条件 ==="
 input bool   RequirePositiveSwap = true;  // ロングスワップが正（キャリー有利）のときのみ保有
@@ -36,7 +41,7 @@ int    trendma_handle;
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    trendma_handle = iMA(_Symbol, PERIOD_CURRENT, TrendMA_Period, 0, TrendMA_Method, PRICE_CLOSE);
+    trendma_handle = iMA(_Symbol, SignalTimeframe, TrendMA_Period, 0, TrendMA_Method, PRICE_CLOSE);
     if(trendma_handle == INVALID_HANDLE)
     {
         Print("MAハンドルの作成に失敗");
@@ -64,7 +69,7 @@ void OnTick()
     ArraySetAsSeries(ma_buf, true);
     if(CopyBuffer(trendma_handle, 0, 1, 1, ma_buf) < 1) return;
     double ma200 = ma_buf[0];
-    double close_prev = iClose(_Symbol, PERIOD_CURRENT, 1);
+    double close_prev = iClose(_Symbol, SignalTimeframe, 1);
 
     bool has_pos = HasPosition();
 

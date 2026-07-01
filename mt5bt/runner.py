@@ -222,15 +222,38 @@ class MT5Runner:
             ini.write(f, space_around_delimiters=False)
 
     def _find_result_csv(self) -> Optional[Path]:
-        """候補パスを順に調べて存在するCSVを返す。"""
+        """候補パスを順に調べて存在するCSVを返す。
+
+        Tester エージェントフォルダ（Tester\\<hash>\\Agent-*）は初回テスト実行時に
+        動的生成されるため、__init__ 時点では存在せず静的候補に入らないことがある
+        （新規ブローカー端末＝OANDA等の初回実行）。そのため毎回再解決もする。
+        """
+        # 静的候補（初期化時に収集・事前削除済み）
         for p in self._result_csv_candidates:
             if p.exists() and p.stat().st_size > 0:
                 return p
+        # 動的再解決: 初回実行で生成された Tester エージェントを拾う。
+        # 静的候補に無いパスは事前削除されていないため、今回実行で生成された
+        # （= 実行開始以降に更新された）CSVのみを採用して古い結果の誤読を防ぐ。
+        result_file_name = self.config.parameters.get("ResultFileName", "")
+        if result_file_name:
+            run_start = getattr(self, "_run_start", 0.0)
+            for d in self.find_tester_files_dirs(self.config.mt5_path):
+                p = d / str(result_file_name)
+                if p in self._result_csv_candidates:
+                    continue
+                if (
+                    p.exists()
+                    and p.stat().st_size > 0
+                    and p.stat().st_mtime >= run_start - 5
+                ):
+                    return p
         return None
 
     def _wait_for_completion(self, proc: subprocess.Popen, timeout: int) -> bool:
         """バックテスト終了（または結果CSV生成）まで待機する。"""
         start = time.time()
+        self._run_start = start  # 動的に拾うCSVの鮮度判定（古い結果の誤読防止）に使用
         check_interval = 5
 
         with click.progressbar(
