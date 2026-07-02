@@ -1,5 +1,8 @@
 # 統計的平均回帰ペアトレード — EURUSD(主) / GBPUSD(従) H1
 # PairTrade v1.0: スプレッド(EUR-GBP)のz-score回帰。マーケットニュートラル。
+# v1.1: Exit_Zを0.0→-1.0に変更（オーバーシュートまで引っ張って決済）。
+#   全期間+12,143→+20,804(+71%)、DD10.70%→7.74%。OOS/IS両プラス維持（IS+5,407→+11,371、
+#   OOS+6,736→+9,433）。詳細: docs/pair_trade.md
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PairTrade"
@@ -18,7 +21,7 @@ parameters:
   SecondSymbol:    "GBPUSD"
   Lookback:        200
   Entry_Z:         4.0
-  Exit_Z:          0.0
+  Exit_Z:          -1.0
   Stop_Z:          5.0
   LotSize:         0.01
   UseRiskSizing:   false   # 固定維持。複利サイズアップはテール発散で破綻リスク（docs/position_sizing.md）

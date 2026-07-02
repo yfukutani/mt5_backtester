@@ -35,7 +35,7 @@
 | 逆張り | RSI_Reversal USDJPY H4 | `rsi_robust_usdjpy_h4.yaml` | 固定 | 20260610 | +8,492 | 17,436 |
 | 逆張り | RSI_Reversal EURUSD H1 | `rsi_robust_eurusd_h1.yaml` | 固定 | 20260605 | +6,180 | 13,616 |
 | 逆張り(レンジ強化) | RSI_Reversal GBPUSD H4 | `rsi_robust_gbpusd_h4.yaml` | 固定 | 20260774 | +14,213 | 5,476 |
-| 中立 | PairTrade EUR/GBP H1 | `pairtrade_eurusd_gbpusd.yaml` | 固定 | 20260629 | +12,340 | 12,284 |
+| 中立(v1.2) | PairTrade EUR/GBP H1 | `pairtrade_eurusd_gbpusd.yaml` | 固定 | 20260629 | +20,804※2 | 9,270 |
 | 順張り(上振れ) | PullbackTrend GOLD H4 | `pullback_gold_h4.yaml` | 固定 | 20260640 | +168,661 | 21,654 |
 | 別軸(キャリー) | Carry AUDJPY D1 | `carry_audjpy_d1.yaml` | 複利0.05 | 20260650 | +220,819 | 48,196 |
 | 別軸(ボラブレイク) | VolBreakout USDJPY H4 | `vbo_usdjpy_h4.yaml` | 固定 | 20260680 | +16,501 | 16,978 |
@@ -45,6 +45,8 @@
 > **IS期間(2021-2026)のみ**の値（本番configと同じ期間、MTF合流フィルター込みrisk2%）。GBPJPYは全期間
 > (2016-2026)の値。純利益は open_prices 値（every_tick 実効値は [model_validation.md](model_validation.md)
 > 参照、特に Carry は -33% の +149,032 で見ること）。MTF合流フィルターの詳細は [mtf_confluence.md](mtf_confluence.md)。
+> ※2 PairTradeは`Exit_Z: 0.0→-1.0`（v1.2、2026.07.02採用）。旧値+12,143→**+20,804**、DD7.74%。
+> 詳細: [pair_trade.md](pair_trade.md)。
 
 > 💡 **VolBreakout USDJPY は「クライシスアルファ」枠:** ボラ圧縮後のブレイクを取る正スキュー戦略。
 > 多市場では頑健でないが USDJPY のみ正のエッジ（PF1.15）。ブックに追加で純利益増＋ポートフォリオDD低下＝
@@ -170,6 +172,10 @@
 > フロンティアを押し出す唯一の道は無相関源の増強だが、探索は収穫逓減に到達（VBO/ETHの2枠のみ生存）。
 
 ## 本番デプロイ構成（総資金25万・リスクパリティ配分）
+
+> ⚠️ 以下は2026.06.28時点のスナップショット。MTF合流フィルター（PB USDJPY/GBPJPY）・PairTrade
+> Exit_Z改善（2026.07.02）は未反映。配分比率（単独DDに比例）自体の再計算が必要なため、
+> 純利益・単独DD列は個別に鵜呑みにせず、最新値は各枠の該当docを参照。
 
 上記は各EAを100k独立サブ口座とした名目評価。**実運用は1口座**で回すため、合算DD（分散で圧縮）に
 対して必要資金ははるかに少ない。総資金**25万**を各枠の単独DDに比例（リスクパリティ）配分した構成を推奨。
