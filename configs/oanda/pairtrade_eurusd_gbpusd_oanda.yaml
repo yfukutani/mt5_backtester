@@ -1,6 +1,5 @@
 # OANDA版 — PairTrade EURUSD(主)/GBPUSD(従) H1（ベース: configs/pairtrade_eurusd_gbpusd.yaml）
-# 統計的平均回帰。EURUSD/GBPUSD両方を気配値に表示しておくこと。
-# 事前: OANDAのMetaEditorで experts/PairTrade.mq5 をコンパイルしておく。
+# 2026.07.03: Exit_Z=-1.0（v1.2 乗り越し決済）を本番同様に反映（フォワードテスト整備）。
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "PairTrade"
@@ -19,7 +18,7 @@ parameters:
   SecondSymbol:    "GBPUSD"
   Lookback:        200
   Entry_Z:         4.0
-  Exit_Z:          0.0
+  Exit_Z:          -1.0
   Stop_Z:          5.0
   LotSize:         0.01
   UseRiskSizing:   false

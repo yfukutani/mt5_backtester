@@ -1,6 +1,5 @@
 # OANDA版 — PullbackTrend GBPJPY H4（ベース: configs/pullback_gbpjpy_h4.yaml）
-# 差分は mt5_path/結果名のみ。GBPJPYはOANDAでも取扱（気配値に表示して履歴DL）。
-# 事前: OANDAのMetaEditorで experts/PullbackTrend.mq5 をコンパイルしておく。
+# 2026.07.03: MTF合流フィルター(UseHigherTFFilter)を本番同様に反映（フォワードテスト整備）。
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -37,6 +36,9 @@ parameters:
   LotSize:                 0.01
   UseRiskSizing:           true
   RiskPercent:             2.0
+  UseHigherTFFilter:       true
+  HigherTF:                16408
+  HigherTF_MA:             200
   MagicNumber:             20260627
   ResultFileName:          "pullback_gbpjpy_h4_oanda_result.csv"
 
