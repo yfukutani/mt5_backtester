@@ -177,7 +177,7 @@ int OnInit()
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol=Sym_EURUSD; x.second=Sym_GBPUSD;
      x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
-     x.lookback=200; x.entryZ=4.0; x.exitZ=0.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
+     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
 
    // 8. Carry AUDJPY 判定D1・執行Carry_ExecTF(既定H1) (複利0.05, スワップ条件ON)
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol=Sym_AUDJPY; x.tf=PERIOD_D1;
