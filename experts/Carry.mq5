@@ -23,6 +23,14 @@ input ENUM_TIMEFRAMES SignalTimeframe = PERIOD_CURRENT;
 input group "=== キャリー条件 ==="
 input bool   RequirePositiveSwap = true;  // ロングスワップが正（キャリー有利）のときのみ保有
 
+input group "=== MAクロス・ヒステリシス帯（往復ビンタ削減） ==="
+// entry: close > MA+b×ATR / exit: close < MA−b×ATR に非対称化し、MA200付近のチョップによる
+// 「高値で買い→浅い割れで損切り」の往復損失を削減する。AUDJPYで採用(b=0.75)、ETHは不採用（既定OFF）。
+// 検証: 全期間 +177,524→+209,966 / DD30.49%→24.17% / every_tick +149,032→+238,486（docs/carry.md）。
+input bool   UseHysteresis  = false;
+input int    ATR_Period     = 14;
+input double Hyst_ATR_Mult  = 0.75;  // 帯の半幅（×ATR）
+
 input group "=== トレード設定 ==="
 input double LotSize     = 0.01;
 input int    MagicNumber = 20260650;
@@ -37,6 +45,7 @@ input string EquityLogFile  = ""; // 全dealのtime,profitを書き出す（mt5b
 
 CTrade trade;
 int    trendma_handle;
+int    atr_handle = INVALID_HANDLE;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -47,15 +56,25 @@ int OnInit()
         Print("MAハンドルの作成に失敗");
         return INIT_FAILED;
     }
+    if(UseHysteresis)
+    {
+        atr_handle = iATR(_Symbol, SignalTimeframe, ATR_Period);
+        if(atr_handle == INVALID_HANDLE) { Print("ATRハンドルの作成に失敗"); return INIT_FAILED; }
+    }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(20);
-    Print("Carry v1.0 起動 | ", _Symbol, " MA", TrendMA_Period,
-          " | PositiveSwapOnly=", RequirePositiveSwap ? "ON" : "OFF");
+    Print("Carry v1.1 起動 | ", _Symbol, " MA", TrendMA_Period,
+          " | PositiveSwapOnly=", RequirePositiveSwap ? "ON" : "OFF",
+          " | Hyst=", UseHysteresis ? StringFormat("ON(±%.2fATR)", Hyst_ATR_Mult) : "OFF");
     return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason) { IndicatorRelease(trendma_handle); }
+void OnDeinit(const int reason)
+{
+    IndicatorRelease(trendma_handle);
+    if(atr_handle != INVALID_HANDLE) IndicatorRelease(atr_handle);
+}
 
 //+------------------------------------------------------------------+
 void OnTick()
@@ -76,16 +95,27 @@ void OnTick()
     // スワップ条件（現在のロングスワップが正か）
     bool swap_ok = !RequirePositiveSwap || (SymbolInfoDouble(_Symbol, SYMBOL_SWAP_LONG) > 0.0);
 
-    // エントリー: MA200上 + キャリー有利 → 買い長期保有（SL/TPなし、MA割れで決済）
-    if(close_prev > ma200 && swap_ok && !has_pos)
+    // ヒステリシス帯: entry閾値=MA+b×ATR / exit閾値=MA−b×ATR（OFF時は両方MA200のまま）
+    double entry_th = ma200, exit_th = ma200;
+    if(UseHysteresis)
+    {
+        double atr_buf[];
+        ArraySetAsSeries(atr_buf, true);
+        if(CopyBuffer(atr_handle, 0, 1, 1, atr_buf) < 1) return;
+        entry_th = ma200 + Hyst_ATR_Mult * atr_buf[0];
+        exit_th  = ma200 - Hyst_ATR_Mult * atr_buf[0];
+    }
+
+    // エントリー: 帯の上抜け + キャリー有利 → 買い長期保有（SL/TPなし、帯の下割れで決済）
+    if(close_prev > entry_th && swap_ok && !has_pos)
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         if(trade.Buy(CalcLot(), _Symbol, ask, 0, 0, "Carry"))
             Print("[CARRY BUY] close=", close_prev, " ma200=", DoubleToString(ma200, _Digits),
                   " swapLong=", DoubleToString(SymbolInfoDouble(_Symbol, SYMBOL_SWAP_LONG), 2));
     }
-    // 決済: MA200割れ（トレンド崩れ＝リスクオフ回避）
-    else if(close_prev < ma200 && has_pos)
+    // 決済: 帯の下割れ（トレンド崩れ＝リスクオフ回避）
+    else if(close_prev < exit_th && has_pos)
     {
         ClosePosition();
         Print("[CARRY EXIT] close=", close_prev, " ma200=", DoubleToString(ma200, _Digits));

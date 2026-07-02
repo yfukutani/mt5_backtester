@@ -115,6 +115,7 @@ struct SLEEVE
    string          second; int lookback; double entryZ, exitZ, stopZ;
    // CARRY
    int             trendPeriod; bool reqPosSwap;
+   bool            useHyst; double hystMult;   // MAクロス・ヒステリシス帯（AUDJPYのみ採用）
    // VBO
    int             channel; bool useSqueeze; int sqLB; double sqFactor; double trailMult;
    // 増レバ配分（deploy）
@@ -179,10 +180,11 @@ int OnInit()
      x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
      x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
 
-   // 8. Carry AUDJPY 判定D1・執行Carry_ExecTF(既定H1) (複利0.05, スワップ条件ON)
+   // 8. Carry AUDJPY 判定D1・執行Carry_ExecTF(既定H1) (複利0.05, スワップ条件ON, ヒステリシス帯±0.75ATR採用)
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol=Sym_AUDJPY; x.tf=PERIOD_D1;
      x.execTf=Carry_ExecTF;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
+     x.useHyst=true; x.hystMult=0.75;
      x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
@@ -222,6 +224,7 @@ int OnInit()
          S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
       } else if(S[i].strat==ST_CARRY){
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
+         if(S[i].useHyst) S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
       } else if(S[i].strat==ST_VBO){
          S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
       }
@@ -248,6 +251,7 @@ void ZeroSleeve(SLEEVE &x)
    x.wasOB=false; x.wasOS=false; x.aboveBB=false; x.belowBB=false;
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
+   x.useHyst=false; x.hystMult=0.75;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
    x.lotMult=1.0; x.refCap=0.0;
 }
@@ -534,10 +538,17 @@ void ProcCarry(int i)
    double ma=mb[0], cp=iClose(sym,tf,1);
    bool swap_ok = !S[i].reqPosSwap || (SymbolInfoDouble(sym,SYMBOL_SWAP_LONG)>0.0);
    bool has=HasAny(i);
+   // ヒステリシス帯: entry=MA+b×ATR / exit=MA−b×ATR（AUDJPYのみ採用、ETHはOFF＝従来どおり）
+   double entry_th=ma, exit_th=ma;
+   if(S[i].useHyst){
+      double ab[]; ArraySetAsSeries(ab,true);
+      if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
+      entry_th=ma+S[i].hystMult*ab[0]; exit_th=ma-S[i].hystMult*ab[0];
+   }
    trade.SetExpertMagicNumber(S[i].magic);
-   if(cp>ma && swap_ok && !has){
+   if(cp>entry_th && swap_ok && !has){
       trade.Buy(LotComplex(i,sym),sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"Carry");
-   } else if(cp<ma && has){
+   } else if(cp<exit_th && has){
       CloseSleeveAll(i);
    }
 }
