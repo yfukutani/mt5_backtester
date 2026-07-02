@@ -1,12 +1,5 @@
-# OANDA証券（OANDA-Japan MT5 Live）でのバックテスト用プロファイル
-# ベースは configs/pullback_usdjpy_h4.yaml（XM検証済み）。差分は mt5_path のみ。
-# 目的: OANDAのスプレッド/スワップ/ヒストリー期間でのコスト差を確認する（エッジ再検証ではない）。
-#
-# 事前準備:
-#   1) OANDAのMetaEditorで experts/PullbackTrend.mq5 をコンパイル
-#      （OANDA端末の MQL5\Experts に配置してから F7）。
-#   2) 気配値に USDJPY を表示しておく（初回はサーバーから履歴DL）。
-# 注: OANDA-Japan MT5 Live はFXのサフィックス無し（USDJPY等プレーン名）を実機確認済み。
+# OANDA版 — PullbackTrend USDJPY H4（ベース: configs/pullback_usdjpy_h4.yaml）
+# 2026.07.03: MTF合流フィルター(UseHigherTFFilter)を本番同様に反映（フォワードテスト整備）。
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -43,6 +36,9 @@ parameters:
   LotSize:                 0.01
   UseRiskSizing:           true
   RiskPercent:             2.0
+  UseHigherTFFilter:       true
+  HigherTF:                16408
+  HigherTF_MA:             200
   MagicNumber:             20260622
   ResultFileName:          "pullback_usdjpy_h4_oanda_result.csv"
 
