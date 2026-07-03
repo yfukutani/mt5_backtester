@@ -1,0 +1,42 @@
+# SCA_EA（セッションORBスキャルパー）— GOLD M15（主軸枠）
+# アジア時間(0-9h鯖時間)レンジのブレイクを9-15hに取り22h強制クローズ。
+# 最終形(2026.07.03): TE15/RR1.5/buf0.05/MinRange0.45。全期間+134,501/PF1.44/DD16.1%(every_tick)。
+# IS(2021-26)+112,551/PF1.52、OOS(2016-21・差分)+21,950＝両期間プラス。
+# 発見: エッジは広レンジ日に集中（MinRange 0.30-0.60の広いプラトー、狭レンジ日は有毒）。
+# リスク%サイジングはエッジ（レンジ幅加重）を反転させ破綻するため固定ロット厳守。
+# ⚠️ スキャルピングのため検証は必ず every_tick で行うこと（open_prices不可）。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "GOLD"
+period:    "M15"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    0
+  RangeEndHour:      9
+  TradeEndHour:      15
+  ForceCloseHour:    22
+  MinRange_ATRd:     0.45
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.05
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          1.5
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261002
+  ResultFileName:    "sca_gold_m15_result.csv"
+
+report_dir:  "results"
+report_name: "SCA_GOLD_M15"
