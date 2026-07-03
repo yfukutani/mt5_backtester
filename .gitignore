@@ -18,6 +18,12 @@ tests/*.html
 tests/*.csv
 tests/charts/
 
+# ML学習データ（各200MB前後・export_chunks.py/merge_chunks.pyで再生成可能）
+ml/*.csv
+ml/chunks/
+ml/*.yaml
+ml/*.txt
+
 # 環境
 .venv/
 venv/
