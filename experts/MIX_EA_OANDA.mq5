@@ -81,6 +81,14 @@ input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
 
+input group "=== 運用ログ（フォワード分析用・ライブで有効化） ==="
+// MQL5\Files\<prefix>_YYYYMM.csv に月次追記。3種のレコードを出力:
+//  DEAL      = 全約定（IN/OUT・枠Magic・ロット・価格・SL/TP・損益）
+//  SCA_RANGE = SCA枠の日次レンジ確定情報（高安・幅・ATRd・ドリフト・スキップ有無）
+//  DAILY     = 日次スナップショット（equity/balance/証拠金/保有数）
+input bool   EnableOpsLog = false;
+input string OpsLogPrefix = "mixlog_oa";
+
 //=== 戦略種別 ===
 enum ESTRAT { ST_PULLBACK, ST_RSI, ST_PAIR, ST_CARRY, ST_VBO, ST_SCA };
 
@@ -143,6 +151,58 @@ struct SLEEVE
 SLEEVE S[32];
 int    NS = 0;
 CTrade trade;
+datetime g_opsDay = 0;   // 運用ログの日次スナップショット管理
+
+//============================ 運用ログ ============================
+string OpsLogFile()
+{
+   MqlDateTime t;
+   TimeToStruct(TimeCurrent(), t);
+   return StringFormat("%s_%04d%02d.csv", OpsLogPrefix, t.year, t.mon);
+}
+
+void OpsWrite(string type, long magic, string sym,
+              double f1, double f2, double f3, double f4, double f5, double f6,
+              string note)
+{
+   if(!EnableOpsLog) return;
+   int fh = FileOpen(OpsLogFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
+   if(fh == INVALID_HANDLE) return;
+   bool empty = (FileSize(fh) == 0);
+   FileSeek(fh, 0, SEEK_END);
+   if(empty)
+      FileWrite(fh, "time", "type", "magic", "symbol", "f1", "f2", "f3", "f4", "f5", "f6", "note");
+   FileWrite(fh, (long)TimeCurrent(), type, magic, sym,
+             DoubleToString(f1, 5), DoubleToString(f2, 5), DoubleToString(f3, 5),
+             DoubleToString(f4, 5), DoubleToString(f5, 5), DoubleToString(f6, 5), note);
+   FileClose(fh);
+}
+
+// 全約定を記録（DEAL: f1=方向 f2=ロット f3=価格 f4=SL f5=TP f6=損益, note=IN/OUT）
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(!EnableOpsLog) return;
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD) return;
+   if(!HistoryDealSelect(trans.deal)) return;
+   long magic = HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
+   if(magic < 20260000 || magic >= 20270000) return;   // 本EAの枠のみ
+   long dtype = HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+   if(dtype != DEAL_TYPE_BUY && dtype != DEAL_TYPE_SELL) return;
+   long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   double pnl = HistoryDealGetDouble(trans.deal, DEAL_PROFIT)
+              + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
+              + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+   OpsWrite("DEAL", magic, HistoryDealGetString(trans.deal, DEAL_SYMBOL),
+            (dtype == DEAL_TYPE_BUY ? 1 : -1),
+            HistoryDealGetDouble(trans.deal, DEAL_VOLUME),
+            HistoryDealGetDouble(trans.deal, DEAL_PRICE),
+            HistoryDealGetDouble(trans.deal, DEAL_SL),
+            HistoryDealGetDouble(trans.deal, DEAL_TP),
+            pnl,
+            (entry == DEAL_ENTRY_IN ? "IN" : "OUT"));
+}
 
 //+------------------------------------------------------------------+
 void AddSleeve(SLEEVE &x){ S[NS] = x; NS++; }
@@ -306,6 +366,18 @@ int CountEnabled(){ int c=0; for(int i=0;i<NS;i++) if(S[i].enabled) c++; return 
 void OnTick()
 {
    if(!MasterEnable) return;
+   // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
+   if(EnableOpsLog)
+   {
+      datetime d = TimeCurrent() - (TimeCurrent() % 86400);
+      if(d != g_opsDay)
+      {
+         g_opsDay = d;
+         OpsWrite("DAILY", 0, "",
+                  AccountInfoDouble(ACCOUNT_EQUITY), AccountInfoDouble(ACCOUNT_BALANCE),
+                  AccountInfoDouble(ACCOUNT_MARGIN), PositionsTotal(), 0, 0, "");
+      }
+   }
    for(int i=0;i<NS;i++)
    {
       if(!S[i].enabled) continue;
@@ -695,6 +767,10 @@ void ProcSCA(int i)
       double atrd=ab[0], w=S[i].scaRangeHigh-S[i].scaRangeLow;
       if(atrd<=0 || w<S[i].scaMinRange*atrd || w>S[i].scaMaxRange*atrd)
          S[i].scaSkip=true;
+      // レンジ確定の意思決定コンテキストを記録（バックテストとの乖離分析用）
+      OpsWrite("SCA_RANGE", S[i].magic, sym,
+               S[i].scaRangeHigh, S[i].scaRangeLow, w, atrd, S[i].scaDrift,
+               S[i].scaSkip ? 1 : 0, S[i].scaSkip ? "SKIP" : "ACTIVE");
    }
    if(!S[i].scaReady || S[i].scaSkip) return;
    if(dt.hour<S[i].scaRangeEnd || dt.hour>=S[i].scaTradeEnd) return;
