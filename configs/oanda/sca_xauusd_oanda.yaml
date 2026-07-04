@@ -1,0 +1,43 @@
+# OANDA版 SCA — XAUUSD M15（改善後GOLD構成: Range1-9h/MinR0.40/金曜スキップ/20時決済）
+# ⚠️ XAUUSDは【商品CFD専用端末】(OANDA MetaTrader 5_CFD)。FX端末では取引不可。
+# ⚠️ every_tick 10年はtickデータ約20GB超が必要（ディスク不足時は期間を絞ること）。
+#    検証実績(2026.07.05・2024.01-2026.06): +134,720/PF2.02/DD11.8%/135取引
+#    （XM GOLD同期間: +149,008/PF2.08/DD14.6%/133取引＝取引数・PFがフィード間で整合）。
+# サーバー時刻はXMと同じGMT+2/+3系（エントリー9-14h・金曜ゼロをログで確認済み）。
+# 事前: OANDA_CFDのMetaEditorで experts/SCA_EA.mq5 をコンパイルしておく。
+mt5_path: "C:\\Program Files\\OANDA MetaTrader 5_CFD\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "XAUUSD"
+period:    "M15"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 20
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    1
+  RangeEndHour:      9
+  TradeEndHour:      15
+  ForceCloseHour:    20
+  MinRange_ATRd:     0.40
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.05
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          1.5
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  SkipFriday:        true
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261002
+  ResultFileName:    "sca_xau_oanda_result.csv"
+
+report_dir:  "results"
+report_name: "SCA_XAUUSD_OANDA"
