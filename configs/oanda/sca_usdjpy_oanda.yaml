@@ -1,0 +1,39 @@
+# OANDA版 SCA — USDJPY M15（初版構成・FX端末）
+# 検証実績(2026.07.05・2016-2026 every_tick): +20,529/PF1.13/DD7.6%/856取引
+# （XM同構成: +8,589/PF1.05/DD10.2%＝OANDAのタイトなスプレッドで大幅改善）。
+# サーバー時刻はXMと同じGMT+2/+3系（エントリー9-11h集中をログで確認済み）。
+mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "USDJPY"
+period:    "M15"
+from_date: "2016.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    0
+  RangeEndHour:      9
+  TradeEndHour:      12
+  ForceCloseHour:    22
+  MinRange_ATRd:     0.30
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.05
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          2.0
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261000
+  ResultFileName:    "sca_usdjpy_oanda_result.csv"
+
+report_dir:  "results"
+report_name: "SCA_USDJPY_OANDA"
