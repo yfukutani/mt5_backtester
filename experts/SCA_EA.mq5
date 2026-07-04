@@ -1,17 +1,25 @@
 //+------------------------------------------------------------------+
 //|  SCA_EA.mq5                                                      |
-//|  セッションORB（オープニングレンジ・ブレイクアウト）スキャルパー v1.0 |
+//|  セッションORB（オープニングレンジ・ブレイクアウト）スキャルパー v1.1 |
 //|  アジア時間のレンジを定義し、ロンドン序盤のブレイクを日中完結で取る。|
 //|  対象: GOLD / USDJPY / GBPJPY（M15チャート推奨）                  |
 //|  既存ブック（H4トレンド/レンジ/キャリー等）と別メカニズム＝       |
 //|  セッション構造のボラ拡大を収益源とする。                         |
+//|  v1.1: ML確率フィルター（M1×30本の18特徴量ロジスティック回帰で     |
+//|  ブレイク方向への2×ATR継続確率を推定し、閾値未満なら見送る）。      |
+//|  係数は ml/train.py の自動生成ヘッダ(ml_model_*.mqh)を埋め込み。   |
 //|  ※検証は必ず every_tick（スプレッド実費込み）で行うこと。          |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
+#include "ml_model_gold.mqh"
+#include "ml_model_usdjpy.mqh"
+#include "ml_model_gbpjpy.mqh"
+
+#define ML_NFEAT 18
 
 input group "=== セッション定義（サーバー時間・XM=GMT+2/+3） ==="
 input int RangeStartHour = 0;   // レンジ計測開始時（アジア序盤）
@@ -36,6 +44,12 @@ input group "=== D1トレンド方向フィルター（MTF合流のORB適用） 
 input bool UseD1TrendFilter = false;
 input int  D1Trend_MA       = 200;
 
+input group "=== ML確率フィルター（M1×30本→2×ATR継続確率） ==="
+// ブレイク検出時にML確率（ブレイク方向にM1 ATR14×2が10本以内に到達する較正済み確率）
+// が閾値未満ならエントリーを見送る。確率が後続バーで閾値を超えれば通常通り入る。
+input bool   UseMLFilter  = false;
+input double ML_Threshold = 0.40;   // ベース率33-35%に対し「平均より明確に高い」水準
+
 input group "=== スプレッドガード ==="
 input int MaxSpreadPoints = 0;  // エントリー時スプレッド上限（points、0=無効）
 
@@ -55,6 +69,9 @@ CTrade trade;
 int    atr_d1_handle;
 int    ma_d1_handle = INVALID_HANDLE;
 double pip_value;
+int    ml_atr_handle = INVALID_HANDLE;   // M1 ATR14（ML特徴量用）
+double ml_w[ML_NFEAT];
+double ml_b = 0.0;
 
 // 日次状態
 datetime g_day        = 0;     // 現在の日（00:00）
@@ -80,6 +97,18 @@ int OnInit()
         ma_d1_handle = iMA(_Symbol, PERIOD_D1, D1Trend_MA, 0, MODE_SMA, PRICE_CLOSE);
         if(ma_d1_handle == INVALID_HANDLE) { Print("D1 MAハンドルの作成に失敗"); return INIT_FAILED; }
     }
+    if(UseMLFilter)
+    {
+        ml_atr_handle = iATR(_Symbol, PERIOD_M1, 14);
+        if(ml_atr_handle == INVALID_HANDLE) { Print("M1 ATRハンドルの作成に失敗"); return INIT_FAILED; }
+        if(StringFind(_Symbol, "GOLD") >= 0 || StringFind(_Symbol, "XAU") >= 0)
+            { ArrayCopy(ml_w, ML_W_GOLD);   ml_b = ML_B_GOLD; }
+        else if(StringFind(_Symbol, "USDJPY") >= 0)
+            { ArrayCopy(ml_w, ML_W_USDJPY); ml_b = ML_B_USDJPY; }
+        else if(StringFind(_Symbol, "GBPJPY") >= 0)
+            { ArrayCopy(ml_w, ML_W_GBPJPY); ml_b = ML_B_GBPJPY; }
+        else { Print("MLフィルター: 未対応銘柄 ", _Symbol); return INIT_FAILED; }
+    }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(20);
     Print("SCA_EA v1.0 起動 | ", _Symbol,
@@ -94,6 +123,104 @@ void OnDeinit(const int reason)
 {
     IndicatorRelease(atr_d1_handle);
     if(ma_d1_handle != INVALID_HANDLE) IndicatorRelease(ma_d1_handle);
+    if(ml_atr_handle != INVALID_HANDLE) IndicatorRelease(ml_atr_handle);
+}
+
+//+------------------------------------------------------------------+
+//| ML特徴量（train.py build_features()と厳密一致・ロング基準・M1）    |
+//| バーt = 確定した最新M1バー（shift 1）                              |
+//+------------------------------------------------------------------+
+double MLSampleStd(const double &v[], int start, int count)
+{
+    if(count < 2) return 0.0;
+    double mean = 0.0;
+    for(int i = start; i < start + count; i++) mean += v[i];
+    mean /= count;
+    double ss = 0.0;
+    for(int i = start; i < start + count; i++) ss += (v[i] - mean) * (v[i] - mean);
+    return MathSqrt(ss / (count - 1));
+}
+
+bool ComputeMLFeatures(double &x[])
+{
+    double c[], o[], h[], l[];
+    long   tv[];
+    double atrBuf[];
+    ArraySetAsSeries(c, true);  ArraySetAsSeries(o, true);
+    ArraySetAsSeries(h, true);  ArraySetAsSeries(l, true);
+    ArraySetAsSeries(tv, true); ArraySetAsSeries(atrBuf, true);
+    int need = 31;   // c[0]=shift1(バーt) .. c[30]=shift31
+    if(CopyClose(_Symbol, PERIOD_M1, 1, need, c) != need) return false;
+    if(CopyOpen(_Symbol, PERIOD_M1, 1, need, o)  != need) return false;
+    if(CopyHigh(_Symbol, PERIOD_M1, 1, need, h)  != need) return false;
+    if(CopyLow(_Symbol, PERIOD_M1, 1, need, l)   != need) return false;
+    if(CopyTickVolume(_Symbol, PERIOD_M1, 1, need, tv) != need) return false;
+    if(CopyBuffer(ml_atr_handle, 0, 1, 3, atrBuf) != 3) return false;
+
+    double atr = atrBuf[0];
+    if(atr <= 0 || atrBuf[1] <= 0 || atrBuf[2] <= 0) return false;
+
+    x[0] = (c[0] - c[1])  / atr;                             // mom1
+    x[1] = (c[0] - c[3])  / atr;                             // mom3
+    x[2] = (c[0] - c[5])  / atr;                             // mom5
+    x[3] = (c[0] - c[10]) / atr;                             // mom10
+    x[4] = (c[0] - c[30]) / atr;                             // mom30
+    x[5] = (c[0] - o[0]) / atr;                              // body0
+    x[6] = (h[0] - MathMax(c[0], o[0])) / atr;               // upw0
+    x[7] = (MathMin(c[0], o[0]) - l[0]) / atr;               // dnw0
+    x[8] = (c[1] - o[1]) / atrBuf[1];                        // body1
+    x[9] = (c[2] - o[2]) / atrBuf[2];                        // body2
+    double hh = h[0], ll = l[0];
+    for(int i = 1; i < 30; i++)
+    {
+        if(h[i] > hh) hh = h[i];
+        if(l[i] < ll) ll = l[i];
+    }
+    double rng = hh - ll;
+    x[10] = (rng > 0 ? (c[0] - ll) / rng : 0.5);             // rangepos
+    x[11] = rng / atr / 30.0 * 10.0;                         // rangew
+    double ret1[30];
+    for(int i = 0; i < 30; i++) ret1[i] = c[i] - c[i + 1];
+    double rv10 = MLSampleStd(ret1, 0, 10);
+    double rv30 = MLSampleStd(ret1, 0, 30);
+    x[12] = (rv30 > 0 ? rv10 / rv30 : 1.0);                  // volratio
+    int up10 = 0, up30 = 0;
+    for(int i = 0; i < 30; i++)
+    {
+        if(c[i] > o[i]) { up30++; if(i < 10) up10++; }
+    }
+    x[13] = up10 / 10.0;                                     // upshare10
+    x[14] = up30 / 30.0;                                     // upshare30
+    double tvm = 0.0;
+    for(int i = 0; i < 30; i++) tvm += (double)tv[i];
+    tvm /= 30.0;
+    x[15] = (tvm > 0 ? (double)tv[0] / tvm : 1.0);           // tvr
+    MqlDateTime st;
+    TimeToStruct(iTime(_Symbol, PERIOD_M1, 1), st);
+    double hr = st.hour + st.min / 60.0;
+    x[16] = MathSin(2.0 * M_PI * hr / 24.0);                 // hsin
+    x[17] = MathCos(2.0 * M_PI * hr / 24.0);                 // hcos
+    return true;
+}
+
+//+------------------------------------------------------------------+
+//| ブレイク方向のML確率（ショートは対称化: train.pyと一致）           |
+//+------------------------------------------------------------------+
+double GetMLProb(bool isLong)
+{
+    double x[ML_NFEAT];
+    if(!ComputeMLFeatures(x)) return -1.0;   // 計算不能（フィルター判定不可＝見送り）
+    if(!isLong)
+    {
+        // 符号反転: mom*, body0/1/2
+        x[0] = -x[0]; x[1] = -x[1]; x[2] = -x[2]; x[3] = -x[3]; x[4] = -x[4];
+        x[5] = -x[5]; x[8] = -x[8]; x[9] = -x[9];
+        double tmp = x[6]; x[6] = x[7]; x[7] = tmp;          // upw0 <-> dnw0
+        x[10] = 1.0 - x[10]; x[13] = 1.0 - x[13]; x[14] = 1.0 - x[14];
+    }
+    double z = ml_b;
+    for(int i = 0; i < ML_NFEAT; i++) z += ml_w[i] * x[i];
+    return 1.0 / (1.0 + MathExp(-z));
 }
 
 //+------------------------------------------------------------------+
@@ -245,8 +372,9 @@ void OnTick()
         d1_ok_sell = (d1_close < ma_buf[0]);
     }
 
-    // 上抜けブレイク → 買い
-    if(d1_ok_buy && close1 > g_rangeHigh + buffer && !has_buy && !(OneShotPerDir && g_tradedLong))
+    // 上抜けブレイク → 買い（MLフィルター有効時はブレイク方向の継続確率が閾値以上の場合のみ）
+    if(d1_ok_buy && close1 > g_rangeHigh + buffer && !has_buy && !(OneShotPerDir && g_tradedLong)
+       && (!UseMLFilter || GetMLProb(true) >= ML_Threshold))
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         double sl  = (SL_Mode == 0) ? g_rangeLow : ask - SL_ATRd_Mult * atrd;
@@ -262,8 +390,9 @@ void OnTick()
             }
         }
     }
-    // 下抜けブレイク → 売り
-    if(d1_ok_sell && close1 < g_rangeLow - buffer && !has_sell && !(OneShotPerDir && g_tradedShort))
+    // 下抜けブレイク → 売り（MLフィルター有効時はブレイク方向の継続確率が閾値以上の場合のみ）
+    if(d1_ok_sell && close1 < g_rangeLow - buffer && !has_sell && !(OneShotPerDir && g_tradedShort)
+       && (!UseMLFilter || GetMLProb(false) >= ML_Threshold))
     {
         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
         double sl  = (SL_Mode == 0) ? g_rangeHigh : bid + SL_ATRd_Mult * atrd;
