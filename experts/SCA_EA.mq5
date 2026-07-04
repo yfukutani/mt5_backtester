@@ -64,6 +64,7 @@ input double RiskPercent   = 1.0;
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
+input string TradeLogFile   = "";   // ポジション単位の取引ログ（メタラベリング学習用）
 
 CTrade trade;
 int    atr_d1_handle;
@@ -436,6 +437,67 @@ double OnTester()
                 FileWrite(eqh, eqt, DoubleToString(eqp, 2));
             }
             FileClose(eqh);
+        }
+    }
+
+    // ポジション単位の取引ログ（エントリー時刻・方向・損益＝メタラベリング用）
+    if(TradeLogFile != "")
+    {
+        int th = FileOpen(TradeLogFile, FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
+        if(th != INVALID_HANDLE)
+        {
+            FileWrite(th, "pos_id", "entry_time", "dir", "lots", "entry_price", "exit_time", "profit");
+            HistorySelect(0, TimeCurrent());
+            int total = HistoryDealsTotal();
+            // ヘッジ口座＝同時保有は最大2（buy/sell各1）なので小さな開位置配列で足りる
+            long   op_id[8];   long op_et[8]; int op_dir[8];
+            double op_lot[8];  double op_px[8]; double op_pnl[8];
+            int nOpen = 0;
+            for(int i = 0; i < total; i++)
+            {
+                ulong tk = HistoryDealGetTicket(i);
+                if(tk == 0) continue;
+                long dtype = HistoryDealGetInteger(tk, DEAL_TYPE);
+                if(dtype != DEAL_TYPE_BUY && dtype != DEAL_TYPE_SELL) continue;
+                long entry = HistoryDealGetInteger(tk, DEAL_ENTRY);
+                long pid   = (long)HistoryDealGetInteger(tk, DEAL_POSITION_ID);
+                double pnl = HistoryDealGetDouble(tk, DEAL_PROFIT)
+                           + HistoryDealGetDouble(tk, DEAL_SWAP)
+                           + HistoryDealGetDouble(tk, DEAL_COMMISSION);
+                if(entry == DEAL_ENTRY_IN)
+                {
+                    if(nOpen < 8)
+                    {
+                        op_id[nOpen] = pid;
+                        op_et[nOpen] = (long)HistoryDealGetInteger(tk, DEAL_TIME);
+                        op_dir[nOpen] = (dtype == DEAL_TYPE_BUY ? 1 : -1);
+                        op_lot[nOpen] = HistoryDealGetDouble(tk, DEAL_VOLUME);
+                        op_px[nOpen]  = HistoryDealGetDouble(tk, DEAL_PRICE);
+                        op_pnl[nOpen] = pnl;
+                        nOpen++;
+                    }
+                }
+                else   // DEAL_ENTRY_OUT
+                {
+                    for(int k = 0; k < nOpen; k++)
+                    {
+                        if(op_id[k] != pid) continue;
+                        FileWrite(th, op_id[k], op_et[k], op_dir[k],
+                                  DoubleToString(op_lot[k], 2),
+                                  DoubleToString(op_px[k], _Digits),
+                                  (long)HistoryDealGetInteger(tk, DEAL_TIME),
+                                  DoubleToString(op_pnl[k] + pnl, 2));
+                        for(int m = k; m < nOpen - 1; m++)
+                        {
+                            op_id[m] = op_id[m+1]; op_et[m] = op_et[m+1]; op_dir[m] = op_dir[m+1];
+                            op_lot[m] = op_lot[m+1]; op_px[m] = op_px[m+1]; op_pnl[m] = op_pnl[m+1];
+                        }
+                        nOpen--;
+                        break;
+                    }
+                }
+            }
+            FileClose(th);
         }
     }
 
