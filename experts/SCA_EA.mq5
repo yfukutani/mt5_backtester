@@ -15,7 +15,7 @@
 //|  ※検証は必ず every_tick（スプレッド実費込み）で行うこと。          |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.40"   // v1.4: B2 UseStopOrders（レンジ確定時の逆指値事前設置）
+#property version   "1.50"   // v1.5: F2-3 UseReversalBoost（リバーサル型増しロット）/ C2-1 UseBodyRange（実体レンジ）
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -59,6 +59,9 @@ input int    Swing_Bars         = 5;
 input bool   UseRetestEntry     = false; // B1: 成行でなくレンジ端+バッファへの指値（リテスト待ち）
 input bool   SkipFriday         = false; // C2: 金曜は新規エントリーなし（決済は継続）
 input bool   UseStopOrders      = false; // B2: レンジ確定時に両端へ逆指値を事前設置（確定待ちの遅れ解消）
+input bool   UseReversalBoost   = false; // F2-3: レンジ内ドリフトと逆方向のブレイクでロット増し
+input double Boost_Mult         = 2.0;   //       増しロット倍率
+input bool   UseBodyRange       = false; // C2-1: レンジをヒゲ除外（実体=open/close）で定義
 
 input group "=== ML確率フィルター（M1×30本→2×ATR継続確率） ==="
 // ブレイク検出時にML確率（ブレイク方向にM1 ATR14×2が10本以内に到達する較正済み確率）
@@ -94,6 +97,7 @@ double ml_b = 0.0;
 datetime g_day        = 0;     // 現在の日（00:00）
 double   g_rangeHigh  = 0.0;
 double   g_rangeLow   = 0.0;
+double   g_drift      = 0.0;   // レンジ窓のドリフト（最終バーclose − 最初バーopen、F2-3用）
 bool     g_rangeReady = false;
 bool     g_rangeSkip  = false; // 幅フィルターで当日スキップ
 bool     g_tradedLong = false;
@@ -372,6 +376,8 @@ bool ComputeRange(datetime day_start)
     datetime t_from = day_start + RangeStartHour * 3600;
     datetime t_to   = day_start + RangeEndHour   * 3600;   // 排他（この時刻のバーは含めない）
     double hi = -DBL_MAX, lo = DBL_MAX;
+    double openF = 0.0, closeL = 0.0;
+    bool haveL = false;
     int bars = Bars(_Symbol, PERIOD_CURRENT);
     for(int sft = 1; sft < 200; sft++)   // 直近200本以内に当日分は収まる（M15×9h=36本）
     {
@@ -379,14 +385,29 @@ bool ComputeRange(datetime day_start)
         datetime bt = iTime(_Symbol, PERIOD_CURRENT, sft);
         if(bt < t_from) break;           // 窓より過去に出たら終了
         if(bt >= t_to) continue;         // 窓より未来（レンジ後）はスキップ
-        double h = iHigh(_Symbol, PERIOD_CURRENT, sft);
-        double l = iLow(_Symbol, PERIOD_CURRENT, sft);
+        double h, l;
+        if(UseBodyRange)
+        {
+            // C2-1: ヒゲを除いた実体レンジ
+            double o = iOpen(_Symbol, PERIOD_CURRENT, sft);
+            double c = iClose(_Symbol, PERIOD_CURRENT, sft);
+            h = MathMax(o, c);
+            l = MathMin(o, c);
+        }
+        else
+        {
+            h = iHigh(_Symbol, PERIOD_CURRENT, sft);
+            l = iLow(_Symbol, PERIOD_CURRENT, sft);
+        }
         if(h > hi) hi = h;
         if(l < lo) lo = l;
+        if(!haveL) { closeL = iClose(_Symbol, PERIOD_CURRENT, sft); haveL = true; }  // 窓内最新バー
+        openF = iOpen(_Symbol, PERIOD_CURRENT, sft);                                 // 窓内最古バー
     }
     if(hi <= -DBL_MAX || lo >= DBL_MAX) return false;
     g_rangeHigh = hi;
     g_rangeLow  = lo;
+    g_drift     = closeL - openF;   // F2-3: レンジ窓内の方向ドリフト
     return true;
 }
 
@@ -534,10 +555,13 @@ void OnTick()
             if(sl_dist > 0)
             {
                 bool sent = false;
+                double lotB = CalcLot(sl_dist);
+                if(UseReversalBoost && g_drift < 0)          // F2-3: アジア下げ→上ブレイク＝リバーサル
+                    lotB = NormalizeLot(lotB * Boost_Mult);
                 if(UsePartialTP)
                 {
                     // A1: 半分を+Partial_R、残りをRunner_RRまで伸ばす（SL共通）
-                    double half = NormalizeLot(CalcLot(sl_dist) / 2.0);
+                    double half = NormalizeLot(lotB / 2.0);
                     double tp1 = NormalizeDouble(ask + Partial_R * sl_dist, _Digits);
                     double tp2 = NormalizeDouble(ask + Runner_RR * sl_dist, _Digits);
                     bool ok1 = trade.Buy(half, _Symbol, ask, NormalizeDouble(sl, _Digits), tp1, "SCA-L1");
@@ -547,7 +571,7 @@ void OnTick()
                 else
                 {
                     double tp = NormalizeDouble(ask + RR_Ratio * sl_dist, _Digits);
-                    sent = trade.Buy(CalcLot(sl_dist), _Symbol, ask, NormalizeDouble(sl, _Digits), tp, "SCA-L");
+                    sent = trade.Buy(lotB, _Symbol, ask, NormalizeDouble(sl, _Digits), tp, "SCA-L");
                 }
                 if(sent)
                 {
@@ -587,9 +611,12 @@ void OnTick()
             if(sl_dist > 0)
             {
                 bool sent = false;
+                double lotS = CalcLot(sl_dist);
+                if(UseReversalBoost && g_drift > 0)          // F2-3: アジア上げ→下ブレイク＝リバーサル
+                    lotS = NormalizeLot(lotS * Boost_Mult);
                 if(UsePartialTP)
                 {
-                    double half = NormalizeLot(CalcLot(sl_dist) / 2.0);
+                    double half = NormalizeLot(lotS / 2.0);
                     double tp1 = NormalizeDouble(bid - Partial_R * sl_dist, _Digits);
                     double tp2 = NormalizeDouble(bid - Runner_RR * sl_dist, _Digits);
                     bool ok1 = trade.Sell(half, _Symbol, bid, NormalizeDouble(sl, _Digits), tp1, "SCA-S1");
@@ -599,7 +626,7 @@ void OnTick()
                 else
                 {
                     double tp = NormalizeDouble(bid - RR_Ratio * sl_dist, _Digits);
-                    sent = trade.Sell(CalcLot(sl_dist), _Symbol, bid, NormalizeDouble(sl, _Digits), tp, "SCA-S");
+                    sent = trade.Sell(lotS, _Symbol, bid, NormalizeDouble(sl, _Digits), tp, "SCA-S");
                 }
                 if(sent)
                 {
