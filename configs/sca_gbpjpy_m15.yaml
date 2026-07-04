@@ -34,6 +34,7 @@ parameters:
   LotSize:           0.01
   UseRiskSizing:     false
   MagicNumber:       20261001
+  UseReversalBoost:  true
   ResultFileName:    "sca_GBPJPY_m15_result.csv"
 
 report_dir:  "results"
