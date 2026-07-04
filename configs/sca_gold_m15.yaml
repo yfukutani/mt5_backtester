@@ -1,9 +1,12 @@
 # SCA_EA（セッションORBスキャルパー）— GOLD M15（主軸枠）
 # アジア時間(0-9h鯖時間)レンジのブレイクを9-15hに取り22h強制クローズ。
-# 最終形(2026.07.03): TE15/RR1.5/buf0.05/MinRange0.45。全期間+134,501/PF1.44/DD16.1%(every_tick)。
-# IS(2021-26)+112,551/PF1.52、OOS(2016-21・差分)+21,950＝両期間プラス。
+# 最終形(2026.07.05): TE15/RR1.5/buf0.05/MinRange0.45 + 金曜スキップ(v1.3 S案C2)。
+# 全期間+143,253/PF1.58/DD16.0%(every_tick)。IS(2021-26)+112,414/PF1.63（金曜スキップはIS中立・
+# OOSの金曜損失-8,889円を除去）。旧構成: +134,501/PF1.44/DD16.1%。
 # 発見: エッジは広レンジ日に集中（MinRange 0.30-0.60の広いプラトー、狭レンジ日は有毒）。
 # リスク%サイジングはエッジ（レンジ幅加重）を反転させ破綻するため固定ロット厳守。
+# エグジット系改良（failed-break/部分利食い/トレール/リテスト）は全て逆効果＝
+# レンジ端SL+RR1.5固定が最適（詳細: docs/sca_scalping_backlog.md 検証結果）。
 # ⚠️ スキャルピングのため検証は必ず every_tick で行うこと（open_prices不可）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
@@ -32,6 +35,7 @@ parameters:
   RR_Ratio:          1.5
   OneShotPerDir:     true
   UseD1TrendFilter:  false
+  SkipFriday:        true
   MaxSpreadPoints:   0
   LotSize:           0.01
   UseRiskSizing:     false

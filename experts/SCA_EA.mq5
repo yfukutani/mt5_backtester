@@ -8,10 +8,14 @@
 //|  v1.1: ML確率フィルター（M1×30本の18特徴量ロジスティック回帰で     |
 //|  ブレイク方向への2×ATR継続確率を推定し、閾値未満なら見送る）。      |
 //|  係数は ml/train.py の自動生成ヘッダ(ml_model_*.mqh)を埋め込み。   |
+//|  v1.2: TradeLogFile（ポジション単位取引ログ・メタラベリング用）。   |
+//|  v1.3: エグジット/エントリー改良の検証用オプション群（既定全OFF）: |
+//|   A2 failed-break exit / A1 部分利食い / A3 スイングトレール /     |
+//|   B1 リテスト指値 / C2 金曜スキップ。                              |
 //|  ※検証は必ず every_tick（スプレッド実費込み）で行うこと。          |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.10"
+#property version   "1.30"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -43,6 +47,17 @@ input group "=== D1トレンド方向フィルター（MTF合流のORB適用） 
 // 本ブックで最も成功した改善パターン（PB USDJPY +53%）のセッションORB版。
 input bool UseD1TrendFilter = false;
 input int  D1Trend_MA       = 200;
+
+input group "=== エグジット/エントリー改良（v1.3・個別検証用、既定は全OFF） ==="
+input bool   UseFailedBreakExit = false; // A2: ブレイク後N本以内の実体レンジ内回帰で即撤退
+input int    FB_MaxBars         = 3;     //     監視バー数（M15）
+input bool   UsePartialTP       = false; // A1: 半分を+Partial_Rで利食い、残りをRunner_RRまで
+input double Partial_R          = 1.0;
+input double Runner_RR          = 2.5;
+input bool   UseSwingTrail      = false; // A3: 直近スイング安値/高値へのSL追従
+input int    Swing_Bars         = 5;
+input bool   UseRetestEntry     = false; // B1: 成行でなくレンジ端+バッファへの指値（リテスト待ち）
+input bool   SkipFriday         = false; // C2: 金曜は新規エントリーなし（決済は継続）
 
 input group "=== ML確率フィルター（M1×30本→2×ATR継続確率） ==="
 // ブレイク検出時にML確率（ブレイク方向にM1 ATR14×2が10本以内に到達する較正済み確率）
@@ -82,6 +97,8 @@ bool     g_rangeReady = false;
 bool     g_rangeSkip  = false; // 幅フィルターで当日スキップ
 bool     g_tradedLong = false;
 bool     g_tradedShort= false;
+datetime g_buyEntryBar  = 0;   // failed-break監視用（エントリーしたバーの時刻）
+datetime g_sellEntryBar = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -246,6 +263,86 @@ void CloseAll()
     }
 }
 
+void DeletePendings()
+{
+    for(int i = OrdersTotal() - 1; i >= 0; i--)
+    {
+        ulong tk = OrderGetTicket(i);
+        if(tk == 0) continue;
+        if(OrderGetString(ORDER_SYMBOL) == _Symbol &&
+           OrderGetInteger(ORDER_MAGIC) == MagicNumber)
+            trade.OrderDelete(tk);
+    }
+}
+
+double NormalizeLot(double lot)
+{
+    double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+    double stepLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    if(stepLot > 0.0) lot = MathFloor(lot / stepLot) * stepLot;
+    return MathMax(minLot, lot);
+}
+
+//+------------------------------------------------------------------+
+//| 保有ポジションの管理（A2 failed-break exit / A3 スイングトレール）|
+//| 新バー確定時に呼ぶ。close1=直前確定バーの終値。                    |
+//+------------------------------------------------------------------+
+void ManageOpenPositions(datetime bar_time)
+{
+    if(!(UseFailedBreakExit || UseSwingTrail)) return;
+    double close1 = iClose(_Symbol, PERIOD_CURRENT, 1);
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong tk = PositionGetTicket(i);
+        if(tk == 0) continue;
+        if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+        long type = PositionGetInteger(POSITION_TYPE);
+
+        // A2: ブレイク後N本以内に実体がレンジ内へ回帰したら失敗ブレイクとして即撤退
+        if(UseFailedBreakExit && g_rangeReady)
+        {
+            datetime eb = (type == POSITION_TYPE_BUY ? g_buyEntryBar : g_sellEntryBar);
+            if(eb > 0)
+            {
+                int barsSince = (int)((bar_time - eb) / PeriodSeconds(PERIOD_CURRENT));
+                if(barsSince >= 1 && barsSince <= FB_MaxBars &&
+                   close1 < g_rangeHigh && close1 > g_rangeLow)
+                {
+                    trade.PositionClose(tk);
+                    continue;
+                }
+            }
+        }
+        // A3: 直近スイング安値/高値へSLを追従（有利方向のみ）
+        if(UseSwingTrail)
+        {
+            double sl = PositionGetDouble(POSITION_SL);
+            double tp = PositionGetDouble(POSITION_TP);
+            if(type == POSITION_TYPE_BUY)
+            {
+                int idx = iLowest(_Symbol, PERIOD_CURRENT, MODE_LOW, Swing_Bars, 1);
+                if(idx >= 0)
+                {
+                    double sw = NormalizeDouble(iLow(_Symbol, PERIOD_CURRENT, idx), _Digits);
+                    if(sw > sl + _Point)
+                        trade.PositionModify(tk, sw, tp);
+                }
+            }
+            else
+            {
+                int idx = iHighest(_Symbol, PERIOD_CURRENT, MODE_HIGH, Swing_Bars, 1);
+                if(idx >= 0)
+                {
+                    double sw = NormalizeDouble(iHigh(_Symbol, PERIOD_CURRENT, idx), _Digits);
+                    if(sl == 0.0 || sw < sl - _Point)
+                        trade.PositionModify(tk, sw, tp);
+                }
+            }
+        }
+    }
+}
+
 //+------------------------------------------------------------------+
 double CalcLot(double sl_dist_price)
 {
@@ -312,14 +409,21 @@ void OnTick()
         g_rangeSkip  = false;
         g_tradedLong = false;
         g_tradedShort= false;
+        g_buyEntryBar  = 0;
+        g_sellEntryBar = 0;
+        if(UseRetestEntry) DeletePendings();   // 前日の未約定リテスト指値を掃除
     }
 
     // 強制クローズ時刻
     if(dt.hour >= ForceCloseHour)
     {
         CloseAll();
+        if(UseRetestEntry) DeletePendings();
         return;
     }
+
+    // 保有ポジションの管理（failed-break exit / スイングトレール）
+    ManageOpenPositions(bar_time);
 
     // レンジ確定（RangeEndHour以降に一度だけ計算）
     if(!g_rangeReady && dt.hour >= RangeEndHour)
@@ -340,6 +444,9 @@ void OnTick()
 
     // エントリー時間帯チェック
     if(dt.hour < RangeEndHour || dt.hour >= TradeEndHour) return;
+
+    // C2: 金曜は新規エントリーなし（決済・トレールは上で処理済み）
+    if(SkipFriday && dt.day_of_week == 5) return;
 
     // D1 ATR（バッファ/SL用）
     double atrd_buf2[];
@@ -379,15 +486,51 @@ void OnTick()
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         double sl  = (SL_Mode == 0) ? g_rangeLow : ask - SL_ATRd_Mult * atrd;
-        double sl_dist = ask - sl;
-        if(sl_dist > 0)
+        if(UseRetestEntry)
         {
-            double tp = NormalizeDouble(ask + RR_Ratio * sl_dist, _Digits);
-            if(trade.Buy(CalcLot(sl_dist), _Symbol, ask, NormalizeDouble(sl, _Digits), tp, "SCA-L"))
+            // B1: レンジ端+バッファへの押し戻しに指値（期限=TradeEndHour）
+            double px = NormalizeDouble(g_rangeHigh + buffer, _Digits);
+            double sl_dist = px - sl;
+            if(sl_dist > 0 && px < ask)
             {
-                g_tradedLong = true;
-                Print("[SCA BUY] range=", DoubleToString(g_rangeLow,_Digits), "-",
-                      DoubleToString(g_rangeHigh,_Digits), " close=", close1);
+                double tp = NormalizeDouble(px + RR_Ratio * sl_dist, _Digits);
+                datetime expiry = day_start + TradeEndHour * 3600;
+                if(trade.BuyLimit(CalcLot(sl_dist), px, _Symbol, NormalizeDouble(sl, _Digits), tp,
+                                  ORDER_TIME_SPECIFIED, expiry, "SCA-RL"))
+                {
+                    g_tradedLong = true;                 // 1日1試行（未約定でも消費）
+                    g_buyEntryBar = bar_time;
+                }
+            }
+        }
+        else
+        {
+            double sl_dist = ask - sl;
+            if(sl_dist > 0)
+            {
+                bool sent = false;
+                if(UsePartialTP)
+                {
+                    // A1: 半分を+Partial_R、残りをRunner_RRまで伸ばす（SL共通）
+                    double half = NormalizeLot(CalcLot(sl_dist) / 2.0);
+                    double tp1 = NormalizeDouble(ask + Partial_R * sl_dist, _Digits);
+                    double tp2 = NormalizeDouble(ask + Runner_RR * sl_dist, _Digits);
+                    bool ok1 = trade.Buy(half, _Symbol, ask, NormalizeDouble(sl, _Digits), tp1, "SCA-L1");
+                    bool ok2 = trade.Buy(half, _Symbol, ask, NormalizeDouble(sl, _Digits), tp2, "SCA-L2");
+                    sent = (ok1 || ok2);
+                }
+                else
+                {
+                    double tp = NormalizeDouble(ask + RR_Ratio * sl_dist, _Digits);
+                    sent = trade.Buy(CalcLot(sl_dist), _Symbol, ask, NormalizeDouble(sl, _Digits), tp, "SCA-L");
+                }
+                if(sent)
+                {
+                    g_tradedLong = true;
+                    g_buyEntryBar = bar_time;
+                    Print("[SCA BUY] range=", DoubleToString(g_rangeLow,_Digits), "-",
+                          DoubleToString(g_rangeHigh,_Digits), " close=", close1);
+                }
             }
         }
     }
@@ -397,15 +540,49 @@ void OnTick()
     {
         double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
         double sl  = (SL_Mode == 0) ? g_rangeHigh : bid + SL_ATRd_Mult * atrd;
-        double sl_dist = sl - bid;
-        if(sl_dist > 0)
+        if(UseRetestEntry)
         {
-            double tp = NormalizeDouble(bid - RR_Ratio * sl_dist, _Digits);
-            if(trade.Sell(CalcLot(sl_dist), _Symbol, bid, NormalizeDouble(sl, _Digits), tp, "SCA-S"))
+            double px = NormalizeDouble(g_rangeLow - buffer, _Digits);
+            double sl_dist = sl - px;
+            if(sl_dist > 0 && px > bid)
             {
-                g_tradedShort = true;
-                Print("[SCA SELL] range=", DoubleToString(g_rangeLow,_Digits), "-",
-                      DoubleToString(g_rangeHigh,_Digits), " close=", close1);
+                double tp = NormalizeDouble(px - RR_Ratio * sl_dist, _Digits);
+                datetime expiry = day_start + TradeEndHour * 3600;
+                if(trade.SellLimit(CalcLot(sl_dist), px, _Symbol, NormalizeDouble(sl, _Digits), tp,
+                                   ORDER_TIME_SPECIFIED, expiry, "SCA-RS"))
+                {
+                    g_tradedShort = true;
+                    g_sellEntryBar = bar_time;
+                }
+            }
+        }
+        else
+        {
+            double sl_dist = sl - bid;
+            if(sl_dist > 0)
+            {
+                bool sent = false;
+                if(UsePartialTP)
+                {
+                    double half = NormalizeLot(CalcLot(sl_dist) / 2.0);
+                    double tp1 = NormalizeDouble(bid - Partial_R * sl_dist, _Digits);
+                    double tp2 = NormalizeDouble(bid - Runner_RR * sl_dist, _Digits);
+                    bool ok1 = trade.Sell(half, _Symbol, bid, NormalizeDouble(sl, _Digits), tp1, "SCA-S1");
+                    bool ok2 = trade.Sell(half, _Symbol, bid, NormalizeDouble(sl, _Digits), tp2, "SCA-S2");
+                    sent = (ok1 || ok2);
+                }
+                else
+                {
+                    double tp = NormalizeDouble(bid - RR_Ratio * sl_dist, _Digits);
+                    sent = trade.Sell(CalcLot(sl_dist), _Symbol, bid, NormalizeDouble(sl, _Digits), tp, "SCA-S");
+                }
+                if(sent)
+                {
+                    g_tradedShort = true;
+                    g_sellEntryBar = bar_time;
+                    Print("[SCA SELL] range=", DoubleToString(g_rangeLow,_Digits), "-",
+                          DoubleToString(g_rangeHigh,_Digits), " close=", close1);
+                }
             }
         }
     }
