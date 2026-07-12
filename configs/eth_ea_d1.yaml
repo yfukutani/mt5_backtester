@@ -1,0 +1,34 @@
+# ETH_EA v1.0 — ETHUSD D1（A2デュアルMA200/40+cd5・2026-07-12ユーザー採用指示で作成）
+# MIX_EA(XM)のETH trend-holdスリーブの置換。詳細: docs/ETH_EA_UM.md
+# 成績（0.02lot・スワップ実費込み）: full(2016.11-2026.06) +7,576/PF1.81/DD3.7%/50取引、
+#   IS(2021.06-) +4,165/PF1.50/DD3.8%、every_tick H1 +4,167（執行一致）。
+#   現行スリーブ(MA200単独)比 full+34%/IS+56%（DD2.3→3.7%とのトレード）。
+# プラトー: ExitMA30/40/50×cd3/5/7全点プラス。災害SL45=全取引MAE最悪-29.2%×1.5＝歴史上不発火
+#   （テスターで結果不変を実証）。
+# 組み込まない: funding系(FE 352格子死亡)/ボラタゲ(ETH逆効果)/ヒステリシス(ETH不採用)/複利(固定優位)。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "ETH_EA"
+symbol:    "ETHUSD"
+period:    "D1"
+from_date: "2016.11.01"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:  200
+  ExitMA_Period:   40
+  ReentryCooldown: 5
+  LotSize:         0.02
+  DisasterSL_Pct:  45.0
+  MagicNumber:     20260723
+  EnableOpsLog:    true
+  ResultFileName:  "eth_ea_d1_result.csv"
+
+report_dir:  "results"
+report_name: "ETH_EA_D1"
