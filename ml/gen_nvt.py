@@ -19,8 +19,11 @@ mcap = load("chain_mcap.csv", "usd").resample("1D").last().ffill()
 txvol = load("chain_txvol_usd.csv", "usd").resample("1D").mean().interpolate()
 nvt = (mcap / txvol.rolling(7).mean()).dropna()
 nvt = nvt[nvt.index >= "2013-01-01"]
+# 注: pandas 2.xはto_datetime(unit="s")がdatetime64[s]を返すことがあり、
+# astype("int64")//10**9 だと秒をさらに10^9で割って壊れる。Timedelta割りで単位非依存に。
+epoch = (nvt.index - pd.Timestamp("1970-01-01")) // pd.Timedelta(seconds=1)
 out = pd.DataFrame({
-    "time": (nvt.index.astype("int64") // 10**9),
+    "time": epoch,
     "nvt": nvt.round(4).values,
 })
 out.to_csv(ML / "nvt_btc.csv", index=False)

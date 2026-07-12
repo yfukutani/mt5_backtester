@@ -18,7 +18,7 @@
 //|    データ非依存で必ず実行。                                       |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -26,7 +26,13 @@
 input group "=== シグナル ==="
 input string FundingFile     = "funding_btc.csv"; // Common\Files内（バックテスト/手動更新用）
 input double Threshold_Pct8h = -0.004;  // 日平均funding閾値（%/8h・5%分位）
-input int    HoldDays        = 5;       // 保有日数（D1バー）
+input int    HoldDays        = 5;       // 保有日数（D1バー・ExitMode=0時）
+
+input group "=== 退出モード（v1.2・P4） ==="
+// 0=固定HoldDays / 1=前日funding日平均>0で退出 / 2=同>直近90日中央値で退出。
+// 1/2はスクイーズ完了の直接観測（スクリーニング: 平均+2.92→+3.29%/+7.45%）。上限MaxHoldDays。
+input int    ExitMode    = 0;
+input int    MaxHoldDays = 20;
 
 input group "=== データ供給（ライブ） ==="
 input bool   UseWebRequest = true;      // ライブ時Binance APIから直接取得（テスターは常にCSV）
@@ -47,6 +53,9 @@ CTrade trade;
 long     f_time[];
 double   f_rate[];
 int      f_n = 0;
+long     g_day[];               // v1.2: 日次平均funding（UTC日番号）
+double   g_dayavg[];
+int      g_dn = 0;
 datetime evaluatedBar = 0;      // このD1バーのシグナル評価済みフラグ
 datetime lastFetchAttempt = 0;  // APIリトライ間隔制御（1時間）
 
@@ -112,7 +121,7 @@ int ParseFunding(const string body, long &t[], double &r[])
 }
 
 //+------------------------------------------------------------------+
-//| 一時配列を本体へ反映（昇順を保証）                                |
+//| 一時配列を本体へ反映（昇順を保証）→ 日次平均も再構築              |
 //+------------------------------------------------------------------+
 void CommitData(long &t[], double &r[], const int n)
 {
@@ -127,6 +136,48 @@ void CommitData(long &t[], double &r[], const int n)
         for(int i = 0; i < n; i++) { f_time[i] = t[i]; f_rate[i] = r[i]; }
     }
     f_n = n;
+    // 日次平均（%/8h）を構築（ExitMode=2の中央値計算用）
+    ArrayResize(g_day, f_n);
+    ArrayResize(g_dayavg, f_n);
+    g_dn = 0;
+    long cur = -1;
+    double sum = 0;
+    int cnt = 0;
+    for(int i = 0; i < f_n; i++)
+    {
+        long dy = f_time[i] / 86400;
+        if(dy != cur)
+        {
+            if(cnt > 0) { g_day[g_dn] = cur; g_dayavg[g_dn] = sum / cnt * 100.0; g_dn++; }
+            cur = dy;
+            sum = 0;
+            cnt = 0;
+        }
+        sum += f_rate[i];
+        cnt++;
+    }
+    if(cnt > 0) { g_day[g_dn] = cur; g_dayavg[g_dn] = sum / cnt * 100.0; g_dn++; }
+}
+
+//+------------------------------------------------------------------+
+//| btより前の直近90日分の日次平均fundingの中央値（ExitMode=2）        |
+//+------------------------------------------------------------------+
+double Median90(datetime bt)
+{
+    long d1 = (long)bt / 86400;          // 当日（含まない）
+    long d0 = d1 - 91;
+    double win[];
+    ArrayResize(win, 100);
+    int m = 0;
+    for(int i = 0; i < g_dn; i++)
+    {
+        if(g_day[i] >= d0 && g_day[i] < d1) win[m++] = g_dayavg[i];
+        else if(g_day[i] >= d1) break;
+    }
+    if(m < 30) return EMPTY_VALUE;       // データ不足
+    ArrayResize(win, m);
+    ArraySort(win);
+    return (m % 2 == 1 ? win[m / 2] : (win[m / 2 - 1] + win[m / 2]) / 2);
 }
 
 //+------------------------------------------------------------------+
@@ -232,13 +283,15 @@ int OnInit()
         }
     }
     if(f_n > 0)
-        Print("FundingRev v1.1 起動 | funding ", f_n, "件 ",
+        Print("FundingRev v1.2 起動 | funding ", f_n, "件 ",
               TimeToString((datetime)f_time[0], TIME_DATE), "..",
               TimeToString((datetime)f_time[f_n - 1], TIME_DATE),
-              " | 閾値 ", DoubleToString(Threshold_Pct8h, 4), "%/8h | 保有", HoldDays, "日",
+              " | 閾値 ", DoubleToString(Threshold_Pct8h, 4), "%/8h",
+              " | 退出 ", ExitMode == 0 ? StringFormat("固定%d日", HoldDays)
+                        : StringFormat("mode%d(上限%d日)", ExitMode, MaxHoldDays),
               " | ", MQLInfoInteger(MQL_TESTER) ? "テスター(CSV)" : (UseWebRequest ? "ライブ(API自動更新)" : "ライブ(CSV外部更新)"));
     else
-        Print("FundingRev v1.1 起動 | fundingデータ未取得（決済は機能・新規はデータ取得後）");
+        Print("FundingRev v1.2 起動 | fundingデータ未取得（決済は機能・新規はデータ取得後）");
     return INIT_SUCCEEDED;
 }
 
@@ -305,10 +358,27 @@ void OnTick()
 {
     datetime bt = iTime(_Symbol, PERIOD_D1, 0);
 
-    // 決済はデータ非依存・毎tick判定（フェイルセーフ）
+    // 決済: ExitMode=0は固定日数（データ非依存のフェイルセーフ）。
+    // 1/2はfunding正常化で早期退出、データ欠損時もMaxHoldDaysで必ず閉じる。
     if(HasPosition())
     {
-        if(BarsHeldD1() >= HoldDays) CloseAll();
+        int held = BarsHeldD1();
+        bool timeup = (ExitMode == 0 ? held >= HoldDays : held >= MaxHoldDays);
+        bool normalized = false;
+        if(ExitMode > 0 && held >= 1)
+        {
+            double avg = FundingAvg(bt - 86400, bt);
+            if(avg != EMPTY_VALUE)
+            {
+                if(ExitMode == 1) normalized = (avg > 0);
+                else
+                {
+                    double med = Median90(bt);
+                    normalized = (med != EMPTY_VALUE && avg > med);
+                }
+            }
+        }
+        if(timeup || normalized) CloseAll();
         evaluatedBar = bt;   // 保有中のバーは新規評価しない（1ポジション制）
         return;
     }
