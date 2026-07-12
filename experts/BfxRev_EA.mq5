@@ -15,7 +15,7 @@
 //|    データ欠損時は新規停止・決済はデータ非依存で必ず実行。          |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -36,6 +36,9 @@ input group "=== トレード設定 ==="
 input double LotSize        = 0.01;
 input double DisasterSL_Pct = 75.0; // 災害SL（MAE最悪-47.5%×1.5・歴史上不発火・0=無効）
 input int    MagicNumber    = 20260724;
+// v1.1: 暗号グループ同時ポジション上限（口座全体のMagic 20260710/20260720/20260723/20260724を
+// 横断カウント）。テスター実測で効率劣化のため既定0（MIX_EA_UM§9）。1=保有中は新規見送り
+input int    MaxCryptoConcurrent = 0;
 
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
@@ -241,6 +244,25 @@ bool HasPosition()
     return false;
 }
 
+// v1.1: 暗号グループ同時上限（口座横断）
+bool CryptoGuardOK()
+{
+    if(MaxCryptoConcurrent <= 0) return true;
+    int cnt = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        long m = PositionGetInteger(POSITION_MAGIC);
+        if(PositionGetSymbol(i) == "") continue;
+        if(m == 20260710 || m == 20260720 || m == 20260723 || m == 20260724) cnt++;
+    }
+    if(cnt >= MaxCryptoConcurrent)
+    {
+        Print("[CRYPTO-CAP] エントリー見送り（暗号同時", cnt, "/上限", MaxCryptoConcurrent, "）");
+        return false;
+    }
+    return true;
+}
+
 int BarsHeldD1()
 {
     for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -307,7 +329,7 @@ void OnTick()
     evaluatedBar = bt;
     if(v1 <= 0 || v0 <= 0) return;
     double chg = (v1 / v0 - 1) * 100;
-    if(chg < -DropPct)
+    if(chg < -DropPct && CryptoGuardOK())
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         double sl = (DisasterSL_Pct > 0 ? NormalizeDouble(ask * (1 - DisasterSL_Pct / 100), _Digits) : 0);

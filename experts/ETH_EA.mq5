@@ -21,7 +21,7 @@
 //|     ETHエクスポージャーが二重になる（docs/ETH_EA_UM.md参照）。     |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -37,6 +37,9 @@ input group "=== トレード設定 ==="
 input double LotSize        = 0.02;   // 固定ロット（複利はETHで劣後の実証あり）
 input double DisasterSL_Pct = 45.0;   // 災害SL（entry比%・歴史上不発火の校正値・0=無効）
 input int    MagicNumber    = 20260723;
+// v1.1: 暗号グループ同時ポジション上限（口座横断・MIX_EA v1.3と同一ルール）。
+// テスター実測で効率劣化のため既定0。1=保有中は新規見送り
+input int    MaxCryptoConcurrent = 0;
 
 input group "=== 運用ログ（ライブのみ） ==="
 input bool   EnableOpsLog = true;     // ethlog_YYYYMM.csv へDEAL/DAILY出力
@@ -94,6 +97,25 @@ bool HasPosition()
            PositionGetInteger(POSITION_MAGIC) == MagicNumber)
             return true;
     return false;
+}
+
+// v1.1: 暗号グループ同時上限（口座横断）
+bool CryptoGuardOK()
+{
+    if(MaxCryptoConcurrent <= 0) return true;
+    int cnt = 0;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        long m = PositionGetInteger(POSITION_MAGIC);
+        if(PositionGetSymbol(i) == "") continue;
+        if(m == 20260710 || m == 20260720 || m == 20260723 || m == 20260724) cnt++;
+    }
+    if(cnt >= MaxCryptoConcurrent)
+    {
+        Print("[CRYPTO-CAP] エントリー見送り（暗号同時", cnt, "/上限", MaxCryptoConcurrent, "）");
+        return false;
+    }
+    return true;
 }
 
 void ClosePosition()
@@ -185,7 +207,7 @@ void OnTick()
     if(ReentryCooldown > 0 && g_last_exit > 0)
         cooldown_ok = (iBarShift(_Symbol, SignalTimeframe, g_last_exit, false) >= ReentryCooldown);
 
-    if(close_prev > entry_th && !has_pos && cooldown_ok)
+    if(close_prev > entry_th && !has_pos && cooldown_ok && CryptoGuardOK())
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         double sl = (DisasterSL_Pct > 0
