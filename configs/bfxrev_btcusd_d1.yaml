@@ -1,0 +1,39 @@
+# BfxRev（Bitfinexデレバレッジ・リバウンド）— BTCUSD D1（第3/4バックログBF・2026.07.12 EA化）
+# Bitfinexマージンのロング建玉が5日で10%超急減＝強制投げの完了直後を買い、10日保有。
+# G1（funding逆張り）とは別のデレバレッジ現象（イベント重複7%・日次相関+0.156・合算効率+39%）。
+# 成績（0.01lot・スワップ実費込み・災害SL75込み）:
+#   full(2016.12-2026.06) +57,812/PF1.98/DD13.6%/58取引
+#   IS(2021.06-) +43,305/PF4.44/DD8.8%/8取引・前半差分+14,507＝両半プラス
+#   プラトー: drop15(+33,844)/drop20(+10,818)/hold5(+37,071)全プラス
+#   年次: プラス6/9年・負け年最大-4,763円（2018）。後半が前半より強い稀形
+# ⚠️ IS取引数8と薄い（2022年はイベントゼロ）・スクリーニングt=3.25-3.72
+# 災害SL75 = MAE最悪-47.5%（2021.5暴落・最終-29%）×1.5・歴史上不発火
+# ライブ: Bitfinex公開APIをWebRequestで自動取得（要URL許可 https://api-pub.bitfinex.com）
+# バックテスト: bfx_btc_long.csv（python ml/fetch_btc_alt_data3.py bitfinex）をCommon\Filesへ
+# 採用状況: **採用決定（2026-07-12ユーザー承認・「取引は少ないが採用」＝IS n=8の留保を織り込み済み）**
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "BfxRev_EA"
+symbol:    "BTCUSD"
+period:    "D1"
+from_date: "2016.12.01"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  BfxFile:         "bfx_btc_long.csv"
+  DropPct:         10.0
+  LookbackDays:    5
+  HoldDays:        10
+  LotSize:         0.01
+  DisasterSL_Pct:  75.0
+  MagicNumber:     20260724
+  ResultFileName:  "bfxrev_btcusd_d1_result.csv"
+
+report_dir:  "results"
+report_name: "BfxRev_BTCUSD_D1"
