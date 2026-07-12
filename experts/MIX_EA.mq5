@@ -9,7 +9,7 @@
 //|  ※XMサーバー時刻(GMT+2/+3)前提。使い方: docs/MIX_EA_UM.md        |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -26,10 +26,17 @@ input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
 input bool En_PAIR       = true;
 input bool En_CARRY      = true;
 input bool En_VBO        = true;
-input bool En_ETH        = true;
+input bool En_ETH        = true;   // v1.2: A2デュアルMA(200/40+cd5+SL45)に更新（ETH_EA同等）
+input bool En_BTC_FUND   = true;   // v1.2新設: BTC funding逆張り（FundingRev v1.2同等・採用形）
 input bool En_SCA_GOLD   = true;   // SCAセッションORB（最終形・Revブースト込み）
 input bool En_SCA_USDJPY = true;
 input bool En_SCA_GBPJPY = true;
+
+input group "=== BTC funding枠の設定（FundingRev v1.2の採用形） ==="
+input string FundingFile      = "funding_btc.csv"; // Common\Files内（テスター/フォールバック）
+input bool   FundUseWebRequest = true;             // ライブ: Binance API自動取得（要URL許可）
+input double FundThreshold    = -0.004;            // 日平均funding閾値（%/8h）
+input int    FundMaxHold      = 20;                // 退出上限日数（med90退出のフェイルセーフ）
 
 input group "=== 全体設定 ==="
 input bool   MasterEnable  = true;   // 全枠の発注を一括停止できる安全スイッチ
@@ -46,6 +53,7 @@ input double Mult_PAIR       = 1.0;
 input double Mult_CARRY      = 1.0;
 input double Mult_VBO        = 1.0;
 input double Mult_ETH        = 1.0;
+input double Mult_BTC_FUND   = 1.0;
 input double Mult_SCA_GOLD   = 1.0;   // 例: ミックスB相当なら3.0（0.01→0.03）
 input double Mult_SCA_USDJPY = 1.0;
 input double Mult_SCA_GBPJPY = 1.0;
@@ -68,7 +76,7 @@ input bool   EnableOpsLog = false;
 input string OpsLogPrefix = "mixlog";
 
 //=== 戦略種別 ===
-enum ESTRAT { ST_PULLBACK, ST_RSI, ST_PAIR, ST_CARRY, ST_VBO, ST_SCA };
+enum ESTRAT { ST_PULLBACK, ST_RSI, ST_PAIR, ST_CARRY, ST_VBO, ST_SCA, ST_FUNDING };
 
 //=== 枠定義＋状態 ===
 struct SLEEVE
@@ -110,6 +118,8 @@ struct SLEEVE
    // CARRY
    int             trendPeriod; bool reqPosSwap;
    bool            useHyst; double hystMult;   // MAクロス・ヒステリシス帯（AUDJPYのみ採用）
+   // CARRY v1.2: デュアルMA退出+クールダウン+災害SL（ETH枠=A2形で採用）
+   int             exitPeriod; int hExit; int cdBars; datetime cdExitBar; double disasterSL;
    // VBO
    int             channel; bool useSqueeze; int sqLB; double sqFactor; double trailMult;
    // 増レバ配分（deploy）
@@ -245,10 +255,19 @@ int OnInit()
      x.magic=20260680; x.lot=0.01; x.useRisk=false; x.channel=20;
      x.useSqueeze=true; x.sqLB=50; x.sqFactor=1.0; x.atrSLmult=2.0; x.trailMult=3.0; x.lotMult=Mult_VBO; AddSleeve(x); }
 
-   // 10. 暗号トレンド ETHUSD D1 (Carryロジック, スワップ条件OFF, 固定0.05)
+   // 10. 暗号 ETHUSD D1 — v1.2でA2デュアルMAに更新（ETH_EA v1.0同等: 200/40+cd5+災害SL45）
+   //     旧: MA200単独ホールド。検証: full+7,576/PF1.81(0.02lot)→0.05でも線形（ES面で実証）
    { SLEEVE x=z; x.enabled=En_ETH; x.strat=ST_CARRY; x.symbol="ETHUSD"; x.tf=PERIOD_D1;
      x.magic=20260710; x.trendPeriod=200; x.reqPosSwap=false;
+     x.exitPeriod=40; x.cdBars=5; x.disasterSL=45.0;
      x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
+
+   // 10b. BTC funding逆張り BTCUSD D1 — v1.2新設（FundingRev v1.2採用形と同一・Magic継続）
+   //      閾値-0.004/退出=funding>90日中央値/上限20日/災害SL40。full+39,036/PF2.17/DD9.4%(0.01lot)
+   //      ⚠️ 単独チャートのFundingRev_EAとは排他（同Magic・併走で二重発注になる）
+   { SLEEVE x=z; x.enabled=En_BTC_FUND; x.strat=ST_FUNDING; x.symbol="BTCUSD"; x.tf=PERIOD_D1;
+     x.magic=20260720; x.lot=0.01; x.useRisk=false; x.disasterSL=40.0;
+     x.lotMult=Mult_BTC_FUND; AddSleeve(x); }
 
    //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
    // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.5/金曜スキップ/Revブースト）
@@ -296,13 +315,21 @@ int OnInit()
       } else if(S[i].strat==ST_CARRY){
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
          if(S[i].useHyst) S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
+         if(S[i].exitPeriod>0)
+            S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
+      } else if(S[i].strat==ST_FUNDING){
+         if(!FundingInit())
+         {
+            S[i].enabled=false;
+            Print("BTC funding枠: データ初期化失敗のため無効化（決済のみ有効・他枠は正常）");
+         }
       } else if(S[i].strat==ST_VBO){
          S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
       } else if(S[i].strat==ST_SCA){
          S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
       }
    }
-   Print("MIX_EA v1.0 (XM) 起動 | 有効枠数=", CountEnabled(), "/", NS,
+   Print("MIX_EA v1.2 (XM) 起動 | 有効枠数=", CountEnabled(), "/", NS,
          " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult);
    return INIT_SUCCEEDED;
 }
@@ -325,6 +352,7 @@ void ZeroSleeve(SLEEVE &x)
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
    x.useHyst=false; x.hystMult=0.75;
+   x.exitPeriod=0; x.hExit=INVALID_HANDLE; x.cdBars=0; x.cdExitBar=0; x.disasterSL=0;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
    x.lotMult=1.0; x.refCap=0.0;
    x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=22;
@@ -355,6 +383,7 @@ void OnTick()
    for(int i=0;i<NS;i++)
    {
       if(!S[i].enabled) continue;
+      if(S[i].strat==ST_FUNDING){ ProcFunding(i); continue; }   // 自前でバー/リトライ管理
       datetime bt = iTime(S[i].symbol, S[i].tf, 0);
       if(bt==0 || bt==S[i].lastBar) continue;   // 新バーのみ
       // VBOはバー内トレーリングのため毎バー評価。他もバー確定で処理。
@@ -629,18 +658,216 @@ void ProcCarry(int i)
    double ma=mb[0], cp=iClose(sym,tf,1);
    bool swap_ok = !S[i].reqPosSwap || (SymbolInfoDouble(sym,SYMBOL_SWAP_LONG)>0.0);
    bool has=HasAny(i);
-   // ヒステリシス帯: entry=MA+b×ATR / exit=MA−b×ATR（AUDJPYのみ採用、ETHはOFF＝従来どおり）
+   // ヒステリシス帯: entry=MA+b×ATR / exit=MA−b×ATR（AUDJPYのみ採用、ETHはOFF）
    double entry_th=ma, exit_th=ma;
    if(S[i].useHyst){
       double ab[]; ArraySetAsSeries(ab,true);
       if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
       entry_th=ma+S[i].hystMult*ab[0]; exit_th=ma-S[i].hystMult*ab[0];
    }
+   // v1.2 A2デュアルMA: entry=TrendMA上かつExitMA上 / exit=ExitMA割れ（ETH枠で採用・ヒステリシスと排他）
+   if(S[i].exitPeriod>0){
+      double eb[]; ArraySetAsSeries(eb,true);
+      if(CopyBuffer(S[i].hExit,0,1,1,eb)<1) return;
+      entry_th=MathMax(ma,eb[0]); exit_th=eb[0];
+   }
+   // v1.2 クールダウン（S9）: 退出後cdBarsは再entry禁止
+   bool cd_ok=true;
+   if(S[i].cdBars>0 && S[i].cdExitBar>0)
+      cd_ok=(iBarShift(sym,tf,S[i].cdExitBar,false)>=S[i].cdBars);
    trade.SetExpertMagicNumber(S[i].magic);
-   if(cp>entry_th && swap_ok && !has){
-      trade.Buy(LotComplex(i,sym),sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"Carry");
+   if(cp>entry_th && swap_ok && !has && cd_ok){
+      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
+      trade.Buy(LotComplex(i,sym),sym,ask,sl,0,"Carry");
    } else if(cp<exit_th && has){
       CloseSleeveAll(i);
+      S[i].cdExitBar=iTime(sym,tf,0);
+   }
+}
+
+//============================ BTC funding逆張り（FundingRev v1.2移植） ============================
+long     f_time[];  double f_rate[];  int f_n=0;
+long     g_fday[];  double g_fdayavg[]; int g_fdn=0;
+datetime g_fundEvalBar=0, g_fundFetchAt=0;
+
+int FundLoadCsvInto(const string fname, long &t[], double &r[])
+{
+   int fh=FileOpen(fname, FILE_READ|FILE_CSV|FILE_ANSI|FILE_COMMON, ',');
+   if(fh==INVALID_HANDLE) return 0;
+   int n=0; ArrayResize(t,8000); ArrayResize(r,8000);
+   FileReadString(fh); FileReadString(fh);   // ヘッダ
+   while(!FileIsEnding(fh)){
+      string ts=FileReadString(fh), rs=FileReadString(fh);
+      if(ts=="") break;
+      if(n>=ArraySize(t)){ ArrayResize(t,n+4000); ArrayResize(r,n+4000); }
+      t[n]=StringToInteger(ts); r[n]=StringToDouble(rs); n++;
+   }
+   FileClose(fh);
+   return n;
+}
+
+void FundCommit(long &t[], double &r[], const int n)
+{
+   ArrayResize(f_time,n); ArrayResize(f_rate,n);
+   if(n>1 && t[0]>t[n-1]) for(int i=0;i<n;i++){ f_time[i]=t[n-1-i]; f_rate[i]=r[n-1-i]; }
+   else                   for(int i=0;i<n;i++){ f_time[i]=t[i];     f_rate[i]=r[i]; }
+   f_n=n;
+   ArrayResize(g_fday,f_n); ArrayResize(g_fdayavg,f_n);
+   g_fdn=0; long cur=-1; double sum=0; int cnt=0;
+   for(int i=0;i<f_n;i++){
+      long dy=f_time[i]/86400;
+      if(dy!=cur){ if(cnt>0){ g_fday[g_fdn]=cur; g_fdayavg[g_fdn]=sum/cnt*100.0; g_fdn++; } cur=dy; sum=0; cnt=0; }
+      sum+=f_rate[i]; cnt++;
+   }
+   if(cnt>0){ g_fday[g_fdn]=cur; g_fdayavg[g_fdn]=sum/cnt*100.0; g_fdn++; }
+}
+
+int FundParse(const string body, long &t[], double &r[])
+{
+   int n=0; ArrayResize(t,1100); ArrayResize(r,1100);
+   int pos=0;
+   while(true){
+      int it=StringFind(body,"\"fundingTime\":",pos); if(it<0) break; it+=14;
+      int ir=StringFind(body,"\"fundingRate\":\"",it); if(ir<0) break; ir+=15;
+      int ire=StringFind(body,"\"",ir); if(ire<0) break;
+      long tms=StringToInteger(StringSubstr(body,it,20));
+      double rate=StringToDouble(StringSubstr(body,ir,ire-ir));
+      if(tms>0){
+         if(n>=ArraySize(t)){ ArrayResize(t,n+500); ArrayResize(r,n+500); }
+         t[n]=tms/1000; r[n]=rate; n++;
+      }
+      pos=ire;
+   }
+   return n;
+}
+
+bool FundFetch()
+{
+   char req[],res[]; string rh;
+   ResetLastError();
+   int code=WebRequest("GET","https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000","",5000,req,res,rh);
+   if(code!=200){
+      int err=GetLastError();
+      Print("funding API失敗 http=",code," err=",err,
+            err==4014?" →オプション→EA→WebRequest許可URLに https://fapi.binance.com を追加":"");
+      return false;
+   }
+   string body=CharArrayToString(res,0,WHOLE_ARRAY,CP_UTF8);
+   long tt[]; double tr[];
+   int n=FundParse(body,tt,tr);
+   if(n<3){ Print("funding APIパース失敗 n=",n); return false; }
+   FundCommit(tt,tr,n);
+   Print("funding API取得: ",n,"件");
+   return true;
+}
+
+bool FundingInit()
+{
+   if(MQLInfoInteger(MQL_TESTER) || !FundUseWebRequest){
+      long tt[]; double tr[];
+      int n=FundLoadCsvInto(FundingFile,tt,tr);
+      if(n<100 && MQLInfoInteger(MQL_TESTER)){ Print("funding CSV不足: ",n,"件"); return false; }
+      if(n>0) FundCommit(tt,tr,n);
+   } else {
+      g_fundFetchAt=TimeCurrent();
+      if(!FundFetch()){
+         long tt[]; double tr[];
+         int n=FundLoadCsvInto(FundingFile,tt,tr);
+         if(n>0) FundCommit(tt,tr,n);
+         Print("起動時API失敗→CSV代替 ",f_n,"件（以後リトライ）");
+      }
+   }
+   Print("BTC funding枠: ",f_n,"件ロード | 閾値",DoubleToString(FundThreshold,4),
+         "%/8h | 退出=med90(上限",FundMaxHold,"日)");
+   return true;   // ライブは0件でも枠は維持（決済独立・fetch再試行）
+}
+
+double FundAvg(datetime t0, datetime t1)
+{
+   double sum=0; int cnt=0;
+   for(int i=0;i<f_n;i++){
+      if(f_time[i]>=(long)t0 && f_time[i]<(long)t1){ sum+=f_rate[i]*100.0; cnt++; }
+      else if(f_time[i]>=(long)t1) break;
+   }
+   return (cnt>0 ? sum/cnt : EMPTY_VALUE);
+}
+
+double FundMed90(datetime bt)
+{
+   long d1=(long)bt/86400, d0=d1-91;
+   double win[]; ArrayResize(win,100); int m=0;
+   for(int i=0;i<g_fdn;i++){
+      if(g_fday[i]>=d0 && g_fday[i]<d1) win[m++]=g_fdayavg[i];
+      else if(g_fday[i]>=d1) break;
+   }
+   if(m<30) return EMPTY_VALUE;
+   ArrayResize(win,m); ArraySort(win);
+   return (m%2==1 ? win[m/2] : (win[m/2-1]+win[m/2])/2);
+}
+
+bool FundEnsure(datetime bt)
+{
+   if(MQLInfoInteger(MQL_TESTER)) return (f_n>0);
+   long newest=(f_n>0 ? f_time[f_n-1] : 0);
+   if(newest>=(long)bt-12*3600) return true;
+   if(!FundUseWebRequest){
+      long tt[]; double tr[];
+      int n=FundLoadCsvInto(FundingFile,tt,tr);
+      if(n>0) FundCommit(tt,tr,n);
+      return (f_n>0 && f_time[f_n-1]>=(long)bt-12*3600);
+   }
+   if(TimeCurrent()-g_fundFetchAt<3600) return false;   // 1時間リトライ間隔
+   g_fundFetchAt=TimeCurrent();
+   if(FundFetch()) return true;
+   return (f_n>0 && f_time[f_n-1]>=(long)bt-12*3600);
+}
+
+int FundBarsHeld(int i)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==S[i].magic){
+         datetime opened=(datetime)PositionGetInteger(POSITION_TIME);
+         return iBarShift(S[i].symbol,PERIOD_D1,opened,false);
+      }
+   }
+   return 0;
+}
+
+void ProcFunding(int i)
+{
+   datetime bt=iTime(S[i].symbol,PERIOD_D1,0);
+   if(bt==0) return;
+   trade.SetExpertMagicNumber(S[i].magic);
+
+   // 決済（データ依存はmed90のみ・上限FundMaxHoldは無条件で必ず執行）
+   if(HasAny(i)){
+      int held=FundBarsHeld(i);
+      bool timeup=(held>=FundMaxHold);
+      bool normalized=false;
+      if(held>=1){
+         double avg=FundAvg(bt-86400,bt);
+         if(avg!=EMPTY_VALUE){
+            double med=FundMed90(bt);
+            normalized=(med!=EMPTY_VALUE && avg>med);
+         }
+      }
+      if((timeup||normalized) && bt!=g_fundEvalBar){   // 新バーで判定（標準形と同一）
+         CloseSleeveAll(i);
+      }
+      g_fundEvalBar=bt;
+      return;
+   }
+   if(g_fundEvalBar==bt) return;   // 本日評価済み
+   if(!FundEnsure(bt)) return;     // データ未達→tickで再試行（1時間間隔）
+   double avg=FundAvg(bt-86400,bt);
+   g_fundEvalBar=bt;
+   if(avg==EMPTY_VALUE) return;
+   if(avg<FundThreshold){
+      double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
+      double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
+      if(trade.Buy(S[i].lot*S[i].lotMult*GlobalLotMult,S[i].symbol,ask,sl,0,"FundRev"))
+         Print("[FUNDREV BUY] avg=",DoubleToString(avg,4),"%/8h");
    }
 }
 

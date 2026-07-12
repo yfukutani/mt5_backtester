@@ -85,7 +85,7 @@ def fetch_bitfinex_side(symbol, side, out_file):
             print(f"    {symbol}:{side} {calls}calls {datetime.fromtimestamp(last_ts/1000, timezone.utc).date()}", flush=True)
             out = [(v[0], v[1]) for k, v in sorted(rows.items())]
             save(out, ["time", "size"], out_file)   # 途中保存（レジューム用）
-        time.sleep(10)   # stats1はIPレベルの長期429があるため超低速
+        time.sleep(5)   # stats1はIPレベルの長期429あり（バースト厳禁・12req/分なら安定）
     out = [(v[0], v[1]) for k, v in sorted(rows.items())]
     return out
 
