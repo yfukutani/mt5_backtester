@@ -10,7 +10,7 @@
 # 災害SL75 = MAE最悪-47.5%（2021.5暴落・最終-29%）×1.5・歴史上不発火
 # ライブ: Bitfinex公開APIをWebRequestで自動取得（要URL許可 https://api-pub.bitfinex.com）
 # バックテスト: bfx_btc_long.csv（python ml/fetch_btc_alt_data3.py bitfinex）をCommon\Filesへ
-# 採用状況: **ユーザージャッジ待ち**（EA化・検証完了）
+# 採用状況: **採用決定（2026-07-12ユーザー承認・「取引は少ないが採用」＝IS n=8の留保を織り込み済み）**
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "BfxRev_EA"

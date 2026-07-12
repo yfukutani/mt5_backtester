@@ -177,7 +177,9 @@ M4の結論（Bybitはフォールバック不可＝平均源は**二重の**API
 - ライブ自動更新内蔵（Bitfinex公開API+キャッシュ/CSVフォールバック・FundingRev v1.1と同型）
 - ⚠️ 正直な留保: **IS取引数8と薄い**（2022年イベントゼロ）。スクリーニングt=3.25-3.72と
   分布の良さ（後半優位・年次分散）が補強材料
-- **採用ジャッジ待ち**: configs/bfxrev_btcusd_d1.yaml / docs/bfxrev_live_setup.md
+- **→ 判定（2026-07-12ユーザー）: 採用**（「取引は少ないが採用」＝IS n=8の留保を織り込み済み）。
+  configs/bfxrev_btcusd_d1.yaml / docs/bfxrev_live_setup.md。
+  BTC系はG1（funding）+BfxRev（マージン）の2種のデレバレッジ観測構成となる
 
 ## 総括 — 4ラウンド累計約1,400案の最終形
 
