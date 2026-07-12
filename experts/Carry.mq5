@@ -6,7 +6,7 @@
 //|     収益のバックテストは近似。スポットP&Lは正確。               |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.20"
+#property version   "1.30"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -35,6 +35,8 @@ input group "=== デュアルMA退出（BTC v1.2・A2） ==="
 // >0で退出線を分離: entry=TrendMA上かつExitMA上 / exit=ExitMA割れ（TrendMA割れを待たない）。
 // 2018年型の深い暴落を早期退出で回避する狙い（BTC検証用・ヒステリシスとは併用不可）。
 input int    ExitMA_Period  = 0;
+// v1.3(S9): 退出後N本は再エントリー禁止（whipsaw削減）。BTC効率+17%/ETH+26%（スクリーニング・5日）。
+input int    ReentryCooldown = 0;
 
 input group "=== トレード設定 ==="
 input double LotSize     = 0.01;
@@ -52,6 +54,7 @@ CTrade trade;
 int    trendma_handle;
 int    atr_handle = INVALID_HANDLE;
 int    exitma_handle = INVALID_HANDLE;
+datetime g_last_exit = 0;   // v1.3: クールダウン起点（退出バー時刻）
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -74,10 +77,11 @@ int OnInit()
     }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(20);
-    Print("Carry v1.2 起動 | ", _Symbol, " MA", TrendMA_Period,
+    Print("Carry v1.3 起動 | ", _Symbol, " MA", TrendMA_Period,
           " | PositiveSwapOnly=", RequirePositiveSwap ? "ON" : "OFF",
           " | Hyst=", UseHysteresis ? StringFormat("ON(±%.2fATR)", Hyst_ATR_Mult) : "OFF",
-          " | ExitMA=", ExitMA_Period > 0 ? IntegerToString(ExitMA_Period) : "OFF");
+          " | ExitMA=", ExitMA_Period > 0 ? IntegerToString(ExitMA_Period) : "OFF",
+          " | Cooldown=", ReentryCooldown > 0 ? IntegerToString(ReentryCooldown) : "OFF");
     return INIT_SUCCEEDED;
 }
 
@@ -128,8 +132,13 @@ void OnTick()
         exit_th  = ex_buf[0];
     }
 
+    // v1.3: 退出後クールダウン（経過バー数 < 設定値なら新規エントリー禁止）
+    bool cooldown_ok = true;
+    if(ReentryCooldown > 0 && g_last_exit > 0)
+        cooldown_ok = (iBarShift(_Symbol, SignalTimeframe, g_last_exit, false) >= ReentryCooldown);
+
     // エントリー: 帯の上抜け + キャリー有利 → 買い長期保有（SL/TPなし、帯の下割れで決済）
-    if(close_prev > entry_th && swap_ok && !has_pos)
+    if(close_prev > entry_th && swap_ok && !has_pos && cooldown_ok)
     {
         double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
         if(trade.Buy(CalcLot(), _Symbol, ask, 0, 0, "Carry"))
@@ -140,6 +149,7 @@ void OnTick()
     else if(close_prev < exit_th && has_pos)
     {
         ClosePosition();
+        g_last_exit = current_bar_time;
         Print("[CARRY EXIT] close=", close_prev, " ma200=", DoubleToString(ma200, _Digits));
     }
 }

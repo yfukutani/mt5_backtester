@@ -13,6 +13,9 @@
 #   （ETH単独→ETH+A2+G1: 効率0.123→0.449）として提示（docs/btc_backlog.mdフェーズ2）。
 # → 判定（2026-07-12ユーザー）: **保留**。BTC版（G1）導入後にETH版EAを作成する際に
 #   併せて実装・再検討する。このconfigは再現用に保持。
+# → 第2バックログS9（2026-07-12）: ReentryCooldown=5を追加（退出後5日は再entry禁止・whipsaw削減）。
+#   full +68,266→+76,751/PF1.54→1.66/DD18.5→16.7%、IS +48,955→+59,685/PF1.51→1.70。
+#   市場横断で頑健（ETHでも効率+26%）。保留解除時はこの形を基準にする。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "Carry"
@@ -32,6 +35,7 @@ parameters:
   RequirePositiveSwap: false
   UseHysteresis:       false
   ExitMA_Period:       30
+  ReentryCooldown:     5
   LotSize:             0.01
   UseRiskSizing:       false
   RefDeposit:          100000.0
