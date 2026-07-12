@@ -1,0 +1,41 @@
+# G1 funding逆張り — BTCUSD D1（BTCバックログ・フェーズ2生存、2026.07.12）
+# Binance永久先物の資金調達率が悲観極端（日平均 < -0.004%/8h ＝ 5%分位）＝ショート過密
+# のとき翌日から5日ロング。踏み上げ構造（スクリーニング: 翌5日+4.18%/t=5.13/対照の6倍）。
+# 成績（0.01lot固定・スワップ実費込み）: full(2019.09-2026.06) +24,819/PF1.81/DD11.0%/43取引、
+#   IS(2021.06-) +23,585/PF1.84/DD11.1%。前半差分+1,234と薄いが正（当時の低価格で円建て益小、
+#   %ベースでは前半+7.10%/5日と最強）。
+# プラトー: 全隣接値プラス（th-0.003:+40,262 / th-0.005:+29,543/PF3.10 / hold3:+27,523 /
+#   hold7:+72,006/PF3.75）＝基準設定は近傍で最も保守的な点。事前決定値を維持（乗換禁止）。
+# 相関: 対ETH保有 +0.138 / 対A2 +0.023（ゲート<+0.3合格・イベント型で独立性高い）。
+# ⚠️ 運用注意:
+#   - fundingデータはEAがCommon\Files\funding_btc.csvを参照。バックテスト前に
+#     `python ml/fetch_btc_alt_data.py` → ml/funding_btc.csv を
+#     C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\Common\Files\ へコピー（ml/*.csvはgitignore）。
+#   - ライブではCSVの日次更新が必要（更新が止まるとFundingAvg=EMPTY_VALUEで新規エントリー停止＝
+#     フェイルセーフ側に倒れる）。
+#   - シグナル頻度は約5.6回/年（2024-25はfundingプラス常態で低頻度）。SL無し5日保有が仕様。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "FundingRev_EA"
+symbol:    "BTCUSD"
+period:    "D1"
+from_date: "2019.09.01"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  FundingFile:      "funding_btc.csv"
+  Threshold_Pct8h:  -0.004
+  HoldDays:         5
+  LotSize:          0.01
+  DisasterSL_Pct:   0.0
+  MagicNumber:      20260720
+  ResultFileName:   "fundingrev_btcusd_d1_result.csv"
+
+report_dir:  "results"
+report_name: "FundingRev_BTCUSD_D1"

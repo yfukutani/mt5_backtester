@@ -1,0 +1,40 @@
+# A2 デュアルMA — BTCUSD D1（BTCバックログ・フェーズ2、2026.07.12）
+# Carry v1.2のExitMA_Periodで退出線を分離: entry=MA200上かつMA30上 / exit=MA30割れ。
+# 早期退出により2018年型の深い暴落を回避（過去のBTC素のtrend-hold=MA200退出はOOS負けで棄却済み。
+# 退出だけ速くすることで初めてBTCで両期間プラス化）。
+# 成績（0.01lot固定・スワップ実費込み）: full(2015.06-2026.06) +68,266/PF1.54/DD18.5%/73取引、
+#   IS(2021.06-) +48,955/PF1.51/DD15.7%、前半差分+19,311＝両期間プラス。
+#   ExitMA50も全期間+52,076/IS+49,257でプラス＝プラトーあり。
+# スワップ実費の帰属: スポット概算+172,061 − スワップ約-90,740（-65円/日/0.01lot×保有1,396日）
+#   ≈ 純+68,266。**現行スワップ（年率-24.8%相当）がスポット益の約53%を食ってなお生存**。
+#   テスターは現行スワップを全歴史に適用（過去期間は実際より過大請求＝保守的）。
+# ⚠️ 相関ゲート不合格: 対ETH trend-hold 日次P&L相関+0.452（両稼働日+0.70）＝「独立新枠」でなく
+#   既存ETH枠と同質（暗号強気の保有）。採用する場合は追加でなく**暗号サブブックの再編**
+#   （ETH単独→ETH+A2+G1: 効率0.123→0.449）としてユーザー判断（docs/btc_backlog.mdフェーズ2）。
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "Carry"
+symbol:    "BTCUSD"
+period:    "D1"
+from_date: "2015.06.01"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  TrendMA_Period:      200
+  RequirePositiveSwap: false
+  UseHysteresis:       false
+  ExitMA_Period:       30
+  LotSize:             0.01
+  UseRiskSizing:       false
+  RefDeposit:          100000.0
+  MagicNumber:         20260712
+  ResultFileName:      "carry_btcusd_dualma_result.csv"
+
+report_dir:  "results"
+report_name: "Carry_BTCUSD_DualMA_D1"
