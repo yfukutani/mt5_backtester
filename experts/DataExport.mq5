@@ -18,11 +18,11 @@
 
 input string ExportSymbols  = "";   // カンマ区切りの出力対象銘柄（空=チャート銘柄）
 input string ExportTag      = "";
-input int    ExportTFMin    = 1;    // 出力時間足（分: 1=M1, 1440=D1）   // 出力ファイル名タグ: m1_<sym>_<tag>.csv
+input int    ExportTFMin    = 1;    // 出力時間足（分: 1=M1, 60=H1, 1440=D1）   // 出力ファイル名タグ: m1_<sym>_<tag>.csv
 input string ResultFileName = "";   // mt5bt互換（完了検出用のダミー結果も書く）
 
 string symbols[];
-ENUM_TIMEFRAMES ExportTF() { return (ExportTFMin >= 1440 ? PERIOD_D1 : PERIOD_M1); }
+ENUM_TIMEFRAMES ExportTF() { return (ExportTFMin >= 1440 ? PERIOD_D1 : (ExportTFMin >= 60 ? PERIOD_H1 : PERIOD_M1)); }
 bool   warmed = false;
 
 int OnInit()
@@ -63,7 +63,7 @@ double OnTester()
         int copied = CopyRates(sym, ExportTF(), 0, total, rates);
         string lower = sym;
         StringToLower(lower);
-        string fname = (ExportTFMin == 1 ? "m1_" : "d1_") + lower + (ExportTag != "" ? "_" + ExportTag : "") + ".csv";
+        string fname = (ExportTFMin == 1 ? "m1_" : (ExportTFMin >= 1440 ? "d1_" : "h1_")) + lower + (ExportTag != "" ? "_" + ExportTag : "") + ".csv";
         int digits = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
         Print("DataExport: symbol=", sym, " Bars=", total, " copied=", copied, " -> ", fname);
         int fh = FileOpen(fname, FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
