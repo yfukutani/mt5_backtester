@@ -6,7 +6,7 @@
 //|     収益のバックテストは近似。スポットP&Lは正確。               |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.00"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -31,6 +31,11 @@ input bool   UseHysteresis  = false;
 input int    ATR_Period     = 14;
 input double Hyst_ATR_Mult  = 0.75;  // 帯の半幅（×ATR）
 
+input group "=== デュアルMA退出（BTC v1.2・A2） ==="
+// >0で退出線を分離: entry=TrendMA上かつExitMA上 / exit=ExitMA割れ（TrendMA割れを待たない）。
+// 2018年型の深い暴落を早期退出で回避する狙い（BTC検証用・ヒステリシスとは併用不可）。
+input int    ExitMA_Period  = 0;
+
 input group "=== トレード設定 ==="
 input double LotSize     = 0.01;
 input int    MagicNumber = 20260650;
@@ -46,6 +51,7 @@ input string EquityLogFile  = ""; // 全dealのtime,profitを書き出す（mt5b
 CTrade trade;
 int    trendma_handle;
 int    atr_handle = INVALID_HANDLE;
+int    exitma_handle = INVALID_HANDLE;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -61,11 +67,17 @@ int OnInit()
         atr_handle = iATR(_Symbol, SignalTimeframe, ATR_Period);
         if(atr_handle == INVALID_HANDLE) { Print("ATRハンドルの作成に失敗"); return INIT_FAILED; }
     }
+    if(ExitMA_Period > 0)
+    {
+        exitma_handle = iMA(_Symbol, SignalTimeframe, ExitMA_Period, 0, TrendMA_Method, PRICE_CLOSE);
+        if(exitma_handle == INVALID_HANDLE) { Print("ExitMAハンドルの作成に失敗"); return INIT_FAILED; }
+    }
     trade.SetExpertMagicNumber(MagicNumber);
     trade.SetDeviationInPoints(20);
-    Print("Carry v1.1 起動 | ", _Symbol, " MA", TrendMA_Period,
+    Print("Carry v1.2 起動 | ", _Symbol, " MA", TrendMA_Period,
           " | PositiveSwapOnly=", RequirePositiveSwap ? "ON" : "OFF",
-          " | Hyst=", UseHysteresis ? StringFormat("ON(±%.2fATR)", Hyst_ATR_Mult) : "OFF");
+          " | Hyst=", UseHysteresis ? StringFormat("ON(±%.2fATR)", Hyst_ATR_Mult) : "OFF",
+          " | ExitMA=", ExitMA_Period > 0 ? IntegerToString(ExitMA_Period) : "OFF");
     return INIT_SUCCEEDED;
 }
 
@@ -74,6 +86,7 @@ void OnDeinit(const int reason)
 {
     IndicatorRelease(trendma_handle);
     if(atr_handle != INVALID_HANDLE) IndicatorRelease(atr_handle);
+    if(exitma_handle != INVALID_HANDLE) IndicatorRelease(exitma_handle);
 }
 
 //+------------------------------------------------------------------+
@@ -104,6 +117,15 @@ void OnTick()
         if(CopyBuffer(atr_handle, 0, 1, 1, atr_buf) < 1) return;
         entry_th = ma200 + Hyst_ATR_Mult * atr_buf[0];
         exit_th  = ma200 - Hyst_ATR_Mult * atr_buf[0];
+    }
+    // A2デュアルMA: entry=TrendMA上かつExitMA上 / exit=ExitMA割れ（早期退出）
+    if(ExitMA_Period > 0)
+    {
+        double ex_buf[];
+        ArraySetAsSeries(ex_buf, true);
+        if(CopyBuffer(exitma_handle, 0, 1, 1, ex_buf) < 1) return;
+        entry_th = MathMax(ma200, ex_buf[0]);
+        exit_th  = ex_buf[0];
     }
 
     // エントリー: 帯の上抜け + キャリー有利 → 買い長期保有（SL/TPなし、帯の下割れで決済）
