@@ -1,0 +1,35 @@
+{
+  "_comment_1": "★VPS（ライブ運用マシン）に合わせて必ず書き換えること★",
+  "_comment_2": "files_dir = 各端末の『ファイル > データフォルダを開く』で出るパス + \\MQL5\\Files",
+  "_comment_3": "server_utc_offset: XM/OANDAサーバー時刻のUTCオフセット（夏3 / 冬2）。DST切替時に手動更新",
+  "server_utc_offset": 3,
+  "use_mt5_api": true,
+  "alert_dir": "C:\\Users\\Administrator\\Desktop",
+  "log_csv": "monitor_log.csv",
+  "terminals": [
+    {
+      "name": "XM",
+      "terminal_path": "C:\\Program Files\\XM Trading MT5\\terminal64.exe",
+      "files_dir": "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\<XMのデータフォルダID>\\MQL5\\Files",
+      "prefix": "mixlog",
+      "sca_symbols": ["USDJPY", "GBPJPY", "GOLD"],
+      "range_check_hour": 9
+    },
+    {
+      "name": "OANDA_FX",
+      "terminal_path": "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe",
+      "files_dir": "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\<OANDA_FXのデータフォルダID>\\MQL5\\Files",
+      "prefix": "mixlog_oa",
+      "sca_symbols": ["USDJPY", "GBPJPY"],
+      "range_check_hour": 9
+    },
+    {
+      "name": "OANDA_CFD",
+      "terminal_path": "C:\\Program Files\\OANDA MetaTrader 5_CFD\\terminal64.exe",
+      "files_dir": "C:\\Users\\Administrator\\AppData\\Roaming\\MetaQuotes\\Terminal\\<OANDA_CFDのデータフォルダID>\\MQL5\\Files",
+      "prefix": "mixlog_oa",
+      "sca_symbols": ["XAUUSD"],
+      "range_check_hour": 9
+    }
+  ]
+}
