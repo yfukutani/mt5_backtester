@@ -86,12 +86,16 @@ def fetch_hashrate():
 
 
 if __name__ == "__main__":
+    import sys
+    # --funding-only: FundingRev_EAフォールバック運用の日次更新用（軽量・funding のみ）
+    targets = (("funding", fetch_funding),) if "--funding-only" in sys.argv else \
+              (("funding", fetch_funding), ("fng", fetch_fng), ("hashrate", fetch_hashrate))
     ok = []
-    for name, fn in (("funding", fetch_funding), ("fng", fetch_fng),
-                     ("hashrate", fetch_hashrate)):
+    for name, fn in targets:
         try:
             fn()
             ok.append(name)
         except Exception as e:
             print(f"  {name} 取得失敗: {e}")
     print(f"完了: {ok}")
+    sys.exit(0 if len(ok) == len(targets) else 1)

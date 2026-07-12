@@ -7,12 +7,14 @@
 # プラトー: 全隣接値プラス（th-0.003:+40,262 / th-0.005:+29,543/PF3.10 / hold3:+27,523 /
 #   hold7:+72,006/PF3.75）＝基準設定は近傍で最も保守的な点。事前決定値を維持（乗換禁止）。
 # 相関: 対ETH保有 +0.138 / 対A2 +0.023（ゲート<+0.3合格・イベント型で独立性高い）。
-# ⚠️ 運用注意:
-#   - fundingデータはEAがCommon\Files\funding_btc.csvを参照。バックテスト前に
+# 採用決定（2026-07-12ユーザー承認）。v1.1でライブ自動更新を内蔵（EA単体で完結）:
+#   - ライブ: Binance APIからWebRequestで日次自動取得（要URL許可 https://fapi.binance.com）。
+#     失敗時はキャッシュCSV→手動CSVへフォールバック、全滅時は新規のみ停止（フェイルセーフ）。
+#     設置手順: docs/fundingrev_live_setup.md
+#   - テスター（このconfig）: Common\Files\funding_btc.csvを参照。バックテスト前に
 #     `python ml/fetch_btc_alt_data.py` → ml/funding_btc.csv を
 #     C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\Common\Files\ へコピー（ml/*.csvはgitignore）。
-#   - ライブではCSVの日次更新が必要（更新が止まるとFundingAvg=EMPTY_VALUEで新規エントリー停止＝
-#     フェイルセーフ側に倒れる）。
+#   - v1.1回帰確認済み: v1.0と1円単位で一致（+24,819/PF1.8090/43取引）。
 #   - シグナル頻度は約5.6回/年（2024-25はfundingプラス常態で低頻度）。SL無し5日保有が仕様。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 

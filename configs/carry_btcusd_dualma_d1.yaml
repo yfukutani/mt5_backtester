@@ -10,7 +10,9 @@
 #   テスターは現行スワップを全歴史に適用（過去期間は実際より過大請求＝保守的）。
 # ⚠️ 相関ゲート不合格: 対ETH trend-hold 日次P&L相関+0.452（両稼働日+0.70）＝「独立新枠」でなく
 #   既存ETH枠と同質（暗号強気の保有）。採用する場合は追加でなく**暗号サブブックの再編**
-#   （ETH単独→ETH+A2+G1: 効率0.123→0.449）としてユーザー判断（docs/btc_backlog.mdフェーズ2）。
+#   （ETH単独→ETH+A2+G1: 効率0.123→0.449）として提示（docs/btc_backlog.mdフェーズ2）。
+# → 判定（2026-07-12ユーザー）: **保留**。BTC版（G1）導入後にETH版EAを作成する際に
+#   併せて実装・再検討する。このconfigは再現用に保持。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "Carry"
