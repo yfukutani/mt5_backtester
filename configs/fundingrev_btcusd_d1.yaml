@@ -11,6 +11,10 @@
 #   full +39,036/PF2.17/DD9.4%（v1.1比 利益+57%/効率+85%）、IS +35,886/PF2.18、
 #   前半差分+3,150＝全窓改善。mode1(funding>0)はDD5.8%の代替形として記録。
 #   決済はデータ欠損でも最長20日で必ず実行（フェイルセーフ維持）。
+# 【DisasterSL_Pct=40 採用 2026-07-12ユーザー承認（第3バックログZ3）】
+#   39取引のMAE分布=中央-3.0%/最悪-25.3%(2020.3コロナ)。40%は歴史上不発火（検算0件）＝
+#   期待値・全バックテスト結果を変えず取引所事故級テールのみ遮断。
+#   テスター再現確認: open_prices full=+39,036（SL無しと同一）/ every_tick H1 IS=+35,883（同）。
 # 採用決定（2026-07-12ユーザー承認）。v1.1でライブ自動更新を内蔵（EA単体で完結）:
 #   - ライブ: Binance APIからWebRequestで日次自動取得（要URL許可 https://fapi.binance.com）。
 #     失敗時はキャッシュCSV→手動CSVへフォールバック、全滅時は新規のみ停止（フェイルセーフ）。
@@ -41,7 +45,7 @@ parameters:
   ExitMode:         2
   MaxHoldDays:      20
   LotSize:          0.01
-  DisasterSL_Pct:   0.0
+  DisasterSL_Pct:   40.0
   MagicNumber:      20260720
   ResultFileName:   "fundingrev_btcusd_d1_result.csv"
 
