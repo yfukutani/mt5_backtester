@@ -759,12 +759,8 @@ int FundLoadCsvInto(const string fname, long &t[], double &r[])
    return n;
 }
 
-void FundCommit(long &t[], double &r[], const int n)
+void FundRebuildDaily()
 {
-   ArrayResize(f_time,n); ArrayResize(f_rate,n);
-   if(n>1 && t[0]>t[n-1]) for(int i=0;i<n;i++){ f_time[i]=t[n-1-i]; f_rate[i]=r[n-1-i]; }
-   else                   for(int i=0;i<n;i++){ f_time[i]=t[i];     f_rate[i]=r[i]; }
-   f_n=n;
    ArrayResize(g_fday,f_n); ArrayResize(g_fdayavg,f_n);
    g_fdn=0; long cur=-1; double sum=0; int cnt=0;
    for(int i=0;i<f_n;i++){
@@ -773,6 +769,31 @@ void FundCommit(long &t[], double &r[], const int n)
       sum+=f_rate[i]; cnt++;
    }
    if(cnt>0){ g_fday[g_fdn]=cur; g_fdayavg[g_fdn]=sum/cnt*100.0; g_fdn++; }
+}
+
+// merge=false: 全置換。merge=true: 既存の末尾より新しい分だけ追記（同時刻は上書き）。
+// t[] の並びは昇順・降順どちらでも可（BfxCommitはsort=-1前提だがBinanceは昇順で返るため）。
+void FundCommit(long &t[], double &r[], const int n, const bool merge)
+{
+   if(!merge || f_n==0){
+      ArrayResize(f_time,n); ArrayResize(f_rate,n);
+      if(n>1 && t[0]>t[n-1]) for(int i=0;i<n;i++){ f_time[i]=t[n-1-i]; f_rate[i]=r[n-1-i]; }
+      else                   for(int i=0;i<n;i++){ f_time[i]=t[i];     f_rate[i]=r[i]; }
+      f_n=n;
+   } else {
+      bool desc=(n>1 && t[0]>t[n-1]);
+      ArrayResize(f_time,f_n,n); ArrayResize(f_rate,f_n,n);
+      for(int k=0;k<n;k++){
+         int i=(desc ? n-1-k : k);          // 常に昇順で走査
+         long ts=t[i];
+         if(f_n>0 && ts==f_time[f_n-1]){ f_rate[f_n-1]=r[i]; continue; }
+         if(f_n==0 || ts>f_time[f_n-1]){
+            ArrayResize(f_time,f_n+1,n); ArrayResize(f_rate,f_n+1,n);
+            f_time[f_n]=ts; f_rate[f_n]=r[i]; f_n++;
+         }
+      }
+   }
+   FundRebuildDaily();
 }
 
 int FundParse(const string body, long &t[], double &r[])
@@ -809,26 +830,24 @@ bool FundFetch()
    long tt[]; double tr[];
    int n=FundParse(body,tt,tr);
    if(n<3){ Print("funding APIパース失敗 n=",n); return false; }
-   FundCommit(tt,tr,n);
-   Print("funding API取得: ",n,"件");
+   FundCommit(tt,tr,n,true);
+   Print("funding API取得: ",n,"件マージ（総",f_n,"件）");
    return true;
 }
 
 bool FundingInit()
 {
+   long tt[]; double tr[];
    if(MQLInfoInteger(MQL_TESTER) || !FundUseWebRequest){
-      long tt[]; double tr[];
       int n=FundLoadCsvInto(FundingFile,tt,tr);
       if(n<100 && MQLInfoInteger(MQL_TESTER)){ Print("funding CSV不足: ",n,"件"); return false; }
-      if(n>0) FundCommit(tt,tr,n);
+      if(n>0) FundCommit(tt,tr,n,false);
    } else {
+      int n=FundLoadCsvInto(FundingFile,tt,tr);   // 先にCSVで土台を作る（BfxInitと同じ順序）
+      if(n>0) FundCommit(tt,tr,n,false);
       g_fundFetchAt=TimeCurrent();
-      if(!FundFetch()){
-         long tt[]; double tr[];
-         int n=FundLoadCsvInto(FundingFile,tt,tr);
-         if(n>0) FundCommit(tt,tr,n);
+      if(!FundFetch())
          Print("起動時API失敗→CSV代替 ",f_n,"件（以後リトライ）");
-      }
    }
    Print("BTC funding枠: ",f_n,"件ロード | 閾値",DoubleToString(FundThreshold,4),
          "%/8h | 退出=med90(上限",FundMaxHold,"日)");
@@ -866,7 +885,7 @@ bool FundEnsure(datetime bt)
    if(!FundUseWebRequest){
       long tt[]; double tr[];
       int n=FundLoadCsvInto(FundingFile,tt,tr);
-      if(n>0) FundCommit(tt,tr,n);
+      if(n>0) FundCommit(tt,tr,n,false);
       return (f_n>0 && f_time[f_n-1]>=(long)bt-12*3600);
    }
    if(TimeCurrent()-g_fundFetchAt<3600) return false;   // 1時間リトライ間隔
