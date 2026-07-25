@@ -52,6 +52,11 @@ PortfolioEA入力（詳細: [portfolio_ea.md](portfolio_ea.md)の増レバ配分
 
 期待値（全期間バックテスト）: **月利4.51% / 最大DD28.19%**（第6案=Mult_PB_GOLD 10.0で4.80%/29.40%）
 
+> **A-1注記（2026-07-25決定）:** GOLD枠は0.01ロット下限でもSL幅70〜78 USD（金$4,000・高ATR時代）で
+> 1取引リスクが10万円基準の11.4%＝設計2%の5.7倍（詳細: forward_reports/2026-07-25_improvements.md A-1）。
+> フォワードテスト中は現状維持とし、**本番移行時に`Mult_PB_GOLD=9.0`をその時点の金価格・ATR水準で
+> 再計算してから適用する**こと（この値は過去のSL幅前提の逆ボラ計算）。手順: docs/ops_fix_20260725.md §6。
+
 ## 1.3 XM base 年度別純利益（各枠100k名目・素の設定）
 
 | 年 | PB USDJPY | PB GBPJPY | GOLD | RSI USDJPY | RSI EURUSD | RSI GBPUSD | Pair | Carry | VBO | ETH | 合計 |
