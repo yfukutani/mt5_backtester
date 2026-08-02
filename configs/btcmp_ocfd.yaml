@@ -1,0 +1,36 @@
+# フォワード照合: OANDA CFD口座相当（MIX_EA_OANDA・GOLD 2枠のみ）2026.07.06-08.01
+mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
+
+expert:    "MIX_EA_OANDA"
+symbol:    "XAUUSD"
+period:    "M15"
+from_date: "2026.07.06"
+to_date:   "2026.08.01"
+
+deposit:  120000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  En_PB_USDJPY:  false
+  En_PB_GBPJPY:  false
+  En_PB_AUDJPY:  false
+  En_PB_GOLD:    true
+  En_RSI_USDJPY: false
+  En_RSI_EURUSD: false
+  En_RSI_GBPUSD: false
+  En_PAIR:       false
+  En_CARRY:      false
+  En_VBO:        false
+  En_ETH:        false
+  En_SCA_GOLD:   true
+  En_SCA_USDJPY: false
+  En_SCA_GBPJPY: false
+  EnableOpsLog:   true
+  OpsLogPrefix:   "btcmp_ocfd"
+  ResultFileName: "btcmp_ocfd_r.csv"
+
+report_dir:  "results"
+report_name: "BTCMP_OCFD"

@@ -1,0 +1,39 @@
+# フォワード照合: OANDA FX口座相当（MIX_EA_OANDA・GOLD枠OFF）2026.07.06-08.01
+mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
+
+expert:    "MIX_EA_OANDA"
+symbol:    "USDJPY"
+period:    "M15"
+from_date: "2026.07.06"
+to_date:   "2026.08.01"
+
+deposit:  80000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  En_PB_USDJPY:  true
+  En_PB_GBPJPY:  true
+  En_PB_AUDJPY:  false
+  En_PB_GOLD:    false
+  En_RSI_USDJPY: true
+  En_RSI_EURUSD: true
+  En_RSI_GBPUSD: true
+  En_PAIR:       true
+  En_CARRY:      true
+  En_VBO:        true
+  En_ETH:        false
+  En_SCA_GOLD:   false
+  En_SCA_USDJPY: true
+  En_SCA_GBPJPY: true
+  RefCap_PB_USDJPY: 100000
+  RefCap_PB_GBPJPY: 100000
+  RefCap_CARRY:     100000
+  EnableOpsLog:   true
+  OpsLogPrefix:   "btcmp_ofx"
+  ResultFileName: "btcmp_ofx_r.csv"
+
+report_dir:  "results"
+report_name: "BTCMP_OFX"
