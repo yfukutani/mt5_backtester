@@ -7,9 +7,11 @@
 //|         USDJPY/GBPJPY(Range0-9h/TE12/FC22/MinR0.30/Revブースト)   |
 //|  ※ライブ運用専用。各戦略の検証は個別EA(mt5bt)を使うこと。        |
 //|  ※XMサーバー時刻(GMT+2/+3)前提。使い方: docs/MIX_EA_UM.md        |
+//|  v1.4: アーム状態のGlobalVariable永続化（再起動でPB armed/RSI     |
+//|        wasOB等/SCA日次状態/Carry cdを失わない。テスターでは無効） |
 //+------------------------------------------------------------------+
 #property copyright "2026"
-#property version   "1.20"
+#property version   "1.40"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -359,7 +361,12 @@ int OnInit()
          S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
       }
    }
-   Print("MIX_EA v1.3 (XM) 起動 | 有効枠数=", CountEnabled(), "/", NS,
+   // v1.4: アーム状態の復元（ライブのみ。テスターでは何もしない）
+   int restored = StRestore();
+   if(StLive())
+      Print("状態永続化: ", restored>0 ? IntegerToString(restored)+"枠のアーム状態を復元"
+                                       : "保存済み状態なし（初回起動または期限切れ）");
+   Print("MIX_EA v1.4 (XM) 起動 | 有効枠数=", CountEnabled(), "/", NS,
          " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult,
          " | CryptoCap=", MaxCryptoConcurrent>0 ? IntegerToString(MaxCryptoConcurrent) : "OFF");
    return INIT_SUCCEEDED;
@@ -396,6 +403,71 @@ void ZeroSleeve(SLEEVE &x)
 
 int CountEnabled(){ int c=0; for(int i=0;i<NS;i++) if(S[i].enabled) c++; return c; }
 
+//============================ アーム状態の永続化（v1.4） ============================
+// PB armed / RSI wasOB・wasOS・aboveBB・belowBB / Carryクールダウン / SCA日次状態は
+// メモリのみに存在し、EA再起動で消えるとアーム済みシグナルをライブだけ取り損ねる
+// （2026-08-02 フォワードvsBT照合で実証: docs/forward_vs_backtest_20260802.md 原因B）。
+// ライブのみGlobalVariableへ保存しOnInitで復元する。テスター/最適化では完全無効＝挙動不変。
+// lastBarは意図的に対象外（再起動直後の1回即時再評価は決済取り逃しの回収に働くため維持）。
+// GlobalVariableは4週間無アクセスで自動削除されるため、日次で全枠を再保存してタッチする。
+bool StLive(){ return !MQLInfoInteger(MQL_TESTER) && !MQLInfoInteger(MQL_OPTIMIZATION); }
+string StKey(const int i, const string f){ return "MIXST_"+(string)S[i].magic+"_"+f; }
+
+// 保存対象フィールドのスナップショット（変更検知用）
+string StSnap(const int i)
+{
+   return StringFormat("%d%d%d%d%d%d|%I64d|%I64d|%.8f|%.8f|%.8f|%d%d%d%d",
+      (int)S[i].armedBuy,(int)S[i].armedSell,(int)S[i].wasOB,(int)S[i].wasOS,
+      (int)S[i].aboveBB,(int)S[i].belowBB,
+      (long)S[i].cdExitBar,(long)S[i].scaDay,
+      S[i].scaRangeHigh,S[i].scaRangeLow,S[i].scaDrift,
+      (int)S[i].scaReady,(int)S[i].scaSkip,(int)S[i].scaTradedL,(int)S[i].scaTradedS);
+}
+
+void StSave(const int i)
+{
+   if(!StLive()) return;
+   GlobalVariableSet(StKey(i,"aB"), S[i].armedBuy  ? 1 : 0);
+   GlobalVariableSet(StKey(i,"aS"), S[i].armedSell ? 1 : 0);
+   GlobalVariableSet(StKey(i,"oB"), S[i].wasOB     ? 1 : 0);
+   GlobalVariableSet(StKey(i,"oS"), S[i].wasOS     ? 1 : 0);
+   GlobalVariableSet(StKey(i,"bU"), S[i].aboveBB   ? 1 : 0);
+   GlobalVariableSet(StKey(i,"bL"), S[i].belowBB   ? 1 : 0);
+   GlobalVariableSet(StKey(i,"cd"), (double)(long)S[i].cdExitBar);
+   GlobalVariableSet(StKey(i,"sD"), (double)(long)S[i].scaDay);
+   GlobalVariableSet(StKey(i,"sH"), S[i].scaRangeHigh);
+   GlobalVariableSet(StKey(i,"sL"), S[i].scaRangeLow);
+   GlobalVariableSet(StKey(i,"sF"), S[i].scaDrift);
+   GlobalVariableSet(StKey(i,"s1"),
+      (S[i].scaReady?1:0)+(S[i].scaSkip?2:0)+(S[i].scaTradedL?4:0)+(S[i].scaTradedS?8:0));
+}
+
+int StRestore()   // OnInit末尾から呼ぶ。復元できた枠数を返す
+{
+   if(!StLive()) return 0;
+   int n=0;
+   for(int i=0;i<NS;i++){
+      if(!S[i].enabled) continue;
+      if(!GlobalVariableCheck(StKey(i,"s1")) && !GlobalVariableCheck(StKey(i,"aB"))) continue;
+      S[i].armedBuy  = (GlobalVariableGet(StKey(i,"aB"))!=0);
+      S[i].armedSell = (GlobalVariableGet(StKey(i,"aS"))!=0);
+      S[i].wasOB     = (GlobalVariableGet(StKey(i,"oB"))!=0);
+      S[i].wasOS     = (GlobalVariableGet(StKey(i,"oS"))!=0);
+      S[i].aboveBB   = (GlobalVariableGet(StKey(i,"bU"))!=0);
+      S[i].belowBB   = (GlobalVariableGet(StKey(i,"bL"))!=0);
+      S[i].cdExitBar = (datetime)(long)GlobalVariableGet(StKey(i,"cd"));
+      S[i].scaDay    = (datetime)(long)GlobalVariableGet(StKey(i,"sD"));
+      S[i].scaRangeHigh = GlobalVariableGet(StKey(i,"sH"));
+      S[i].scaRangeLow  = GlobalVariableGet(StKey(i,"sL"));
+      S[i].scaDrift     = GlobalVariableGet(StKey(i,"sF"));
+      int f=(int)GlobalVariableGet(StKey(i,"s1"));
+      S[i].scaReady=((f&1)!=0); S[i].scaSkip=((f&2)!=0);
+      S[i].scaTradedL=((f&4)!=0); S[i].scaTradedS=((f&8)!=0);
+      n++;
+   }
+   return n;
+}
+
 //+------------------------------------------------------------------+
 void OnTick()
 {
@@ -412,6 +484,13 @@ void OnTick()
                   AccountInfoDouble(ACCOUNT_MARGIN), PositionsTotal(), 0, 0, "");
       }
    }
+   // v1.4: 状態GVの日次タッチ（4週間無アクセス失効の回避・ライブのみ・EnableOpsLog非依存）
+   if(StLive())
+   {
+      static datetime st_day = 0;
+      datetime d2 = TimeCurrent() - (TimeCurrent() % 86400);
+      if(d2 != st_day){ st_day = d2; for(int i=0;i<NS;i++) if(S[i].enabled) StSave(i); }
+   }
    for(int i=0;i<NS;i++)
    {
       if(!S[i].enabled) continue;
@@ -421,6 +500,8 @@ void OnTick()
       if(bt==0 || bt==S[i].lastBar) continue;   // 新バーのみ
       // VBOはバー内トレーリングのため毎バー評価。他もバー確定で処理。
       S[i].lastBar = bt;
+      // v1.4: アーム状態が変化したバーだけ保存（ライブのみ。テスターではsnap生成もしない）
+      string snap = StLive() ? StSnap(i) : "";
       switch(S[i].strat){
          case ST_PULLBACK: ProcPullback(i); break;
          case ST_RSI:      ProcRSI(i);      break;
@@ -429,6 +510,7 @@ void OnTick()
          case ST_VBO:      ProcVBO(i);      break;
          case ST_SCA:      ProcSCA(i);      break;
       }
+      if(StLive() && StSnap(i)!=snap) StSave(i);
    }
 }
 

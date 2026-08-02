@@ -282,3 +282,28 @@ XM版v1.3（暗号3枠2x込み）とOANDA版（暗号非対応・13枠のまま�
    （Mult1.0）+暗号2x採用値」の素の姿
 3. 暗号枠はイベント型のため月次分布は不均一（0円の月が多数）。月次レビューは%リターン主指標
 4. OANDA版は暗号CFD非対応のため暗号3戦略はXM専用（ヘッダー・§8参照）
+
+## 11. v1.4 / OANDA v1.1: アーム状態のGlobalVariable永続化（2026-08-02）
+
+**背景:** フォワードvsBT照合（docs/forward_vs_backtest_20260802.md 原因B）で、PBの`armedBuy/armedSell`・
+RSIの`wasOB/wasOS/aboveBB/belowBB`（2段構えシグナルの第1段フラグ）がEAメモリのみに存在し、
+**EA再起動でリセットされるとアーム済みシグナルをライブだけ取り損ねる**ことが実証された
+（watchdog誤再起動期に7/21 PB USDJPYや7/31 RSI USDJPY等を両ブローカーで逸失）。
+
+**実装（両EA共通・単一挿入点）:**
+- 保存対象: PB `armedBuy/armedSell`、RSI `wasOB/wasOS/aboveBB/belowBB`、SCA日次状態
+  （`scaDay/scaReady/scaSkip/scaTradedL/scaTradedS/レンジ高安/ドリフト`。**scaTradedL/S消失による
+  同日再エントリーも同時に防止**）、XM版のみCarry `cdExitBar`（ETH枠クールダウン）
+- `lastBar`は**意図的に対象外**（再起動直後の1回即時再評価は決済取り逃しの回収に働く仕様のため維持）
+- GlobalVariable名: `MIXST_<magic>_<field>`。値が変化したバーだけ保存＋**日次で全枠を再保存**
+  （GVの4週間無アクセス自動削除への対策）。OnInitで復元し
+  「状態永続化: N枠のアーム状態を復元」をログ出力（初回は「保存済み状態なし」）
+- **テスター/最適化では読み書きとも完全無効**（`MQL_TESTER`ガード）＝バックテスト挙動は不変
+
+**回帰ゲート（採用根拠）:** 改修前後をMetaEditor強制再ビルドで比較し、
+XM長窓（2026.05.01-06.20 every_tick・53取引）/ XM 7月窓（39取引）/ OANDA FX長窓（40取引）/
+OANDA FX 7月窓（33取引）/ OANDA CFD 7月窓（3取引）の**DEAL行が全窓で完全一致**（ml/reg_diff.py）。
+
+**運用ノート:** 適用後の**初回**起動だけはGVが無いため従来と同じアーム白紙で立ち上がる。
+以後の再起動（watchdog復旧・端末メンテ・停電復帰）ではアーム状態が引き継がれる。
+長期停止後の復元は「停止時点の状態」であり停止中のバー分は反映されない（連続稼働の完全代替ではない）。
