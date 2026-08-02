@@ -140,6 +140,26 @@ function Test-InRolloverWindow {
     return ($t -ge [timespan]::Zero -and $t -lt [timespan]::FromMinutes($WindowMinutes))
 }
 
+function Get-LastLiveUpdate {
+    # S-8: timestamp of the most recent MT5 LiveUpdate restart marker, or $null.
+    # Journal shape (real incident, 2026-08-02):
+    #   17:07:04  LiveUpdate  new version build 6090 ... is available
+    #   17:07:10  LiveUpdate  downloaded successfully
+    #   17:08:10  LiveUpdate  start "...\liveupdate\terminal64.exe" /update /path:... /config:...
+    # Only the 'start ... /update' line marks the actual restart; the two lines before it
+    # are just the update check and do not by themselves imply the terminal restarted.
+    # LiveUpdate restarts the terminal WITHOUT re-attaching the EA even when /config: is
+    # passed, so this event belongs to the OLD session -- do not filter by -Since.
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()]$Records)
+    $last = $null
+    foreach ($r in $Records) {
+        if ($r.Category -eq 'LiveUpdate' -and $r.Message -match '/update') {
+            $last = $r.Stamp
+        }
+    }
+    return $last
+}
+
 function Test-EaHealth {
     # Main S-3 / S-4 judgement for one terminal. See header for the returned Status values.
     # -ProcessRunning: test override; when $null the real process list is queried and the
@@ -151,7 +171,8 @@ function Test-EaHealth {
         [int]$GraceMinutes = 10,
         [int]$DaysBack = 14,
         [int]$FreshLimitHours = 78,
-        [string]$MixlogPrefix = 'mixlog'
+        [string]$MixlogPrefix = 'mixlog',
+        [int]$LiveUpdateWindowMin = 40
     )
     $result = [pscustomobject]@{
         Name           = $Terminal.Name
@@ -204,6 +225,20 @@ function Test-EaHealth {
             return $result
         }
         # loaded < expected
+        # S-8: a recent MT5 LiveUpdate restart is positive evidence the EA will NOT come
+        # back on its own (unlike a normal restart, where grace-period waiting helps while
+        # the EA finishes initializing). Never suppressed by GRACE or the rollover SKIP --
+        # both exist to avoid false alarms on an otherwise-healthy startup, and this is not
+        # that case. See docs/ops_fix_20260802.md S-8 for the 2026-08-02 27-40 minute gap
+        # this closes (previously bound to the watchdog's own 30-min cycle).
+        $lastLiveUpdate = Get-LastLiveUpdate -Records $records
+        if ($null -ne $lastLiveUpdate -and ($Now - $lastLiveUpdate).TotalMinutes -ge 0 -and
+            ($Now - $lastLiveUpdate).TotalMinutes -le $LiveUpdateWindowMin) {
+            $result.Status = 'PROBLEM'
+            $result.Reason = ('MT5 LiveUpdate restart at ' + $lastLiveUpdate.ToString('HH:mm:ss') +
+                ' did not re-attach the EA (' + $loaded + '/' + $expected + ' loaded)')
+            return $result
+        }
         if ($null -ne $sessionStart -and ($Now - $sessionStart).TotalMinutes -lt $GraceMinutes) {
             $result.Status = 'GRACE'
             $result.Reason = 'terminal started recently, EA init pending'
