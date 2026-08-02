@@ -25,6 +25,7 @@ param(
     [switch] $ApplyActiveHours,
     [switch] $ApplyWatchdogS4U,
     [switch] $Apply,                       # without this, everything is a dry run
+    [switch] $NoSelfElevate,               # do not re-launch through UAC (for automation)
     [string] $TaskName    = 'EA-MT5-Watchdog',
     [string] $ScriptPath  = 'C:\AI\claud\project\forward_test\check_and_recover.ps1',
     # Active hours = the window Windows must NOT reboot in. Max width is 18 hours.
@@ -69,10 +70,47 @@ function Show-State {
 }
 
 if (-not (Test-Elevated)) {
-    Write-Warning 'Not elevated. Re-run this from an Administrator PowerShell:'
-    Write-Warning ('  powershell -NoProfile -ExecutionPolicy Bypass -File "{0}" -ApplyActiveHours -ApplyWatchdogS4U -Apply' -f $PSCommandPath)
-    Show-State
-    exit 1
+    # The account here IS in BUILTIN\Administrators, but an ordinary PowerShell window
+    # gets a UAC-filtered token (Medium integrity, Administrators "deny only"), so every
+    # write below silently has no chance of succeeding. This happened for real on
+    # 2026-08-02 18:59: the correct command line was run, the guard tripped, and the
+    # run looked successful because the state dump printed normally. So rather than
+    # just warning, re-launch through UAC and make the failure impossible to miss.
+    if ($NoSelfElevate) {
+        Write-Output ''
+        Write-Output '################################################################'
+        Write-Output '#  NOT ELEVATED - NOTHING WAS CHANGED                          #'
+        Write-Output '################################################################'
+        Show-State
+        exit 1
+    }
+
+    Write-Output 'Not elevated - re-launching through UAC. Approve the prompt to continue.'
+    $argList = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit',
+        '-File', ('"{0}"' -f $PSCommandPath)
+    )
+    if ($ApplyActiveHours) { $argList += '-ApplyActiveHours' }
+    if ($ApplyWatchdogS4U) { $argList += '-ApplyWatchdogS4U' }
+    if ($Apply)            { $argList += '-Apply' }
+    $argList += @('-ActiveHoursStart', $ActiveHoursStart, '-ActiveHoursEnd', $ActiveHoursEnd)
+
+    try {
+        # -NoExit keeps the elevated window open so the post-change checklist stays readable.
+        Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $argList -ErrorAction Stop
+        Write-Output 'Elevated window launched. Read the results THERE, not in this window.'
+        exit 0
+    } catch {
+        Write-Output ''
+        Write-Output '################################################################'
+        Write-Output '#  NOT ELEVATED and the UAC prompt was declined or failed.     #'
+        Write-Output '#  NOTHING WAS CHANGED.                                        #'
+        Write-Output '#  Open PowerShell via right-click > "Run as administrator"    #'
+        Write-Output '#  and run this script again.                                  #'
+        Write-Output '################################################################'
+        Show-State
+        exit 1
+    }
 }
 
 Show-State

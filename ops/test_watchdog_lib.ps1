@@ -151,6 +151,39 @@ Write-Journal $t.DataDir $today @(
 $r = Test-EaHealth -Terminal $t -Now ($today.AddHours(13)) -ProcessRunning $true
 Assert-Equal 'PROBLEM' $r.Status 'case9 pre-restart load does not count for current session -> PROBLEM'
 
+Write-Output '=== S-8: MT5 LiveUpdate restart detection ==='
+
+# Case 14: real 2026-08-02 incident replay. LiveUpdate restarts the terminal without
+# re-attaching the EA. Checked 5 minutes later -- inside the old GRACE window, so the
+# pre-S-8 logic would have said GRACE. S-8 must say PROBLEM instead (LiveUpdate is
+# positive evidence the EA will not come back on its own).
+$t = New-MockTerminal 'case14'
+Write-Journal $t.DataDir $today @(
+    (New-JournalLine '17:07:04.000' 'LiveUpdate' 'new version build 6090 (IDE: 6090, Tester: 6090) is available'),
+    (New-JournalLine '17:07:10.000' 'LiveUpdate' 'downloaded successfully'),
+    (New-JournalLine '17:08:10.000' 'LiveUpdate' 'start "...\liveupdate\terminal64.exe" /update /path:"..." /config:"..."'),
+    (New-JournalLine '17:08:11.000' 'Experts' 'expert MIX_EA_OANDA (USDJPY,M15) removed'),
+    (New-JournalLine '17:08:15.000' 'Terminal' 'stopped with 0'),
+    (New-JournalLine '17:08:45.000' 'Terminal' 'OANDA MetaTrader 5 x64 build 6090 started for OANDA Corporation')
+)
+$r = Test-EaHealth -Terminal $t -Now ($today.AddHours(17).AddMinutes(13)) -ProcessRunning $true
+Assert-Equal 'PROBLEM' $r.Status 'case14 LiveUpdate restart, checked 5min later -> PROBLEM (not GRACE)'
+
+# Case 15: same LiveUpdate event, but it is now stale (48 minutes old, past the 40-minute
+# window) and the terminal separately restarted 3 minutes ago via the normal recovery path.
+# An old LiveUpdate marker must not permanently force PROBLEM -- ordinary GRACE rules take
+# back over once the LiveUpdate event ages out of the window.
+$t = New-MockTerminal 'case15'
+Write-Journal $t.DataDir $today @(
+    (New-JournalLine '16:50:00.000' 'LiveUpdate' 'new version build 6090 (IDE: 6090, Tester: 6090) is available'),
+    (New-JournalLine '16:50:10.000' 'LiveUpdate' 'start "...\liveupdate\terminal64.exe" /update /path:"..." /config:"..."'),
+    (New-JournalLine '16:50:11.000' 'Experts' 'expert MIX_EA_OANDA (USDJPY,M15) removed'),
+    (New-JournalLine '17:35:00.000' 'Startup' 'successfully initialized from start config "C:\ops\claude_startup_oanda.ini"'),
+    (New-JournalLine '17:35:01.000' 'Terminal' 'OANDA MetaTrader 5 x64 build 6090 started for OANDA Corporation')
+)
+$r = Test-EaHealth -Terminal $t -Now ($today.AddHours(17).AddMinutes(38)) -ProcessRunning $true
+Assert-Equal 'GRACE' $r.Status 'case15 LiveUpdate 48min old (window expired), fresh restart 3min ago -> GRACE'
+
 Write-Output '=== process and freshness fallback ==='
 
 # Case 10: process dead -> PROBLEM immediately, even at 00:06.
