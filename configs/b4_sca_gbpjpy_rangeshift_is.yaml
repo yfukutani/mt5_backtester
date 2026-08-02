@@ -1,0 +1,66 @@
+# B-4 感度分析（IS期間 2021-2026）— SCA GBPJPY のレンジ下限摂動
+#
+# 目的: フォワードで実測された「同一シグナルでもブローカーによってレンジ下限が食い違う」
+#       現象（2026-08-02改善案 F-4）に対し、エッジがその実測幅で壊れるかを測る。
+#       実測値: |下限差| 平均 5.2 pips・最大 19.4 pips（USDJPYは1.2pips）
+#                レンジ幅差 平均 11.2%・最大 35.2%（2026-07-30: OANDA 0.560 / XM 0.363）
+#
+# 判定（改善案B-4の合格条件）:
+#   摂動 ±5 pips 以内で IS/OOS 両期間プラスが維持されるか。
+#   両期間プラスが崩れる最小摂動幅 < 5.2 pips なら「構造的に脆弱」と判定し、
+#   枠の扱い（ブローカー一本化 / 採否見直し）をユーザー判断に上げる。
+#
+# ⚠️ 必ず OOS 版 (b4_sca_gbpjpy_rangeshift_oos.yaml) と対で見ること。
+# ⚠️ スキャルピングのため model: every_tick 必須（open_prices 不可）。
+# ⚠️ 実行は開発PC（バックテスト機）で。運用PCはN100 4コアで3端末が常駐しており、
+#    10年every_tickを回すと月曜オープンのライブ稼働を圧迫する。
+
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "GBPJPY"
+period:    "M15"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    0
+  RangeEndHour:      9
+  TradeEndHour:      12
+  ForceCloseHour:    22
+  MinRange_ATRd:     0.30
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.0
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          2.0
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261001
+  UseReversalBoost:  true
+  # 摂動なしが基準。下の optimize で振る。
+  RangeShiftLow_Pips:  0.0
+  RangeShiftHigh_Pips: 0.0
+
+optimize:
+  enabled:   true
+  criterion: "balance"
+  parameters:
+    # +で下限を引き上げ＝レンジを狭める（＝XM側で観測された向き）。
+    # step 1 で ±2 / ±5 / ±10 pips をすべて含む 21 パス。
+    RangeShiftLow_Pips:
+      from: -10
+      to:    10
+      step:   1
+
+report_dir:  "results"
+report_name: "B4_SCA_GBPJPY_RangeShiftLow_IS"

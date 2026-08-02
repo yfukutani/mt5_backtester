@@ -1,0 +1,55 @@
+# B-4 感度分析（OOS期間 2016-2021）— SCA GBPJPY のレンジ下限摂動
+#
+# IS版 (b4_sca_gbpjpy_rangeshift_is.yaml) と必ず対で評価する。
+# 元の凍結ベースラインでは本枠は IS(2021-26)+15,880 / OOS(2016-21)-553 ＝
+# 利益はISドリブンでOOSはフラット。したがって OOS は「プラスを維持」というより
+# 「摂動でOOSがさらに崩れないか」を見る位置づけであることに注意する。
+#
+# ⚠️ model: every_tick 必須。実行は開発PCで（理由はIS版のコメント参照）。
+
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "GBPJPY"
+period:    "M15"
+from_date: "2016.06.21"
+to_date:   "2021.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    0
+  RangeEndHour:      9
+  TradeEndHour:      12
+  ForceCloseHour:    22
+  MinRange_ATRd:     0.30
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.0
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          2.0
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261001
+  UseReversalBoost:  true
+  RangeShiftLow_Pips:  0.0
+  RangeShiftHigh_Pips: 0.0
+
+optimize:
+  enabled:   true
+  criterion: "balance"
+  parameters:
+    RangeShiftLow_Pips:
+      from: -10
+      to:    10
+      step:   1
+
+report_dir:  "results"
+report_name: "B4_SCA_GBPJPY_RangeShiftLow_OOS"
