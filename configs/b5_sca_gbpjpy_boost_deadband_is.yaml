@@ -1,0 +1,72 @@
+# B-5 検証（IS期間 2021-2026）— リバーサルBoost の drift デッドバンド
+#
+# 目的: Boost の発動条件は drift の「符号」だけを見ているため、drift がゼロ近傍だと
+#       ブローカーのフィード差で符号が反転し、同一シグナルの実効ロットが 2倍ずれる。
+#       フォワード実測（2026-08-02改善案 F-5）:
+#         2026-07-28 GBPJPY  drift OANDA +0.023 / XM -0.005 → OANDA 0.01lot / XM 0.02lot
+#         GBPJPY 18営業日中 3日（17%）で符号不一致、いずれも |drift| < 0.10
+#       Boost_MinDrift_ATRd で「|drift| が D1ATR×k 以上のときだけ Boost」とし、
+#       エッジを失わずにばらつきだけ減らせるかを測る。
+#
+# 判定（改善案B-5の合格条件）:
+#   1. IS/OOS 両期間プラスを維持（必須ゲート）
+#   2. k > 0 で月利の劣化が 10% 未満
+#   3. Boost発動回数とBoost起因の損益内訳を必ず確認する
+#      → k=0 の結果と UseReversalBoost:false の結果を比べれば Boost 自体の寄与が分離できる。
+#         **デッドバンドの是非以前に「Boostが実際に稼いでいるか」を先に見ること。**
+#         そのためのベースライン run は下の「別途1回」を参照。
+#   1.と2.を満たす最小の k を採用候補とする。満たす k が無ければ現行（k=0）維持。
+#
+# 別途1回（このconfigとは別に手動で）:
+#   parameters の UseReversalBoost を false にし optimize.enabled も false にして
+#   `mt5bt run` を1回。これが「Boostなし」ベースライン。
+#
+# ⚠️ model: every_tick 必須。実行は開発PCで。
+
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "SCA_EA"
+symbol:    "GBPJPY"
+period:    "M15"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "every_tick"
+
+parameters:
+  RangeStartHour:    0
+  RangeEndHour:      9
+  TradeEndHour:      12
+  ForceCloseHour:    22
+  MinRange_ATRd:     0.30
+  MaxRange_ATRd:     1.00
+  Break_Buffer_ATRd: 0.0
+  SL_Mode:           0
+  SL_ATRd_Mult:      0.5
+  RR_Ratio:          2.0
+  OneShotPerDir:     true
+  UseD1TrendFilter:  false
+  MaxSpreadPoints:   0
+  LotSize:           0.01
+  UseRiskSizing:     false
+  MagicNumber:       20261001
+  UseReversalBoost:  true
+  Boost_Mult:        2.0
+  Boost_MinDrift_ATRd: 0.0
+
+optimize:
+  enabled:   true
+  criterion: "balance"
+  parameters:
+    # k=0（現行）/0.05/0.10/0.15/0.20。改善案が指定した 0/0.05/0.10/0.20 を含む。
+    Boost_MinDrift_ATRd:
+      from: 0.00
+      to:   0.20
+      step: 0.05
+
+report_dir:  "results"
+report_name: "B5_SCA_GBPJPY_BoostDeadband_IS"

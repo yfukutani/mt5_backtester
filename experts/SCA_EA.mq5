@@ -61,6 +61,23 @@ input bool   SkipFriday         = false; // C2: 金曜は新規エントリー�
 input bool   UseStopOrders      = false; // B2: レンジ確定時に両端へ逆指値を事前設置（確定待ちの遅れ解消）
 input bool   UseReversalBoost   = false; // F2-3: レンジ内ドリフトと逆方向のブレイクでロット増し
 input double Boost_Mult         = 2.0;   //       増しロット倍率
+// B-5(2026.08.02): Boost判定の不感帯。|drift| < この値×D1ATR のときはBoostを発動しない。
+// 0.0 = 従来どおり（純粋な符号判定）＝既定なので既存の検証結果は不変。
+// 背景: driftはレンジ窓の「最終バーclose − 最初バーopen」でゼロ近傍を取りやすく、
+// 符号判定だけだとフィード差で結果が反転する。フォワードで実測（2026-07-28 GBPJPY:
+// drift OANDA +0.023 / XM -0.005 で符号が割れ、同一シグナルの実効ロットが 0.01 と 0.02 に
+// 分かれた。GBPJPY 18営業日中3日=17%で符号不一致・いずれも |drift| < 0.10）。
+// 詳細: docs/forward_reports/2026-08-02_improvements.md F-5 / B-5
+input double Boost_MinDrift_ATRd = 0.0;
+// B-4(2026.08.02): レンジ境界の摂動（感度分析用・pip単位、+で内側=レンジを狭める向き）。
+// 0.0 = 従来どおりなので既定では既存の検証結果は不変。
+// 背景: 同一シグナルでもブローカーによってレンジ下限が食い違う。フォワード18営業日の実測で
+// GBPJPYは |下限差| 平均 5.2pips・最大 19.4pips（USDJPYは1.2pips）、レンジ幅差は平均11.2%・
+// 最大35.2%。XM側の安値が常に高い＝レンジが狭い方向に系統的にズレる。
+// このパラメータで ±2/±5/±10 pips を振り、エッジがフィード差の実測幅で壊れないかを見る。
+// 詳細: docs/forward_reports/2026-08-02_improvements.md F-4 / B-4
+input double RangeShiftLow_Pips  = 0.0;  // +で下限を引き上げ（レンジを狭める＝XM側の挙動）
+input double RangeShiftHigh_Pips = 0.0;  // +で上限を引き下げ（レンジを狭める）
 input int    RangeMode          = 0;     // レンジ定義: 0=高安 1=実体(C2-1) 2=終値(C2-3) 3=分位10-90%(C2-2) 4=M5精密(C2-8)
 input bool   BreakOnWick        = false; // D2-1: 判定を終値でなく確定バー高安で行う
 input bool   UseTiltGate        = false; // D2-4: レンジ確定時の終値位置で方向を事前限定（上寄り→上のみ）
@@ -101,6 +118,7 @@ double ml_b = 0.0;
 datetime g_day        = 0;     // 現在の日（00:00）
 double   g_rangeHigh  = 0.0;
 double   g_rangeLow   = 0.0;
+double   g_atrd       = 0.0;   // レンジ確定時のD1 ATR（B-5のドリフト不感帯で使う）
 double   g_drift      = 0.0;   // レンジ窓のドリフト（最終バーclose − 最初バーopen、F2-3用）
 double   g_tilt       = 0.0;   // レンジ確定時終値の中央乖離（D2-4用）
 bool     g_touchedHigh = false; // 当日レンジ上端タッチ済み（D2-7用）
@@ -427,10 +445,43 @@ bool ComputeRange(datetime day_start)
         if(hi <= lo) return false;
     }
 
+    // B-4: レンジ境界の摂動（感度分析）。幅フィルター(MinRange/MaxRange)とSL(レンジ反対端)の
+    // 両方に効かせたいので、ここで境界そのものを動かす。摂動でレンジが潰れる日は不成立扱い。
+    if(RangeShiftLow_Pips != 0.0 || RangeShiftHigh_Pips != 0.0)
+    {
+        double pip = _Point * (((_Digits == 3) || (_Digits == 5)) ? 10.0 : 1.0);
+        lo += RangeShiftLow_Pips  * pip;
+        hi -= RangeShiftHigh_Pips * pip;
+        if(hi <= lo) return false;
+    }
+
     g_rangeHigh = hi;
     g_rangeLow  = lo;
     g_drift     = closeL - openF;                  // F2-3: レンジ窓内の方向ドリフト
+    g_atrd      = 0.0;                             // B-5: 当日ATRは後段のレンジ確定時に入る
     g_tilt      = closeL - (hi + lo) / 2.0;        // D2-4: 確定時終値の中央乖離
+    return true;
+}
+
+//+------------------------------------------------------------------+
+// B-5: リバーサルBoostを発動してよいか。
+//   isLongBreak=true  … 上ブレイク → アジアが下げていた(drift<0)ならリバーサル
+//   isLongBreak=false … 下ブレイク → アジアが上げていた(drift>0)ならリバーサル
+// Boost_MinDrift_ATRd > 0 のときは |drift| が D1ATR×その値以上ある場合だけ発動する。
+// これにより drift がゼロ近傍の日（符号がフィード差で反転しうる日）でロットが
+// 2倍に跳ねるのを防ぐ。既定 0.0 では従来と完全に同一の挙動になる。
+bool IsReversalBoost(const bool isLongBreak)
+{
+    if(!UseReversalBoost) return false;
+    if(isLongBreak) { if(g_drift >= 0.0) return false; }
+    else            { if(g_drift <= 0.0) return false; }
+
+    if(Boost_MinDrift_ATRd > 0.0)
+    {
+        // ATRが未取得(0)の日は不感帯を判定できないため、安全側に倒してBoostしない。
+        if(g_atrd <= 0.0) return false;
+        if(MathAbs(g_drift) < Boost_MinDrift_ATRd * g_atrd) return false;
+    }
     return true;
 }
 
@@ -483,6 +534,7 @@ void OnTick()
         ArraySetAsSeries(atrd_buf, true);
         if(CopyBuffer(atr_d1_handle, 0, 1, 1, atrd_buf) < 1) return;
         double atrd = atrd_buf[0];
+        g_atrd = atrd;                    // B-5: エントリー時のドリフト不感帯判定で参照する
         double width = g_rangeHigh - g_rangeLow;
         if(atrd <= 0.0 || width < MinRange_ATRd * atrd || width > MaxRange_ATRd * atrd)
             g_rangeSkip = true;
@@ -593,7 +645,7 @@ void OnTick()
             {
                 bool sent = false;
                 double lotB = CalcLot(sl_dist);
-                if(UseReversalBoost && g_drift < 0)          // F2-3: アジア下げ→上ブレイク＝リバーサル
+                if(IsReversalBoost(true))                    // F2-3: アジア下げ→上ブレイク＝リバーサル
                     lotB = NormalizeLot(lotB * Boost_Mult);
                 if(UsePartialTP)
                 {
@@ -651,7 +703,7 @@ void OnTick()
             {
                 bool sent = false;
                 double lotS = CalcLot(sl_dist);
-                if(UseReversalBoost && g_drift > 0)          // F2-3: アジア上げ→下ブレイク＝リバーサル
+                if(IsReversalBoost(false))                   // F2-3: アジア上げ→下ブレイク＝リバーサル
                     lotS = NormalizeLot(lotS * Boost_Mult);
                 if(UsePartialTP)
                 {
