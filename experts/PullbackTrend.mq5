@@ -59,6 +59,17 @@ input group "=== ポジションサイジング（リスクベース） ==="
 input bool   UseRiskSizing = false; // ON: 資産のRiskPercent%をSL距離でリスクするロットを動的計算（複利）
 input double RiskPercent   = 1.0;   // 1取引あたりのリスク（口座資産に対する%）
 
+input group "=== 利益保護（S1/S3検証用・既定OFFで従来と完全同一挙動） ==="
+// 2026-08-03: フォワードで観測された「含み益を吐き出して大損」現象の対策候補。
+// docs/profit_giveback_proposals_20260803.md の S1（建値ストップ）/ S3（ATR連動トレーリング）。
+// R = 初期SL距離。建値ストップ後もRを保つため TP から逆算する（SLはBEで動くため使えない）。
+// 判定は新バー確定時のみ（本EAのOnTick全体が新バーゲートの内側＝VolBreakoutと同じ粒度）。
+input bool   UseBreakevenR   = false;  // S1: 含み益がR倍数に達したらSLを建値側へ移動
+input double BE_Trigger_R    = 0.5;    //     発動しきい値（Rの倍数）
+input double BE_Offset_R     = 0.0;    //     移動先（0=建値ちょうど / +で利益確保 / -で建値より不利側）
+input bool   UseATRTrail     = false;  // S3: ATR連動トレーリング（VolBreakout.mq5と同一方式）
+input double Trail_Mult_ATR  = 3.0;    //     SL距離 = 確定足終値 ∓ Trail_Mult_ATR × ATR
+
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
 input string EquityLogFile  = ""; // 全dealのtime,profitを書き出す（mt5bt portfolioでDD合算）
@@ -165,6 +176,9 @@ void OnTick()
     double high_2     = iHigh(_Symbol,  SignalTimeframe, 2);
     double low_2      = iLow(_Symbol,   SignalTimeframe, 2);
 
+    // 保有中ポジションの利益保護（既定OFF＝何もしない）。エントリー判定より先に評価する
+    ManageOpenPosition(close_prev, high_prev, low_prev, atr);
+
     // --- トレンド判定 ---
     bool uptrend   = (close_prev > trendma) && (fastema > slowema);
     bool downtrend = (close_prev < trendma) && (fastema < slowema);
@@ -259,6 +273,67 @@ void OnTick()
             Print("[SELL] close=", close_prev, " fastEMA=", DoubleToString(fastema, _Digits),
                   " atr=", DoubleToString(atr, _Digits));
         armed_sell = false;
+    }
+}
+
+//+------------------------------------------------------------------+
+// 利益保護（S1: 建値ストップ / S3: ATR連動トレーリング）。
+// UseBreakevenR / UseATRTrail が両方OFFなら即座にreturnするため、既定では従来と完全同一。
+// SLは改善方向にしか動かさない（緩める方向の変更はしない）。
+void ManageOpenPosition(const double close1, const double high1, const double low1, const double atr1)
+{
+    if(!UseBreakevenR && !UseATRTrail) return;
+
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket == 0) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+        if(PositionGetString(POSITION_SYMBOL) != _Symbol)     continue;
+
+        bool   is_buy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+        double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+        double cur_sl = PositionGetDouble(POSITION_SL);
+        double tp     = PositionGetDouble(POSITION_TP);
+
+        // R（初期SL距離）: TP距離 = SL距離 × RR比 なので TP から逆算する
+        double R = (UseATRStops && tp > 0.0 && RR_Ratio > 0.0)
+                   ? MathAbs(open_p - tp) / RR_Ratio
+                   : StopLoss_Pips * pip_value;
+        if(R <= 0.0) continue;
+
+        double new_sl = cur_sl;
+
+        // S1: 建値ストップ。確定足の高安が発動線に到達していれば移動
+        if(UseBreakevenR)
+        {
+            double fav = is_buy ? (high1 - open_p) : (open_p - low1);
+            if(fav >= BE_Trigger_R * R)
+            {
+                double be = is_buy ? open_p + BE_Offset_R * R
+                                   : open_p - BE_Offset_R * R;
+                if(is_buy  && be > new_sl)                        new_sl = be;
+                if(!is_buy && (new_sl == 0.0 || be < new_sl))     new_sl = be;
+            }
+        }
+
+        // S3: ATR連動トレーリング（VolBreakout.mq5 の TrailStop と同一ロジック）
+        if(UseATRTrail && atr1 > 0.0)
+        {
+            double t = is_buy ? close1 - Trail_Mult_ATR * atr1
+                              : close1 + Trail_Mult_ATR * atr1;
+            if(is_buy  && t > new_sl && t < close1)                    new_sl = t;
+            if(!is_buy && (new_sl == 0.0 || t < new_sl) && t > close1) new_sl = t;
+        }
+
+        if(new_sl == cur_sl || new_sl == 0.0) continue;
+
+        // 現値を跨ぐSLは送らない（即約定・invalid stops を避ける）
+        double px = is_buy ? SymbolInfoDouble(_Symbol, SYMBOL_BID)
+                           : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+        if((is_buy && new_sl >= px) || (!is_buy && new_sl <= px)) continue;
+
+        trade.PositionModify(ticket, NormalizeDouble(new_sl, _Digits), tp);
     }
 }
 
