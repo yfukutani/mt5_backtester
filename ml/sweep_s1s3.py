@@ -46,8 +46,44 @@ SLEEVES = {
 BE_TRIGGERS = [0.4, 0.5, 0.75, 1.0]        # S1
 TRAIL_MULTS = [1.5, 2.0, 2.5, 3.0]         # S3（PullbackTrendのみ）
 
+# A/B案（2026-08-03）。既定OFFの入力を立てるだけで戦略パラメータには触らない。
+AB_VARIANTS = [
+    ("A5H12",  {"hold": 12}),                        # A5 保有12本で成行決済
+    ("A5H30",  {"hold": 30}),                        # A5 30本
+    ("A5H60",  {"hold": 60}),                        # A5 60本
+    ("A6ALL",  {"weekend": True, "wkprofit": False}),  # A6 金曜20時に必ず決済
+    ("A6PRF",  {"weekend": True, "wkprofit": True}),   # A6 含み益のときだけ決済
+    ("B7L2",   {"cdloss": 2, "cdbars": 20}),         # B7 2連敗→20本クールダウン
+    ("B7L3",   {"cdloss": 3, "cdbars": 20}),         # B7 3連敗→20本
+    ("B8P80",  {"atrpct": 0.80}),                    # B8 ATR分位80%超で抑制
+    ("B8P90",  {"atrpct": 0.90}),                    # B8 90%超
+    ("B10L20", {"struct": 20}),                      # B10 構造TP（20本スイング）
+    ("B10L50", {"struct": 50}),                      # B10 構造TP（50本スイング）
+]
+AB_RSI_ONLY = [
+    ("A4A10",  {"beatr": 1.0}),   # A4 ATR基準の建値（固定SL枠でのみ意味を持つ）
+    ("A4A15",  {"beatr": 1.5}),
+]
+# B10（構造TP）がPB_GOLDで唯一全区間改善したため、台地性を確かめる追加格子
+AB2_VARIANTS = [
+    ("B10L10",  {"struct": 10}),
+    ("B10L30",  {"struct": 30}),
+    ("B10L80",  {"struct": 80}),
+    ("B10L120", {"struct": 120}),
+    ("B10R03",  {"struct": 20, "minrr": 0.3}),
+    ("B10R07",  {"struct": 20, "minrr": 0.7}),
+    ("B10R10",  {"struct": 20, "minrr": 1.0}),
+]
 
-def variants(kind):
+
+def variants(kind, group="s1s3"):
+    if group == "ab2":
+        return [("BASE", {})] + list(AB2_VARIANTS)
+    if group == "ab":
+        v = [("BASE", {})] + list(AB_VARIANTS)
+        if kind == "RSI":
+            v += AB_RSI_ONLY
+        return v
     v = [("BASE", {})]
     for t in BE_TRIGGERS:
         tag = "BE%02d" % round(t * 100)
@@ -79,6 +115,27 @@ def build(sleeve, base_cfg, kind, sl_pips, win, tag, spec, prefix="S13"):
     if "trail" in spec:
         p["UseATRTrail"] = True
         p["Trail_Mult_ATR"] = spec["trail"]
+    # --- A/B案 ---
+    if "hold" in spec:                       # A5
+        p["MaxHoldBars"] = spec["hold"]
+    if spec.get("weekend"):                  # A6
+        p["ExitBeforeWeekend"] = True
+        p["WeekendExitHour"] = 20
+        p["WeekendOnlyProfit"] = bool(spec.get("wkprofit"))
+    if "cdloss" in spec:                     # B7
+        p["CooldownLosses"] = spec["cdloss"]
+        p["CooldownBars"] = spec["cdbars"]
+    if "atrpct" in spec:                     # B8
+        p["UseATRPctFilter"] = True
+        p["ATRPct_Lookback"] = 100
+        p["ATRPct_Max"] = spec["atrpct"]
+    if "struct" in spec:                     # B10
+        p["UseStructureTP"] = True
+        p["StructureLookback"] = spec["struct"]
+        p["StructureMinRR"] = spec.get("minrr", 0.5)
+    if "beatr" in spec:                      # A4（RSIのみ）
+        p["UseBreakevenATR"] = True
+        p["BE_Trigger_ATR"] = spec["beatr"]
     path = WORK / (name + ".yaml")
     with open(path, "w", encoding="utf-8") as fh:
         yaml.safe_dump(cfg, fh, allow_unicode=True, sort_keys=False)
@@ -105,10 +162,13 @@ def summary(name):
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     prefix = sys.argv[2] if len(sys.argv) > 2 else "S13"
+    group = sys.argv[3] if len(sys.argv) > 3 else "s1s3"   # "s1s3" | "ab"
     jobs = []
     for sleeve, (base_cfg, kind, sl_pips) in SLEEVES.items():
+        if group == "ab2" and sleeve not in ("PB_GOLD", "PB_GBPJPY"):
+            continue          # B10の追加格子はPB_GOLD（本命）とPB_GBPJPY（独立窓の対照）のみ
         for win in ("IS", "OOS"):
-            for tag, spec in variants(kind):
+            for tag, spec in variants(kind, group):
                 if mode == "regression" and tag != "BASE":
                     continue
                 jobs.append((sleeve, base_cfg, kind, sl_pips, win, tag, spec))
