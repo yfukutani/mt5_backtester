@@ -70,6 +70,22 @@ input double BE_Offset_R     = 0.0;    //     移動先（0=建値ちょうど /
 input bool   UseATRTrail     = false;  // S3: ATR連動トレーリング（VolBreakout.mq5と同一方式）
 input double Trail_Mult_ATR  = 3.0;    //     SL距離 = 確定足終値 ∓ Trail_Mult_ATR × ATR
 
+input group "=== A/B案検証用（2026-08-03・既定OFFで従来と完全同一挙動） ==="
+// docs/profit_giveback_proposals_20260803.md の A5/A6/B7/B8/B10。
+// S1(建値)/S3(トレーリング)が全滅したため、決済の後付け以外の切り口を検証する。
+input int    MaxHoldBars       = 0;      // A5: 保有N本経過で成行決済（0=無効）
+input bool   ExitBeforeWeekend = false;  // A6: 金曜の指定時刻以降に決済
+input int    WeekendExitHour   = 20;     //     決済時刻（サーバー時間）
+input bool   WeekendOnlyProfit = false;  //     含み益のときだけ決済する
+input int    CooldownLosses    = 0;      // B7: 同方向N連敗でクールダウン（0=無効）
+input int    CooldownBars      = 20;     //     クールダウン期間（バー）
+input bool   UseATRPctFilter   = false;  // B8: ATR分位フィルター（高ボラ時のエントリー抑制）
+input int    ATRPct_Lookback   = 100;    //     分位の測定期間（バー）
+input double ATRPct_Max        = 0.80;   //     この分位を超えるボラではエントリーしない
+input bool   UseStructureTP    = false;  // B10: 直近スイング高安をTPに使う（従来RRとの近い方）
+input int    StructureLookback = 50;     //     スイング探索期間（バー）
+input double StructureMinRR    = 0.5;    //     構造TPがこのRR未満なら従来RRを使う
+
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
 input string EquityLogFile  = ""; // 全dealのtime,profitを書き出す（mt5bt portfolioでDD合算）
@@ -178,6 +194,7 @@ void OnTick()
 
     // 保有中ポジションの利益保護（既定OFF＝何もしない）。エントリー判定より先に評価する
     ManageOpenPosition(close_prev, high_prev, low_prev, atr);
+    TimeBasedExits();   // A5/A6（既定OFF＝何もしない）
 
     // --- トレンド判定 ---
     bool uptrend   = (close_prev > trendma) && (fastema > slowema);
@@ -251,12 +268,17 @@ void OnTick()
         tp_dist = TakeProfit_Pips * pip_value;
     }
 
+    // B8: 高ボラ・レジームのエントリー抑制（既定OFF）
+    bool vol_ok = AtrPctOK(atr);
+    entry_buy  = entry_buy  && vol_ok && CooldownOK(true);    // B7（既定OFF）
+    entry_sell = entry_sell && vol_ok && CooldownOK(false);
+
     // 買いエントリー
     if(entry_buy && !has_buy)
     {
         if(has_sell) ClosePositions(POSITION_TYPE_SELL);
         double sl = NormalizeDouble(ask - sl_dist, _Digits);
-        double tp = NormalizeDouble(ask + tp_dist, _Digits);
+        double tp = NormalizeDouble(ask + StructureTP(true, ask, sl_dist, tp_dist), _Digits);  // B10
         if(trade.Buy(CalcLot(sl_dist), _Symbol, ask, sl, tp, "PullbackBuy"))
             Print("[BUY] close=", close_prev, " fastEMA=", DoubleToString(fastema, _Digits),
                   " atr=", DoubleToString(atr, _Digits));
@@ -268,7 +290,7 @@ void OnTick()
     {
         if(has_buy) ClosePositions(POSITION_TYPE_BUY);
         double sl = NormalizeDouble(bid + sl_dist, _Digits);
-        double tp = NormalizeDouble(bid - tp_dist, _Digits);
+        double tp = NormalizeDouble(bid - StructureTP(false, bid, sl_dist, tp_dist), _Digits);  // B10
         if(trade.Sell(CalcLot(sl_dist), _Symbol, bid, sl, tp, "PullbackSell"))
             Print("[SELL] close=", close_prev, " fastEMA=", DoubleToString(fastema, _Digits),
                   " atr=", DoubleToString(atr, _Digits));
@@ -335,6 +357,103 @@ void ManageOpenPosition(const double close1, const double high1, const double lo
 
         trade.PositionModify(ticket, NormalizeDouble(new_sl, _Digits), tp);
     }
+}
+
+//+------------------------------------------------------------------+
+// A5/A6: 保有時間ストップと週末手仕舞い（既定OFFなら何もしない）
+void TimeBasedExits()
+{
+    if(MaxHoldBars <= 0 && !ExitBeforeWeekend) return;
+
+    MqlDateTime now;
+    TimeToStruct(TimeCurrent(), now);
+    bool weekend_due = ExitBeforeWeekend && (now.day_of_week == 5) && (now.hour >= WeekendExitHour);
+
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket == 0) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+        if(PositionGetString(POSITION_SYMBOL) != _Symbol)     continue;
+
+        bool close_it = false;
+        if(MaxHoldBars > 0)
+        {
+            datetime opened = (datetime)PositionGetInteger(POSITION_TIME);
+            int held = iBarShift(_Symbol, SignalTimeframe, opened, false);
+            if(held >= MaxHoldBars) close_it = true;
+        }
+        if(!close_it && weekend_due)
+            close_it = (!WeekendOnlyProfit || PositionGetDouble(POSITION_PROFIT) > 0.0);
+
+        if(close_it) trade.PositionClose(ticket);
+    }
+}
+
+//+------------------------------------------------------------------+
+// B7: 同方向の連敗数を返す（直近の負け決済時刻も返す）。勝ちが出た時点で打ち切る。
+int RecentLossStreak(const bool for_buy, datetime &last_loss_time)
+{
+    last_loss_time = 0;
+    if(!HistorySelect(0, TimeCurrent())) return 0;
+    int streak = 0;
+    for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+    {
+        ulong tk = HistoryDealGetTicket(i);
+        if(tk == 0) continue;
+        if(HistoryDealGetInteger(tk, DEAL_MAGIC) != MagicNumber) continue;
+        if(HistoryDealGetString(tk, DEAL_SYMBOL) != _Symbol)     continue;
+        if(HistoryDealGetInteger(tk, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
+        // BUYを閉じるOUT約定はSELL側になる
+        bool closed_buy = (HistoryDealGetInteger(tk, DEAL_TYPE) == DEAL_TYPE_SELL);
+        if(closed_buy != for_buy) continue;
+        double p = HistoryDealGetDouble(tk, DEAL_PROFIT) + HistoryDealGetDouble(tk, DEAL_SWAP)
+                 + HistoryDealGetDouble(tk, DEAL_COMMISSION);
+        if(p >= 0.0) break;
+        if(streak == 0) last_loss_time = (datetime)HistoryDealGetInteger(tk, DEAL_TIME);
+        streak++;
+    }
+    return streak;
+}
+
+// B7: クールダウン中ならfalse（エントリー禁止）
+bool CooldownOK(const bool for_buy)
+{
+    if(CooldownLosses <= 0) return true;
+    datetime last_loss = 0;
+    if(RecentLossStreak(for_buy, last_loss) < CooldownLosses) return true;
+    if(last_loss == 0) return true;
+    return (iBarShift(_Symbol, SignalTimeframe, last_loss, false) >= CooldownBars);
+}
+
+//+------------------------------------------------------------------+
+// B8: 現在のATRが過去ATRの何分位か（1.0に近いほど高ボラ）
+bool AtrPctOK(const double atr_now)
+{
+    if(!UseATRPctFilter) return true;
+    double buf[];
+    ArraySetAsSeries(buf, true);
+    if(CopyBuffer(atr_handle, 0, 1, ATRPct_Lookback, buf) < ATRPct_Lookback) return true;
+    int below = 0;
+    for(int i = 0; i < ATRPct_Lookback; i++) if(buf[i] < atr_now) below++;
+    return ((double)below / ATRPct_Lookback) <= ATRPct_Max;
+}
+
+//+------------------------------------------------------------------+
+// B10: 直近スイング高安をTPに使う。構造レベルと従来RR TPの「近い方」を採用する。
+//      構造が無い/近すぎる場合は従来RRのまま（＝エントリーは削らない）。
+double StructureTP(const bool is_buy, const double entry, const double sl_dist, const double rr_tp)
+{
+    if(!UseStructureTP) return rr_tp;
+    double h[], l[];
+    ArraySetAsSeries(h, true); ArraySetAsSeries(l, true);
+    if(CopyHigh(_Symbol, SignalTimeframe, 1, StructureLookback, h) < StructureLookback) return rr_tp;
+    if(CopyLow(_Symbol,  SignalTimeframe, 1, StructureLookback, l) < StructureLookback) return rr_tp;
+    double lvl  = is_buy ? h[ArrayMaximum(h, 0, StructureLookback)]
+                         : l[ArrayMinimum(l, 0, StructureLookback)];
+    double dist = is_buy ? (lvl - entry) : (entry - lvl);
+    if(dist <= 0.0 || dist < StructureMinRR * sl_dist) return rr_tp;
+    return MathMin(dist, rr_tp);
 }
 
 //+------------------------------------------------------------------+

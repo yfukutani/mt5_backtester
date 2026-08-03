@@ -74,6 +74,24 @@ input bool UseTimeFilter   = false; // 時間帯フィルターを使用する
 input int  FilterStartHour = 8;     // エントリー許可開始時刻（GMT時）
 input int  FilterEndHour   = 20;    // エントリー許可終了時刻（GMT時）
 
+input group "=== A/B案検証用（2026-08-03・既定OFFで従来と完全同一挙動） ==="
+// docs/profit_giveback_proposals_20260803.md の A4/A5/A6/B7/B8/B10。
+// S1(建値R基準)/S3(ATRトレーリング)が全滅したため、別の切り口を検証する。
+input bool   UseBreakevenATR   = false;  // A4: ATR基準の建値ストップ（固定SL枠でR基準が効かない場合用）
+input double BE_Trigger_ATR    = 1.0;    //     含み益がATR×この値で建値へ
+input int    MaxHoldBars       = 0;      // A5: 保有N本経過で成行決済（0=無効）
+input bool   ExitBeforeWeekend = false;  // A6: 金曜の指定時刻以降に決済
+input int    WeekendExitHour   = 20;     //     決済時刻（サーバー時間）
+input bool   WeekendOnlyProfit = false;  //     含み益のときだけ決済する
+input int    CooldownLosses    = 0;      // B7: 同方向N連敗でクールダウン（0=無効）
+input int    CooldownBars      = 20;     //     クールダウン期間（バー）
+input bool   UseATRPctFilter   = false;  // B8: ATR分位フィルター（高ボラ時のエントリー抑制）
+input int    ATRPct_Lookback   = 100;    //     分位の測定期間（バー）
+input double ATRPct_Max        = 0.80;   //     この分位を超えるボラではエントリーしない
+input bool   UseStructureTP    = false;  // B10: 直近スイング高安をTPに使う（従来TPとの近い方）
+input int    StructureLookback = 50;     //     スイング探索期間（バー）
+input double StructureMinRR    = 0.5;    //     構造TPがこのRR未満なら従来TPを使う
+
 input group "=== 出力設定 ==="
 input string ResultFileName = "";
 input string EquityLogFile  = ""; // 全dealのtime,profitを書き出す（mt5bt portfolioでDD合算）
@@ -333,6 +351,15 @@ void OnTick()
     bool entry_buy  = adx_ok && in_time && vol_ok && range_ok && uptrend   && (rsi_buy  || bb_buy  || dp_buy);
     bool entry_sell = adx_ok && in_time && vol_ok && range_ok && downtrend && (rsi_sell || bb_sell || dp_sell);
 
+    // A4/A5/A6（既定OFF＝何もしない）
+    CheckBreakevenATR(atr);
+    TimeBasedExits();
+
+    // B7/B8: エントリー側の抑制（既定OFF）
+    bool atrpct_ok = AtrPctOK(atr);
+    entry_buy  = entry_buy  && atrpct_ok && CooldownOK(true);
+    entry_sell = entry_sell && atrpct_ok && CooldownOK(false);
+
     bool has_buy  = HasPosition(POSITION_TYPE_BUY);
     bool has_sell = HasPosition(POSITION_TYPE_SELL);
 
@@ -355,7 +382,7 @@ void OnTick()
     {
         if(has_sell) ClosePositions(POSITION_TYPE_SELL);
         double sl = NormalizeDouble(ask - sl_dist, _Digits);
-        double tp = NormalizeDouble(ask + tp_dist, _Digits);
+        double tp = NormalizeDouble(ask + StructureTP(true, ask, sl_dist, tp_dist), _Digits);  // B10
         string reason = dp_buy ? (rsi_buy || bb_buy ? "RSI/BB+DP" : "DoubleBottom")
                                 : (rsi_buy ? (bb_buy ? "RSI+BB" : "RSI") : "BB");
         if(trade.Buy(CalcLot(sl_dist), _Symbol, ask, sl, tp, reason))
@@ -370,7 +397,7 @@ void OnTick()
     {
         if(has_buy) ClosePositions(POSITION_TYPE_BUY);
         double sl = NormalizeDouble(bid + sl_dist, _Digits);
-        double tp = NormalizeDouble(bid - tp_dist, _Digits);
+        double tp = NormalizeDouble(bid - StructureTP(false, bid, sl_dist, tp_dist), _Digits);  // B10
         string reason = dp_sell ? (rsi_sell || bb_sell ? "RSI/BB+DP" : "DoubleTop")
                                  : (rsi_sell ? (bb_sell ? "RSI+BB" : "RSI") : "BB");
         if(trade.Sell(CalcLot(sl_dist), _Symbol, bid, sl, tp, reason))
@@ -454,6 +481,122 @@ void CheckBreakeven()
             }
         }
     }
+}
+
+//+------------------------------------------------------------------+
+// A4: ATR基準の建値ストップ（固定SL枠ではRが一定なので pips版BEと等価だが、
+//     ATR連動にすることでボラに応じた発動になる）
+void CheckBreakevenATR(const double atr_now)
+{
+    if(!UseBreakevenATR || atr_now <= 0.0) return;
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket == 0) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+        if(PositionGetString(POSITION_SYMBOL) != _Symbol)     continue;
+        bool   is_buy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+        double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+        double cur_sl = PositionGetDouble(POSITION_SL);
+        double tp     = PositionGetDouble(POSITION_TP);
+        double hi = iHigh(_Symbol, PERIOD_CURRENT, 1), lo = iLow(_Symbol, PERIOD_CURRENT, 1);
+        double fav = is_buy ? (hi - open_p) : (open_p - lo);
+        if(fav < BE_Trigger_ATR * atr_now) continue;
+        if(is_buy && open_p <= cur_sl) continue;
+        if(!is_buy && cur_sl != 0.0 && open_p >= cur_sl) continue;
+        double px = is_buy ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+        if((is_buy && open_p >= px) || (!is_buy && open_p <= px)) continue;
+        trade.PositionModify(ticket, NormalizeDouble(open_p, _Digits), tp);
+    }
+}
+
+//+------------------------------------------------------------------+
+// A5/A6: 保有時間ストップと週末手仕舞い（既定OFFなら何もしない）
+void TimeBasedExits()
+{
+    if(MaxHoldBars <= 0 && !ExitBeforeWeekend) return;
+    MqlDateTime now;
+    TimeToStruct(TimeCurrent(), now);
+    bool weekend_due = ExitBeforeWeekend && (now.day_of_week == 5) && (now.hour >= WeekendExitHour);
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket == 0) continue;
+        if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+        if(PositionGetString(POSITION_SYMBOL) != _Symbol)     continue;
+        bool close_it = false;
+        if(MaxHoldBars > 0)
+        {
+            datetime opened = (datetime)PositionGetInteger(POSITION_TIME);
+            if(iBarShift(_Symbol, PERIOD_CURRENT, opened, false) >= MaxHoldBars) close_it = true;
+        }
+        if(!close_it && weekend_due)
+            close_it = (!WeekendOnlyProfit || PositionGetDouble(POSITION_PROFIT) > 0.0);
+        if(close_it) trade.PositionClose(ticket);
+    }
+}
+
+//+------------------------------------------------------------------+
+// B7: 同方向の連敗数（勝ちが出た時点で打ち切り）
+int RecentLossStreak(const bool for_buy, datetime &last_loss_time)
+{
+    last_loss_time = 0;
+    if(!HistorySelect(0, TimeCurrent())) return 0;
+    int streak = 0;
+    for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+    {
+        ulong tk = HistoryDealGetTicket(i);
+        if(tk == 0) continue;
+        if(HistoryDealGetInteger(tk, DEAL_MAGIC) != MagicNumber) continue;
+        if(HistoryDealGetString(tk, DEAL_SYMBOL) != _Symbol)     continue;
+        if(HistoryDealGetInteger(tk, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
+        bool closed_buy = (HistoryDealGetInteger(tk, DEAL_TYPE) == DEAL_TYPE_SELL);
+        if(closed_buy != for_buy) continue;
+        double p = HistoryDealGetDouble(tk, DEAL_PROFIT) + HistoryDealGetDouble(tk, DEAL_SWAP)
+                 + HistoryDealGetDouble(tk, DEAL_COMMISSION);
+        if(p >= 0.0) break;
+        if(streak == 0) last_loss_time = (datetime)HistoryDealGetInteger(tk, DEAL_TIME);
+        streak++;
+    }
+    return streak;
+}
+
+bool CooldownOK(const bool for_buy)
+{
+    if(CooldownLosses <= 0) return true;
+    datetime last_loss = 0;
+    if(RecentLossStreak(for_buy, last_loss) < CooldownLosses) return true;
+    if(last_loss == 0) return true;
+    return (iBarShift(_Symbol, PERIOD_CURRENT, last_loss, false) >= CooldownBars);
+}
+
+//+------------------------------------------------------------------+
+// B8: ATR分位フィルター
+bool AtrPctOK(const double atr_now)
+{
+    if(!UseATRPctFilter) return true;
+    double buf[];
+    ArraySetAsSeries(buf, true);
+    if(CopyBuffer(atr_handle, 0, 1, ATRPct_Lookback, buf) < ATRPct_Lookback) return true;
+    int below = 0;
+    for(int i = 0; i < ATRPct_Lookback; i++) if(buf[i] < atr_now) below++;
+    return ((double)below / ATRPct_Lookback) <= ATRPct_Max;
+}
+
+//+------------------------------------------------------------------+
+// B10: 構造TP（直近スイング高安と従来TPの近い方）
+double StructureTP(const bool is_buy, const double entry, const double sl_dist, const double rr_tp)
+{
+    if(!UseStructureTP) return rr_tp;
+    double h[], l[];
+    ArraySetAsSeries(h, true); ArraySetAsSeries(l, true);
+    if(CopyHigh(_Symbol, PERIOD_CURRENT, 1, StructureLookback, h) < StructureLookback) return rr_tp;
+    if(CopyLow(_Symbol,  PERIOD_CURRENT, 1, StructureLookback, l) < StructureLookback) return rr_tp;
+    double lvl  = is_buy ? h[ArrayMaximum(h, 0, StructureLookback)]
+                         : l[ArrayMinimum(l, 0, StructureLookback)];
+    double dist = is_buy ? (lvl - entry) : (entry - lvl);
+    if(dist <= 0.0 || dist < StructureMinRR * sl_dist) return rr_tp;
+    return MathMin(dist, rr_tp);
 }
 
 //+------------------------------------------------------------------+
