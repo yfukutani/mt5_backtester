@@ -18,10 +18,11 @@
 //|  ETH A2デュアルMAの暗号3戦略は、OANDA証券が暗号資産CFD非対応の    |
 //|  ため本EAには追加不可（XM版MIX_EA v1.3専用）。本EAは13枠のまま。  |
 //+------------------------------------------------------------------+
+// v1.2: 利益トレール（含み益が残高比%刻みでSLを段階的に引き上げ・既定OFF）
 // v1.1: アーム状態のGlobalVariable永続化（再起動でPB armed/RSI wasOB等/
 //       SCA日次状態を失わない。テスターでは無効・挙動不変）
 #property copyright "2026"
-#property version   "1.10"
+#property version   "1.20"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -51,6 +52,16 @@ input string Sym_EURUSD = "EURUSD";   // FX（RSI＋Pairの主）
 input string Sym_GBPUSD = "GBPUSD";   // FX（RSI＋Pairの従）
 input string Sym_GOLD   = "XAUUSD";   // 商品CFD専用口座（OANDAは XAUUSD）
 input string Sym_ETHUSD = "ETHUSD";   // 暗号資産＝OANDA取扱なし（En_ETH=false既定）
+
+input group "=== 利益トレール（v1.2・既定OFF） ==="
+// 含み益が口座残高のStep%に達したらSLを「残高のLock%の利益を確保する価格」へ移動し、
+// 以後はStep%増えるごとに同じ幅だけSLを引き上げる（追従幅は Step-Lock で一定）。
+// 例（Step=0.5 / Lock=0.1・残高10万円）: +500円→SL=+100円 / +1,000円→+600円 / +1,500円→+1,100円
+// SLは改善方向にのみ動かし、現値やストップレベルを跨ぐ位置には置かない。
+// 対象は本EAが建てた全ポジション（PairTrade/Carryなど本来SLを持たない枠にもSLが付く点に注意）。
+input bool   UseProfitTrail    = false;  // 利益トレールを使用する
+input double ProfitTrail_Step  = 0.5;    // 発動・引き上げの刻み（口座残高に対する%）
+input double ProfitTrail_Lock  = 0.1;    // 初回発動時に確保する利益（口座残高に対する%）
 
 input group "=== 全体設定 ==="
 input bool   MasterEnable  = true;   // 全枠の発注を一括停止できる安全スイッチ
@@ -338,7 +349,10 @@ int OnInit()
    if(StLive())
       Print("状態永続化: ", restored>0 ? IntegerToString(restored)+"枠のアーム状態を復元"
                                        : "保存済み状態なし（初回起動または期限切れ）");
-   Print("MIX_EA_OANDA v1.1 起動 | 有効枠数=", CountEnabled(), "/", NS,
+   if(UseProfitTrail)
+      PrintFormat("利益トレール: ON | 刻み%.2f%% / 初回確保%.2f%%（追従幅%.2f%%）",
+                  ProfitTrail_Step, ProfitTrail_Lock, ProfitTrail_Step - ProfitTrail_Lock);
+   Print("MIX_EA_OANDA v1.2 起動 | 有効枠数=", CountEnabled(), "/", NS,
          " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult);
    return INIT_SUCCEEDED;
 }
@@ -435,10 +449,77 @@ int StRestore()   // OnInit末尾から呼ぶ。復元できた枠数を返す
    return n;
 }
 
+//============================ 利益トレール（v1.2） ============================
+// 仕様: 含み益が「口座残高 × ProfitTrail_Step%」に達するごとに段階を1つ上げ、
+//       第n段では「口座残高 × (Lock% + (n-1)×Step%)」の利益を確保する価格へSLを移動する。
+//       Step=0.5 / Lock=0.1 なら 0.5%→+0.1% / 1.0%→+0.6% / 1.5%→+1.1%（追従幅0.4%固定）。
+// 既定OFF。ONでも「改善方向のみ・現値/ストップレベルを跨がない」ため約定拒否は起きない。
+bool IsOurMagic(const long m)
+{
+   for(int i=0;i<NS;i++) if(S[i].magic==m) return true;
+   return false;
+}
+
+void ProfitTrail()
+{
+   if(!UseProfitTrail) return;
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   double step_money = bal * ProfitTrail_Step / 100.0;
+   if(bal <= 0.0 || step_money <= 0.0) return;
+
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk = PositionGetTicket(k);
+      if(tk==0) continue;
+      long mg = PositionGetInteger(POSITION_MAGIC);
+      if(!IsOurMagic(mg)) continue;
+
+      string sym = PositionGetString(POSITION_SYMBOL);
+      // 判定は実含み益（スワップ込み）
+      double profit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      int n = (int)MathFloor(profit / step_money);
+      if(n < 1) continue;
+
+      double lock_money = bal * ProfitTrail_Lock / 100.0 + (n - 1) * step_money;
+      bool   is_buy = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+      double cur_sl = PositionGetDouble(POSITION_SL);
+      double tp     = PositionGetDouble(POSITION_TP);
+      int    dg     = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      double px     = is_buy ? SymbolInfoDouble(sym, SYMBOL_BID) : SymbolInfoDouble(sym, SYMBOL_ASK);
+
+      // 値幅→金額の換算はポジション自身の損益から求める。
+      // SYMBOL_TRADE_TICK_VALUE は建値通貨で返るブローカーがあり（XMのGOLD/ETH/BTCで実測）、
+      // 口座通貨(JPY)前提で計算するとUSD建て銘柄でSL距離が約164倍になり一度も発動しない。
+      double moved   = is_buy ? (px - open_p) : (open_p - px);
+      double pprofit = PositionGetDouble(POSITION_PROFIT);
+      if(moved <= 0.0 || pprofit <= 0.0) continue;
+      double money_per_price = pprofit / moved;
+      if(money_per_price <= 0.0) continue;
+      double dist = lock_money / money_per_price;
+      if(dist <= 0.0) continue;
+
+      double newsl = NormalizeDouble(is_buy ? open_p + dist : open_p - dist, dg);
+
+      if(is_buy  && !(newsl > cur_sl)) continue;
+      if(!is_buy && !(cur_sl==0.0 || newsl < cur_sl)) continue;
+      if((is_buy && newsl >= px) || (!is_buy && newsl <= px)) continue;
+
+      long   stops = SymbolInfoInteger(sym, SYMBOL_TRADE_STOPS_LEVEL);
+      double pt    = SymbolInfoDouble(sym, SYMBOL_POINT);
+      if(stops > 0 && MathAbs(px - newsl) < stops * pt) continue;
+
+      if(trade.PositionModify(tk, newsl, tp))
+         OpsWrite("PTRAIL", mg, sym, n, profit, lock_money, newsl, px,
+                  PositionGetDouble(POSITION_VOLUME), "STEP");
+   }
+}
+
 //+------------------------------------------------------------------+
 void OnTick()
 {
    if(!MasterEnable) return;
+   ProfitTrail();   // v1.2（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
    {
