@@ -490,10 +490,25 @@ int StRestore()   // OnInit末尾から呼ぶ。復元できた枠数を返す
 //       第n段では「口座残高 × (Lock% + (n-1)×Step%)」の利益を確保する価格へSLを移動する。
 //       Step=0.5 / Lock=0.1 なら 0.5%→+0.1% / 1.0%→+0.6% / 1.5%→+1.1%（追従幅0.4%固定）。
 // 既定OFF。ONでも「改善方向のみ・現値/ストップレベルを跨がない」ため約定拒否は起きない。
-bool IsOurMagic(const long m)
+int SleeveByMagic(const long m)
 {
-   for(int i=0;i<NS;i++) if(S[i].magic==m) return true;
-   return false;
+   for(int i=0;i<NS;i++) if(S[i].magic==m) return i;
+   return -1;
+}
+
+// 利益トレールの対象枠: **FXのみ**（GOLD・暗号は対象外）かつ PairTrade / Carry を除外。
+// 除外理由（2026-08-05 実測・docs/profit_trail_20260805.md）:
+//  - GOLD（PB 20260640 / SCA 20261002）と暗号は利益が35〜45%失われた（トレンド追随の大勝ちを刈る）
+//  - PairTrade は2レグ同時決済のサヤ取りで、片脚だけSLに掛かるとヘッジが崩れる
+//  - Carry は「SLを置かない」ことが設計思想（docs/carry.md・DDは決済では削れないと検証済み）
+//  ※ETH枠は ST_CARRY で実装されているため Carry 除外に含まれる
+bool PtrailEligible(const int i)
+{
+   if(i < 0) return false;
+   if(S[i].strat==ST_PAIR || S[i].strat==ST_CARRY)     return false;  // PairTrade / Carry / ETH
+   if(S[i].strat==ST_FUNDING || S[i].strat==ST_BFXREV) return false;  // BTC funding / BfxRev
+   if(S[i].magic==20260640 || S[i].magic==20261002)    return false;  // PB GOLD / SCA GOLD
+   return true;
 }
 
 void ProfitTrail()
@@ -508,7 +523,7 @@ void ProfitTrail()
       ulong tk = PositionGetTicket(k);
       if(tk==0) continue;
       long mg = PositionGetInteger(POSITION_MAGIC);
-      if(!IsOurMagic(mg)) continue;
+      if(!PtrailEligible(SleeveByMagic(mg))) continue;   // FX枠のみ（Pair/Carry/GOLD/暗号は除外）
 
       string sym = PositionGetString(POSITION_SYMBOL);
       // 判定は実含み益（スワップ込み）
