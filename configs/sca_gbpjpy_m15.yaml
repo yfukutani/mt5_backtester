@@ -2,6 +2,8 @@
 # アジア時間(0-9h鯖時間)レンジをロンドン午前(9-12h)にブレイクした方向へ日中完結で取る。
 # 最終形(2026.07.03): TE12/RR2.0/buf0/MinRange0.30。全期間+15,327/PF1.04/DD17.6%(every_tick)。
 # ⚠️ IS(2021-26)+15,880/OOS(2016-21)-553＝利益はISドリブン・OOSフラット。GOLDが主軸、本枠は補助。
+# v1.1(2026-08): Boost_Mult 2.0→3.0採用（応答曲面M239・本番同一条件tier2確認:
+#   IS+27,445→+39,027/OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
 # ⚠️ スキャルピングのため検証は必ず every_tick で行うこと（open_prices不可）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
@@ -35,6 +37,7 @@ parameters:
   UseRiskSizing:     false
   MagicNumber:       20261001
   UseReversalBoost:  true
+  Boost_Mult:        3.0
   ResultFileName:    "sca_GBPJPY_m15_result.csv"
 
 report_dir:  "results"
