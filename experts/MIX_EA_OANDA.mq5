@@ -242,9 +242,13 @@ int OnInit()
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
+   //    v1.3: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
+   //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
+   //    OOS低下は許容。docs/new_strategies_round2_20260805.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol=Sym_GBPJPY; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
-     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
+     x.slopeMinATR=1.5; x.rr=3.5; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }
