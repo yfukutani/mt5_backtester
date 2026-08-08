@@ -1,0 +1,26 @@
+mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
+
+expert:    "BfxRev_EA"
+symbol:    "ETHUSD"
+period:    "D1"
+from_date: "2021.06.21"
+to_date:   "2026.06.20"
+
+deposit:  100000
+currency: "JPY"
+leverage: 25
+
+model: "open_prices"
+
+parameters:
+  BfxFile:         "bfx_eth_long.csv"
+  DropPct:         10.0
+  LookbackDays:    5
+  HoldDays:        10
+  LotSize:         0.02
+  DisasterSL_Pct:  75.0
+  MagicNumber:     20260899
+  ResultFileName:  "bfxrev_ethusd_d1_is_result.csv"
+
+report_dir:  "results"
+report_name: "BfxRev_ETHUSD_D1_IS"

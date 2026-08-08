@@ -9,6 +9,9 @@
 # サイジング: リスク2%採用。MTFフィルター込み risk2%: +18,337/PF1.20/DD10.74%
 #   （旧risk2% +17,263/PF1.18/DD11.6%から改善）。PF>1の真のエッジがあるためサイジングが有効
 #   （docs/position_sizing.md）。
+# v1.4(2026-08): MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5採用（応答曲面M366・本番同一条件
+#   tier2確認: IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
+#   OOS低下（頑健性低下）は許容という判断。docs/new_strategies_round2_20260805.md）
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -35,11 +38,11 @@ parameters:
   ADX_Threshold:           22.5
   UseTrendStrength:        true
   MA_Slope_Lookback:       20
-  MA_Slope_Min_ATR:        1.2
+  MA_Slope_Min_ATR:        1.5
   UseATRStops:             true
   ATR_Period:              14
   ATR_SL_Mult:             2.0
-  RR_Ratio:                2.0
+  RR_Ratio:                3.5
   StopLoss_Pips:           50
   TakeProfit_Pips:         110
   LotSize:                 0.01
