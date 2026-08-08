@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "codex": {
+      "command": "C:\\Users\\f\\AppData\\Roaming\\npm\\codex.cmd",
+      "args": ["mcp-server"]
+    }
+  }
+}

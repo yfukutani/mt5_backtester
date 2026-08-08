@@ -12,6 +12,9 @@
 # v1.4(2026-08): MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5採用（応答曲面M366・本番同一条件
 #   tier2確認: IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
 #   OOS低下（頑健性低下）は許容という判断。docs/new_strategies_round2_20260805.md）
+# v1.5(2026-08): RR_Ratio 3.5→4.0採用（Codex提案11の近傍応答曲面・本番同一条件tier2確認:
+#   IS+18,665→+29,315／OOS+4,641→+10,197。トレードオフなしの純改善。
+#   docs/codex_verification_20260808.md）
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -42,7 +45,7 @@ parameters:
   UseATRStops:             true
   ATR_Period:              14
   ATR_SL_Mult:             2.0
-  RR_Ratio:                3.5
+  RR_Ratio:                4.0
   StopLoss_Pips:           50
   TakeProfit_Pips:         110
   LotSize:                 0.01

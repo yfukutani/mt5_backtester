@@ -39,6 +39,8 @@ CANDIDATES = [
      {"UseStopOrders": True}, "every_tick"),
     ("PB_USDJPY_Slope15_RR35", "configs/pullback_usdjpy_h4.yaml",
      {"MA_Slope_Min_ATR": 1.5, "RR_Ratio": 3.5}, "open_prices"),
+    ("PB_GBPJPY_RR40", "configs/pullback_gbpjpy_h4.yaml",
+     {"RR_Ratio": 4.0}, "open_prices"),
 ]
 
 # ベースライン（現行本番パラメータそのまま）も同時に同一条件で回して比較基準にする
