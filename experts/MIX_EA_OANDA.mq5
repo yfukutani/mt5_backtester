@@ -38,7 +38,8 @@ input bool En_RSI_EURUSD = true;
 input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
 input bool En_PAIR       = true;
 input bool En_CARRY      = true;
-input bool En_VBO        = true;
+input bool En_VBO        = false;  // 2026-08-08: every_tick実費検証でOOS一貫マイナス判明のため除外
+                                    // （docs/codex_verification_20260808.md）
 input bool En_ETH        = false;  // ETHUSD＝OANDAは暗号資産CFD取扱なし。既定OFF（取扱不可）
 input bool En_SCA_GOLD   = true;   // SCA XAUUSD（CFDアクセス前提・無ければfalse）
 input bool En_SCA_USDJPY = true;   // SCA USDJPY（OANDAスプレッドでXM比+139%の検証実績）
@@ -245,10 +246,13 @@ int OnInit()
    //    v1.3: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
    //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
    //    OOS低下は許容。docs/new_strategies_round2_20260805.md）
+   //    v1.4: RR_Ratio 3.5→4.0（Codex提案11の近傍応答曲面・本番同一条件tier2確認:
+   //    IS+18,665→+29,315／OOS+4,641→+10,197。トレードオフなしの純改善。
+   //    docs/codex_verification_20260808.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol=Sym_GBPJPY; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.slopeMinATR=1.5; x.rr=3.5; AddSleeve(x); }
+     x.slopeMinATR=1.5; x.rr=4.0; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }

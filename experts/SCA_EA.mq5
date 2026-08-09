@@ -548,16 +548,26 @@ void OnTick()
             double sl_b = NormalizeDouble(g_rangeLow, _Digits);
             double dist_b = px_b - sl_b;
             if(dist_b > 0)
-                trade.BuyStop(CalcLot(dist_b), px_b, _Symbol, sl_b,
+            {
+                double lotB = CalcLot(dist_b);
+                if(IsReversalBoost(true))
+                    lotB = NormalizeLot(lotB * Boost_Mult);
+                trade.BuyStop(lotB, px_b, _Symbol, sl_b,
                               NormalizeDouble(px_b + RR_Ratio * dist_b, _Digits),
                               ORDER_TIME_SPECIFIED, expiry, "SCA-BS");
+            }
             double px_s = NormalizeDouble(g_rangeLow - buffer2, _Digits);
             double sl_s = NormalizeDouble(g_rangeHigh, _Digits);
             double dist_s = sl_s - px_s;
             if(dist_s > 0)
-                trade.SellStop(CalcLot(dist_s), px_s, _Symbol, sl_s,
+            {
+                double lotS = CalcLot(dist_s);
+                if(IsReversalBoost(false))
+                    lotS = NormalizeLot(lotS * Boost_Mult);
+                trade.SellStop(lotS, px_s, _Symbol, sl_s,
                                NormalizeDouble(px_s - RR_Ratio * dist_s, _Digits),
                                ORDER_TIME_SPECIFIED, expiry, "SCA-SS");
+            }
             g_tradedLong = true;    // 設置で当日分を消費（各方向1回）
             g_tradedShort = true;
         }
