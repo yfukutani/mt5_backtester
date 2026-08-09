@@ -1,5 +1,8 @@
 # OANDA版 — RSI_Reversal GBPUSD H4 ロバスト構成・レンジ枠強化（ベース: configs/rsi_robust_gbpusd_h4.yaml）
 # 事前: OANDAのMetaEditorで experts/RSI_Reversal.mq5 をコンパイルしておく。
+# 2026-08-10: BB_Deviation 2.5→2.0, BB_Period 20→30を本番採用値に同期（Codex 500案分析で
+#   単体OANDA configが未同期のドリフトを検出。MIX_EA_OANDA.mq5自体は既に採用済みのため
+#   実運用への影響はなく、この単体研究configの整合性のみの修正）。
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "RSI_Reversal"
@@ -16,8 +19,8 @@ model: "open_prices"
 
 parameters:
   MA_Period:               200
-  BB_Period:               20
-  BB_Deviation:            2.5
+  BB_Period:               30
+  BB_Deviation:            2.0
   RSI_Period:              14
   RSI_OverboughtExtreme:   75.0
   RSI_Overbought:          72.5

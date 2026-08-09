@@ -135,13 +135,13 @@ struct SLEEVE
    double          slPips, tpPips;
    // PB 環境フィルター・ADX
    bool            useTrend; double slopeMinATR; int slopeLB;
-   bool            useADX;   double adxThr;
+   bool            useADX;   double adxThr; int adxPeriod;
    // PB マルチタイムフレーム合流フィルター
    bool            useHigherTF; ENUM_TIMEFRAMES higherTF; int higherTFMA; int hHigherTrend;
    // PB 状態
    bool            armedBuy, armedSell;
    // RSI
-   double          bbDev, rsiOBX, rsiOB, rsiOSX, rsiOS;
+   double          bbDev, rsiOBX, rsiOB, rsiOSX, rsiOS; int bbPeriod;
    bool            useDP; int swingLB, dpBars; double dpTolATR;
    bool            useRange; double rangeMaxATR; int rangeLB;
    bool            wasOB, wasOS, aboveBB, belowBB;
@@ -253,10 +253,12 @@ int OnInit()
    //    v1.7: RR_Ratio 3.5→4.0（Codex提案11の近傍応答曲面・本番同一条件tier2確認:
    //    IS+18,665→+29,315／OOS+4,641→+10,197。トレードオフなしの純改善。
    //    docs/codex_verification_20260808.md）
+   //    v1.8: ADX_Period 14→10（Codex 500案応答曲面C・IS+29,315→+31,611／OOS+10,197→+14,670。
+   //    トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.slopeMinATR=1.5; x.rr=4.0; AddSleeve(x); }
+     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }
@@ -279,8 +281,11 @@ int OnInit()
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
    //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
+   //     v1.7: BB_Period 20→30（Codex 500案応答曲面B・IS+12,442→+13,398／OOS+16,045→+18,922。
+   //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
-     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.lotMult=Mult_RSI_GBPUSD; AddSleeve(x); }
+     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
+     x.lotMult=Mult_RSI_GBPUSD; AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
@@ -356,13 +361,13 @@ int OnInit()
          S[i].hFast =iMA(S[i].symbol,S[i].tf,20,0,MODE_EMA,PRICE_CLOSE);
          S[i].hSlow =iMA(S[i].symbol,S[i].tf,50,0,MODE_EMA,PRICE_CLOSE);
          S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
-         S[i].hADX  =iADX(S[i].symbol,S[i].tf,14);
+         S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
          if(S[i].useHigherTF)
             S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
       } else if(S[i].strat==ST_RSI){
          S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hBB  =iBands(S[i].symbol,S[i].tf,20,0,S[i].bbDev,PRICE_CLOSE);
+         S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
          S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
       } else if(S[i].strat==ST_CARRY){
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
@@ -409,10 +414,10 @@ void ZeroSleeve(SLEEVE &x)
    x.hTrend=INVALID_HANDLE; x.hFast=INVALID_HANDLE; x.hSlow=INVALID_HANDLE;
    x.hATR=INVALID_HANDLE; x.hADX=INVALID_HANDLE; x.hRSI=INVALID_HANDLE; x.hBB=INVALID_HANDLE;
    x.useATRstops=false; x.atrSLmult=0; x.rr=0; x.slPips=0; x.tpPips=0;
-   x.useTrend=false; x.slopeMinATR=0; x.slopeLB=20; x.useADX=false; x.adxThr=0;
+   x.useTrend=false; x.slopeMinATR=0; x.slopeLB=20; x.useADX=false; x.adxThr=0; x.adxPeriod=14;
    x.useHigherTF=false; x.higherTF=PERIOD_D1; x.higherTFMA=200; x.hHigherTrend=INVALID_HANDLE;
    x.armedBuy=false; x.armedSell=false;
-   x.bbDev=2.0; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
+   x.bbDev=2.0; x.bbPeriod=20; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
    x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
    x.useRange=false; x.rangeMaxATR=0; x.rangeLB=20;
    x.wasOB=false; x.wasOS=false; x.aboveBB=false; x.belowBB=false;

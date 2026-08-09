@@ -15,6 +15,8 @@
 # v1.5(2026-08): RR_Ratio 3.5→4.0採用（Codex提案11の近傍応答曲面・本番同一条件tier2確認:
 #   IS+18,665→+29,315／OOS+4,641→+10,197。トレードオフなしの純改善。
 #   docs/codex_verification_20260808.md）
+# v1.6(2026-08-10): ADX_Period 14→10採用（Codex 500案応答曲面C・IS+29,315→+31,611/
+#   OOS+10,197→+14,670。トレードオフなしの純改善。docs/codex500_verification_20260810.md）
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -37,7 +39,7 @@ parameters:
   UsePullbackQuality:      true
   UseMomentumConfirm:      true
   UseADXFilter:            true
-  ADX_Period:              14
+  ADX_Period:              10
   ADX_Threshold:           22.5
   UseTrendStrength:        true
   MA_Slope_Lookback:       20
