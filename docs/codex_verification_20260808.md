@@ -119,8 +119,11 @@ P11で見つかった(Slope1.5, RR4.0)を、本番同一条件（risk2%サイジ
 - SCA USDJPY `UseStopOrders`: Boost修正後もOOS悪化・DD倍増
 - VBO Channel×Trailの近傍パラメータ変更: 全点不合格、調整では解決しない
 
-### 要ユーザー判断
-- **VBO USDJPY sleeveの継続可否**: every_tick実費検証でOOSが一貫してマイナス。本番ポートフォリオからの除外・比率縮小・監視強化のいずれかの判断が必要
+### 要ユーザー判断 → 決定済み（2026-08-08）
+- **VBO USDJPY sleeveの継続可否**: every_tick実費検証でOOSが一貫してマイナス。
+  **ユーザー判断により除外を決定。** `MIX_EA.mq5`/`MIX_EA_OANDA.mq5`の`En_VBO`を
+  `true`→`false`に変更し反映済み（回帰チェック: 純利益213,963→213,794円・VBO分の
+  寄与が消え正しく除外されたことを確認、クラッシュなし）。
 - コード監査で見つかった実害候補（PairTrade両建てリスク・SCA OCO欠如・tick-size未量子化・FundingRev欠損データガード等）: 仕様決定と個別の回帰試験が必要な規模のため、別タスクとして着手要否を判断されたい
 - Carry AUDJPY (Hyst=0.5, MA=200)への変更: 固定ロットの応答曲面では最良点だが、本番の複利/risk%サイジングでのtier2確認が未実施
 

@@ -28,7 +28,8 @@ input bool En_RSI_EURUSD = true;
 input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
 input bool En_PAIR       = true;
 input bool En_CARRY      = true;
-input bool En_VBO        = true;
+input bool En_VBO        = false;  // 2026-08-08: every_tick実費検証でOOS一貫マイナス判明のため除外
+                                    // （docs/codex_verification_20260808.md）
 input bool En_ETH        = true;   // v1.2: A2デュアルMA(200/40+cd5+SL45)に更新（ETH_EA同等）
 input bool En_BTC_FUND   = true;   // v1.2新設: BTC funding逆張り（FundingRev v1.2同等・採用形）
 input bool En_BFXREV     = true;   // v1.3新設: Bitfinexデレバレッジ・リバウンド（BfxRev v1.0採用形）

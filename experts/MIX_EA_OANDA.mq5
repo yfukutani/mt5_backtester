@@ -38,7 +38,8 @@ input bool En_RSI_EURUSD = true;
 input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
 input bool En_PAIR       = true;
 input bool En_CARRY      = true;
-input bool En_VBO        = true;
+input bool En_VBO        = false;  // 2026-08-08: every_tick実費検証でOOS一貫マイナス判明のため除外
+                                    // （docs/codex_verification_20260808.md）
 input bool En_ETH        = false;  // ETHUSD＝OANDAは暗号資産CFD取扱なし。既定OFF（取扱不可）
 input bool En_SCA_GOLD   = true;   // SCA XAUUSD（CFDアクセス前提・無ければfalse）
 input bool En_SCA_USDJPY = true;   // SCA USDJPY（OANDAスプレッドでXM比+139%の検証実績）
