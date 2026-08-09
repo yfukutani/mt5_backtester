@@ -1,6 +1,9 @@
 # OANDA版 SCA — GBPJPY M15（初版構成・FX端末）
 # 検証実績(2026.07.05・2016-2026 every_tick): +25,207/PF1.07/DD19.4%/1,336取引
 # （XM同構成: +15,327/PF1.04/DD17.6%＝OANDAのタイトなスプレッドで+65%改善）。
+# 2026-08-09: UseReversalBoost/Boost_Mult=3.0を追加（本番採用値に同期。Codex 500案分析で
+#   単体OANDA configにBoost設定が無く既定OFFになっていたドリフトを検出。MIX_EA_OANDA.mq5
+#   自体は既に採用済みのため実運用への影響はなく、この単体研究configの整合性のみの修正）。
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "SCA_EA"
@@ -32,6 +35,8 @@ parameters:
   LotSize:           0.01
   UseRiskSizing:     false
   MagicNumber:       20261001
+  UseReversalBoost:  true
+  Boost_Mult:        3.0
   ResultFileName:    "sca_gbpjpy_oanda_result.csv"
 
 report_dir:  "results"

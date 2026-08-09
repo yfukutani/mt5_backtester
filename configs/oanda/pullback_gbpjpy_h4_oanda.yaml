@@ -1,5 +1,10 @@
 # OANDA版 — PullbackTrend GBPJPY H4（ベース: configs/pullback_gbpjpy_h4.yaml）
 # 2026.07.03: MTF合流フィルター(UseHigherTFFilter)を本番同様に反映（フォワードテスト整備）。
+# 2026-08-09: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→4.0（本番採用値に同期。Codex 500案分析で
+#   単体OANDA configが本番と未同期のドリフトを検出。MIX_EA_OANDA.mq5自体は既に採用済みのため
+#   実運用への影響はなく、この単体研究configの整合性のみの修正）。
+# 2026-08-10: ADX_Period 14→10採用（Codex 500案応答曲面C・本番採用値に同期。
+#   docs/codex500_verification_20260810.md）
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -22,15 +27,15 @@ parameters:
   UsePullbackQuality:      true
   UseMomentumConfirm:      true
   UseADXFilter:            true
-  ADX_Period:              14
+  ADX_Period:              10
   ADX_Threshold:           22.5
   UseTrendStrength:        true
   MA_Slope_Lookback:       20
-  MA_Slope_Min_ATR:        1.2
+  MA_Slope_Min_ATR:        1.5
   UseATRStops:             true
   ATR_Period:              14
   ATR_SL_Mult:             2.0
-  RR_Ratio:                2.0
+  RR_Ratio:                4.0
   StopLoss_Pips:           50
   TakeProfit_Pips:         110
   LotSize:                 0.01
