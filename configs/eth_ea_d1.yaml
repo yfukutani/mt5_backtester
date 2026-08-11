@@ -21,7 +21,7 @@ leverage: 25
 model: "open_prices"
 
 parameters:
-  TrendMA_Period:  200
+  TrendMA_Period:  150
   ExitMA_Period:   40
   ReentryCooldown: 5
   LotSize:         0.02

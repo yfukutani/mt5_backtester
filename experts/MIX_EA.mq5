@@ -265,10 +265,13 @@ int OnInit()
    //      ON/OFFで結果が完全一致＝**発火せず無効**と実測判明（MinRR1.5だと構造距離が
    //      1.5*SL〜4.0*SLの窓に入る取引が皆無）。MinRR0.5まで下げると発火するが
    //      IS+33,133→+15,833/OOS+20,763→+435と激しく悪化。よって既定OFFのまま温存する。
+   //    v2.1: ADX_Threshold 22.5→30（全パラメータ再最適化・IS+33,133→+34,242/
+   //    OOS+20,763→+22,692、DDも両期間改善(IS5.93→4.94%・OOS14.68→11.32%)＝
+   //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10;
+     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
      x.fastEMA=25; x.slowEMA=60; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
@@ -286,9 +289,12 @@ int OnInit()
    // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
-   // 6. RSI EURUSD H1 (DP OFF, SL45/TP105)
+   // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
+   //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
+   //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
+   //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=45; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
    //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
@@ -316,8 +322,11 @@ int OnInit()
 
    // 10. 暗号 ETHUSD D1 — v1.2でA2デュアルMAに更新（ETH_EA v1.0同等: 200/40+cd5+災害SL45）
    //     旧: MA200単独ホールド。検証: full+7,576/PF1.81(0.02lot)→0.05でも線形（ES面で実証）
+   //     v2.1: TrendMA_Period 200→150（全パラメータ再最適化・IS+4,128→+4,419/
+   //     OOS+3,410→+3,664、DD/PFとも両期間改善＝トレードオフなしの純改善。
+   //     docs/param_reopt_20260811.md）
    { SLEEVE x=z; x.enabled=En_ETH; x.strat=ST_CARRY; x.symbol="ETHUSD"; x.tf=PERIOD_D1;
-     x.magic=20260710; x.trendPeriod=200; x.reqPosSwap=false;
+     x.magic=20260710; x.trendPeriod=150; x.reqPosSwap=false;
      x.exitPeriod=40; x.cdBars=5; x.disasterSL=45.0;
      x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
 
@@ -342,11 +351,15 @@ int OnInit()
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
      x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
-   // 12. SCA USDJPY M15（初版形: Range0-9h/TE12/FC22/MinR0.30/buf0.05/RR2.0/Revブースト）
+   // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
+   //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
+   //     **OOS-4,875→+110＝OOS赤字を黒字転換**・DD両期間改善。
+   //     ⚠️ただしOOS純利益+110円/PF1.0024と経済的には極薄で、スプレッド変動で消えうる水準。
+   //     トレードオフなしの純改善ではあるがユーザー承認のうえ採用。docs/param_reopt_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_USDJPY; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
      x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
-     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.05;
+     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
