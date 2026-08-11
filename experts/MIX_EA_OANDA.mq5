@@ -136,6 +136,10 @@ struct SLEEVE
    // PB 環境フィルター・ADX
    bool            useTrend; double slopeMinATR; int slopeLB;
    bool            useADX;   double adxThr; int adxPeriod;
+   // PB EMA組（スリーブ別）
+   int             fastEMA, slowEMA;
+   // PB 構造TP（B10: 直近スイング高安をTP上限に使う）
+   bool            useStructTP; int structLB; double structMinRR;
    // PB マルチタイムフレーム合流フィルター
    bool            useHigherTF; ENUM_TIMEFRAMES higherTF; int higherTFMA; int hHigherTrend;
    // PB 状態
@@ -251,10 +255,15 @@ int OnInit()
    //    docs/codex_verification_20260808.md）
    //    v1.5: ADX_Period 14→10（Codex 500案応答曲面C・IS+29,315→+31,611／OOS+10,197→+14,670。
    //    トレードオフなしの純改善。docs/codex500_verification_20260810.md）
+   //    v1.6: EMA組 20/50→25/60（Codex 500案残余F5・IS+31,611→+33,133/OOS+14,670→+20,763・
+   //    DD 18.13→14.68%＝トレードオフなしの純改善。docs/codex500_verification2_20260810.md）
+   //    ⚠️構造TP(B10)はEMA25/60採用後にON/OFFで結果が完全一致＝発火せず無効と実測判明。
+   //      MinRR0.5まで下げると発火するが激しく悪化するため既定OFFのまま温存（XM版と同一判断）。
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol=Sym_GBPJPY; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; AddSleeve(x); }
+     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10;
+     x.fastEMA=25; x.slowEMA=60; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; AddSleeve(x); }
@@ -321,11 +330,15 @@ int OnInit()
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.3: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
    //     OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
+   //     v1.6: Boost_Mult 3.0→4.0（Codex 500案残余F21・IS+39,027→+50,609/OOS+23,451→+35,775。
+   //     ⚠️利益+30〜53%と引き換えにDDも悪化(IS 24.01→26.45%・OOS 17.37→19.32%)＝
+   //     利益とリスクのトレードオフをユーザー承認のうえ採用。
+   //     docs/codex500_verification2_20260810.md）
    { SLEEVE x=z; x.enabled=En_SCA_GBPJPY; x.strat=ST_SCA; x.symbol=Sym_GBPJPY; x.tf=PERIOD_M15;
      x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=3.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=4.0; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
    for(int i=0;i<NS;i++)
@@ -341,8 +354,8 @@ int OnInit()
       S[i].lastBar = 0;
       if(S[i].strat==ST_PULLBACK){
          S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hFast =iMA(S[i].symbol,S[i].tf,20,0,MODE_EMA,PRICE_CLOSE);
-         S[i].hSlow =iMA(S[i].symbol,S[i].tf,50,0,MODE_EMA,PRICE_CLOSE);
+         S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
+         S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
          S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
          S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
          if(S[i].useHigherTF)
@@ -383,6 +396,8 @@ void ZeroSleeve(SLEEVE &x)
    x.hATR=INVALID_HANDLE; x.hADX=INVALID_HANDLE; x.hRSI=INVALID_HANDLE; x.hBB=INVALID_HANDLE;
    x.useATRstops=false; x.atrSLmult=0; x.rr=0; x.slPips=0; x.tpPips=0;
    x.useTrend=false; x.slopeMinATR=0; x.slopeLB=20; x.useADX=false; x.adxThr=0; x.adxPeriod=14;
+   x.fastEMA=20; x.slowEMA=50;
+   x.useStructTP=false; x.structLB=50; x.structMinRR=0.5;
    x.useHigherTF=false; x.higherTF=PERIOD_D1; x.higherTFMA=200; x.hHigherTrend=INVALID_HANDLE;
    x.armedBuy=false; x.armedSell=false;
    x.bbDev=2.0; x.bbPeriod=20; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
@@ -666,6 +681,23 @@ double GetBuf(int h,int idx)
 }
 
 //============================ PullbackTrend ============================
+// B10構造TP: 直近スイング高安とRR由来TPの「近い方」の距離を返す。
+// 構造が無い/近すぎる場合は従来RR距離のまま（＝エントリーは削らない）。
+// 単体EA PullbackTrend.mq5 の StructureTP() と同一ロジック。
+double StructTPDist(int i,const bool is_buy,const double entry,const double sl_dist,const double rr_tp)
+{
+   if(!S[i].useStructTP) return rr_tp;
+   double h[],l[];
+   ArraySetAsSeries(h,true); ArraySetAsSeries(l,true);
+   if(CopyHigh(S[i].symbol,S[i].tf,1,S[i].structLB,h)<S[i].structLB) return rr_tp;
+   if(CopyLow (S[i].symbol,S[i].tf,1,S[i].structLB,l)<S[i].structLB) return rr_tp;
+   double lvl  = is_buy ? h[ArrayMaximum(h,0,S[i].structLB)]
+                        : l[ArrayMinimum(l,0,S[i].structLB)];
+   double dist = is_buy ? (lvl-entry) : (entry-lvl);
+   if(dist<=0.0 || dist < S[i].structMinRR*sl_dist) return rr_tp;
+   return MathMin(dist,rr_tp);
+}
+
 void ProcPullback(int i)
 {
    string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
@@ -719,15 +751,17 @@ void ProcPullback(int i)
    if(eb && !hb){
       if(hs) CloseType(i,POSITION_TYPE_SELL);
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double tpb=StructTPDist(i,true,ask,sld,tpd);   // B10
       trade.Buy(LotRisk(i,sld),sym,ask,
-                NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"PB");
+                NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpb,S[i].digits),"PB");
       S[i].armedBuy=false;
    }
    if(es && !hs){
       if(hb) CloseType(i,POSITION_TYPE_BUY);
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+      double tps=StructTPDist(i,false,bid,sld,tpd);  // B10
       trade.Sell(LotRisk(i,sld),sym,bid,
-                 NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"PB");
+                 NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tps,S[i].digits),"PB");
       S[i].armedSell=false;
    }
 }

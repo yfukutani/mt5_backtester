@@ -4,6 +4,10 @@
 # ⚠️ IS(2021-26)+15,880/OOS(2016-21)-553＝利益はISドリブン・OOSフラット。GOLDが主軸、本枠は補助。
 # v1.1(2026-08): Boost_Mult 2.0→3.0採用（応答曲面M239・本番同一条件tier2確認:
 #   IS+27,445→+39,027/OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
+# v1.2(2026-08-10): Boost_Mult 3.0→4.0採用（Codex 500案残余F21・IS+39,027→+50,609/
+#   OOS+23,451→+35,775）。⚠️利益+30〜53%と引き換えにDDも悪化（IS 24.01→26.45%・
+#   OOS 17.37→19.32%）＝利益とリスクのトレードオフをユーザー承認のうえ採用。
+#   5.0以上が更に良いかは未検証。docs/codex500_verification2_20260810.md
 # ⚠️ スキャルピングのため検証は必ず every_tick で行うこと（open_prices不可）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
@@ -37,7 +41,7 @@ parameters:
   UseRiskSizing:     false
   MagicNumber:       20261001
   UseReversalBoost:  true
-  Boost_Mult:        3.0
+  Boost_Mult:        4.0
   ResultFileName:    "sca_GBPJPY_m15_result.csv"
 
 report_dir:  "results"

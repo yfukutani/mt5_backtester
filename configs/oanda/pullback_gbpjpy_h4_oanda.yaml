@@ -5,6 +5,9 @@
 #   実運用への影響はなく、この単体研究configの整合性のみの修正）。
 # 2026-08-10: ADX_Period 14→10採用（Codex 500案応答曲面C・本番採用値に同期。
 #   docs/codex500_verification_20260810.md）
+# 2026-08-10: EMA組 20/50→25/60（Codex 500案残余F5・本番採用値に同期。
+#   構造TPはEMA25/60採用後に発火せず無効と実測判明したため不採用。
+#   docs/codex500_verification2_20260810.md）
 mt5_path: "C:\\Program Files\\OANDA MetaTrader 5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -21,8 +24,8 @@ model: "open_prices"
 
 parameters:
   TrendMA_Period:          200
-  FastEMA_Period:          20
-  SlowEMA_Period:          50
+  FastEMA_Period:          25
+  SlowEMA_Period:          60
   RequireBullishCandle:    true
   UsePullbackQuality:      true
   UseMomentumConfirm:      true

@@ -17,6 +17,13 @@
 #   docs/codex_verification_20260808.md）
 # v1.6(2026-08-10): ADX_Period 14→10採用（Codex 500案応答曲面C・IS+29,315→+31,611/
 #   OOS+10,197→+14,670。トレードオフなしの純改善。docs/codex500_verification_20260810.md）
+# v1.7(2026-08-10): EMA組 20/50→25/60採用（Codex 500案残余F5・IS+31,611→+33,133/
+#   OOS+14,670→+20,763・DD18.13→14.68%＝トレードオフなしの純改善。
+#   docs/codex500_verification2_20260810.md）
+# ⚠️構造TP(UseStructureTP)はF9でEMA20/50時にOOS改善(+14,670→+18,475)を示したため一度採用したが、
+#   EMA25/60採用後の実測でON/OFFの結果が完全一致＝**発火せず無効**と判明したため既定OFFに戻した
+#   （MinRR1.5では構造距離が1.5*SL〜4.0*SLの窓に入る取引が皆無。MinRR0.5まで下げると発火するが
+#   IS+33,133→+15,833/OOS+20,763→+435と激しく悪化）。EAへの実装自体は温存。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
 expert:    "PullbackTrend"
@@ -33,8 +40,8 @@ model: "open_prices"
 
 parameters:
   TrendMA_Period:          200
-  FastEMA_Period:          20
-  SlowEMA_Period:          50
+  FastEMA_Period:          25
+  SlowEMA_Period:          60
   RequireBullishCandle:    true
   UsePullbackQuality:      true
   UseMomentumConfirm:      true
