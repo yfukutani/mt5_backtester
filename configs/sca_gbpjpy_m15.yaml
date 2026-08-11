@@ -7,7 +7,16 @@
 # v1.2(2026-08-10): Boost_Mult 3.0→4.0採用（Codex 500案残余F21・IS+39,027→+50,609/
 #   OOS+23,451→+35,775）。⚠️利益+30〜53%と引き換えにDDも悪化（IS 24.01→26.45%・
 #   OOS 17.37→19.32%）＝利益とリスクのトレードオフをユーザー承認のうえ採用。
-#   5.0以上が更に良いかは未検証。docs/codex500_verification2_20260810.md
+#   docs/codex500_verification2_20260810.md
+# v1.3(2026-08-11): Boost_Mult 4.0→6.0採用（Codex 500案ラウンド3 R3F09・
+#   IS+50,609→+73,773/OOS+35,775→+60,423＝利益+46〜69%）。
+#   ⚠️DDも悪化（IS 26.45→30.03%・OOS 19.32→22.95%）。ただし取引数は全水準で完全同一
+#   （IS684/OOS658）＝エントリー集合不変のサイジング変更でありながら利益/DD比は単調改善
+#   （IS1913→2457・OOS1851→2632）。Boost対象が「レンジ内ドリフトと逆方向のブレイク」という
+#   高エッジの部分集合のため、そこへ資金を寄せるのはリスク調整後も合理的。
+#   ⚠️IS-DD30.03%はDD30%制約に接触（枠単独・0.01ロット基準。ポートフォリオでは配分比率がかかる）。
+#   ⚠️Boost4.5は0.01×4.5=0.045がロットステップ0.01で0.04へ丸められ4.0と完全同値＝
+#   0.01ロット基準では整数倍しか意味を持たない。docs/codex500_round3_20260811.md
 # ⚠️ スキャルピングのため検証は必ず every_tick で行うこと（open_prices不可）。
 mt5_path: "C:\\Users\\f\\AppData\\Roaming\\XMTrading MT5\\terminal64.exe"
 
@@ -41,7 +50,7 @@ parameters:
   UseRiskSizing:     false
   MagicNumber:       20261001
   UseReversalBoost:  true
-  Boost_Mult:        4.0
+  Boost_Mult:        6.0
   ResultFileName:    "sca_GBPJPY_m15_result.csv"
 
 report_dir:  "results"
