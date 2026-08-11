@@ -40,13 +40,21 @@ input bool En_SCA_GBPJPY = true;
 input group "=== BTC funding枠の設定（FundingRev v1.2の採用形） ==="
 input string FundingFile      = "funding_btc.csv"; // Common\Files内（テスター/フォールバック）
 input bool   FundUseWebRequest = true;             // ライブ: Binance API自動取得（要URL許可）
-input double FundThreshold    = -0.004;            // 日平均funding閾値（%/8h）
+input double FundThreshold    = -0.003;            // 日平均funding閾値（%/8h）
+                                                   // v2.2: -0.004→-0.003（トレードオフ8案の
+                                                   // 組合せ検証#2・IS+57,087でポートフォリオ
+                                                   // 最大の増益寄与+21,275。
+                                                   // docs/tradeoff8_combined_20260812.md）
 input int    FundMaxHold      = 20;                // 退出上限日数（med90退出のフェイルセーフ）
 
 input group "=== BfxRev枠の設定（BfxRev v1.0の採用形） ==="
 input string BfxFile          = "bfx_btc_long.csv"; // Common\Files内
 input bool   BfxUseWebRequest = true;   // ライブ: Bitfinex API自動取得（要URL許可 api-pub.bitfinex.com）
-input double BfxDropPct       = 10.0;   // ロング建玉急減閾値（%/5日）
+input double BfxDropPct       = 10.0;   // ロング建玉急減閾値（%/観測窓）
+input int    BfxLookbackDays  = 10;     // 建玉変化の観測窓（日）
+                                        // v2.2: 5→10（トレードオフ8案の組合せ検証#8・
+                                        // IS+55,156(PF4.31)/OOS+19,376。従来は5日固定ハードコード
+                                        // だったためinput化した。docs/tradeoff8_combined_20260812.md）
 input int    BfxHoldDays      = 10;     // 保有日数
 
 input group "=== 暗号グループ同時ポジション上限（v1.3） ==="
@@ -247,9 +255,13 @@ int OnInit()
    pb.useADX=true; pb.adxThr=22.5;
 
    // 1. PB USDJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
+   //    v2.2: ADX_Threshold 22.5→27.5（トレードオフ8案の組合せ検証#3・単独ではIS+41,850/
+   //    OOS+3,332＝現行OOS-3,299から黒字化。ポートフォリオ合算でDD抑制に寄与(-0.0775pt)。
+   //    docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
-     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
+     x.adxThr=27.5; AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    //    v1.6: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
    //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
@@ -268,14 +280,20 @@ int OnInit()
    //    v2.1: ADX_Threshold 22.5→30（全パラメータ再最適化・IS+33,133→+34,242/
    //    OOS+20,763→+22,692、DDも両期間改善(IS5.93→4.94%・OOS14.68→11.32%)＝
    //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
+   //    v2.2: SlowEMA 60→35（トレードオフ8案の組合せ検証#4・現行ADX30との組合せで
+   //    IS+34,242→+38,136/OOS+22,692→+25,204＝旧単独測定(IS35,946/OOS20,684)より更に良化する
+   //    正の相互作用を確認。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
-     x.fastEMA=25; x.slowEMA=60; AddSleeve(x); }
+     x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
+   //    v2.2: RR_Ratio 2.0→5.0（トレードオフ8案の組合せ検証#5・ほぼ利益の出ていなかった枠が
+   //    IS+6,157(PF1.74)/OOS+5,619(PF1.40)と両期間で明確に黒字化。
+   //    docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
-     x.useRisk=false; x.lot=0.01; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD (固定)
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
      x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
@@ -287,8 +305,11 @@ int OnInit()
    rs.swingLB=3; rs.dpTolATR=0.5; rs.useRisk=false; rs.lot=0.01;
 
    // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
+   //    v2.2: DP_Tolerance_ATR 0.5→1.5（トレードオフ8案の組合せ検証#6・IS+7,915/OOS+7,925と
+   //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
-     x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
+     x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
+     x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
    //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
@@ -310,9 +331,11 @@ int OnInit()
      x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
 
    // 8. Carry AUDJPY D1 (複利0.05, スワップ条件ON, ヒステリシス帯±0.75ATR採用)
+   //    v2.2: ReentryCooldown 0→10（トレードオフ8案の組合せ検証#7・ISは完全不変(105,817)のまま
+   //    OOSのみ+33,912→+37,325。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol="AUDJPY"; x.tf=PERIOD_D1;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
-     x.useHyst=true; x.hystMult=0.75;
+     x.useHyst=true; x.hystMult=0.75; x.cdBars=10;
      x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
@@ -1292,7 +1315,7 @@ bool BfxInit()
       if(!BfxFetch())
          Print("起動時Bitfinex API失敗→CSV代替 ",bx_n,"日（以後リトライ）");
    }
-   Print("BfxRev枠: ",bx_n,"日ロード | 急減-",DoubleToString(BfxDropPct,0),"%/5日 | 保有",BfxHoldDays,"日");
+   Print("BfxRev枠: ",bx_n,"日ロード | 急減-",DoubleToString(BfxDropPct,0),"%/",BfxLookbackDays,"日 | 保有",BfxHoldDays,"日");
    return true;   // ライブは0件でも枠維持（決済独立・fetch再試行）
 }
 
@@ -1350,7 +1373,7 @@ void ProcBfx(int i)
    if(g_bfxEvalBar==bt) return;
    if(!BfxEnsure(bt)) return;
    long yday=(long)bt/86400-1;
-   double v1=BfxValAt(yday), v0=BfxValAt(yday-5);
+   double v1=BfxValAt(yday), v0=BfxValAt(yday-BfxLookbackDays);
    g_bfxEvalBar=bt;
    if(v1<=0 || v0<=0) return;
    double chg=(v1/v0-1)*100;
@@ -1358,7 +1381,7 @@ void ProcBfx(int i)
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
       if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult),S[i].symbol,ask,sl,0,"BfxRev"))
-         Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/5日");
+         Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/",BfxLookbackDays,"日");
    }
 }
 

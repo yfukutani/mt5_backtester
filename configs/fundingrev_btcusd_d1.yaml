@@ -40,7 +40,7 @@ model: "open_prices"
 
 parameters:
   FundingFile:      "funding_btc.csv"
-  Threshold_Pct8h:  -0.004
+  Threshold_Pct8h:  -0.003
   HoldDays:         5
   ExitMode:         2
   MaxHoldDays:      20

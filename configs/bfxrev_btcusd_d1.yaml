@@ -28,7 +28,7 @@ model: "open_prices"
 parameters:
   BfxFile:         "bfx_btc_long.csv"
   DropPct:         10.0
-  LookbackDays:    5
+  LookbackDays:    10
   HoldDays:        10
   LotSize:         0.01
   DisasterSL_Pct:  75.0
