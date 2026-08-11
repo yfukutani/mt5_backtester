@@ -24,7 +24,7 @@ parameters:
   ForceCloseHour:    22
   MinRange_ATRd:     0.30
   MaxRange_ATRd:     1.00
-  Break_Buffer_ATRd: 0.05
+  Break_Buffer_ATRd: 0.10
   SL_Mode:           0
   SL_ATRd_Mult:      0.5
   RR_Ratio:          2.0

@@ -40,7 +40,7 @@ parameters:
   Range_Slope_Max_ATR:     0.2
   LotSize:                 0.01
   UseRiskSizing:           false
-  StopLoss_Pips:           45
+  StopLoss_Pips:           25
   TakeProfit_Pips:         105
   MagicNumber:             20260605
   ResultFileName:          "rsi_robust_eurusd_h1_result.csv"

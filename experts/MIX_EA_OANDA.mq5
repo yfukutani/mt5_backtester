@@ -262,7 +262,7 @@ int OnInit()
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol=Sym_GBPJPY; x.magic=20260627;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10;
+     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;   // v1.8: ADX閾値22.5→30
      x.fastEMA=25; x.slowEMA=60; AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
@@ -280,9 +280,11 @@ int OnInit()
    // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol=Sym_USDJPY; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
-   // 6. RSI EURUSD H1 (DP OFF, SL45/TP105)
+   // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
+   //    v1.8: StopLoss_Pips 45→25（全パラメータ再最適化・OOS赤字-1,867→+2,582へ黒字転換。
+   //    docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol=Sym_EURUSD; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=45; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.3: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
    //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
@@ -310,8 +312,10 @@ int OnInit()
      x.useSqueeze=true; x.sqLB=50; x.sqFactor=1.0; x.atrSLmult=2.0; x.trailMult=3.0; x.lotMult=Mult_VBO; AddSleeve(x); }
 
    // 10. 暗号トレンド ETHUSD D1 (Carryロジック, スワップ条件OFF, 固定0.05) ※OANDA取扱なし→既定OFF
+   //     v1.8: TrendMA_Period 200→150（全パラメータ再最適化・両期間で利益/PF/DD改善。
+   //     docs/param_reopt_20260811.md。※OANDA取扱なしで既定OFFのため実運用への影響なし）
    { SLEEVE x=z; x.enabled=En_ETH; x.strat=ST_CARRY; x.symbol=Sym_ETHUSD; x.tf=PERIOD_D1;
-     x.magic=20260710; x.trendPeriod=200; x.reqPosSwap=false;
+     x.magic=20260710; x.trendPeriod=150; x.reqPosSwap=false;
      x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
 
    //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
@@ -321,11 +325,13 @@ int OnInit()
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
      x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
-   // 12. SCA USDJPY M15（初版形: Range0-9h/TE12/FC22/MinR0.30/buf0.05/RR2.0/Revブースト）
+   // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
+   //     v1.8: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・OOS赤字-4,875→+110へ黒字転換。
+   //     ⚠️ただしOOS+110円/PF1.0024と経済的には極薄。docs/param_reopt_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_USDJPY; x.strat=ST_SCA; x.symbol=Sym_USDJPY; x.tf=PERIOD_M15;
      x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
-     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.05;
+     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.3: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
