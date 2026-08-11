@@ -154,6 +154,7 @@ struct SLEEVE
    // CARRY
    int             trendPeriod; bool reqPosSwap;
    bool            useHyst; double hystMult;   // MAクロス・ヒステリシス帯（AUDJPYのみ採用）
+   int             cdBars; datetime cdExitBar; // 退出後クールダウン（XM版から移植・S9）
    // VBO
    int             channel; bool useSqueeze; int sqLB; double sqFactor; double trailMult;
    // 増レバ配分（deploy）
@@ -243,9 +244,12 @@ int OnInit()
    pb.useADX=true; pb.adxThr=22.5;
 
    // 1. PB USDJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
+   //    v1.9: ADX_Threshold 22.5→27.5（トレードオフ8案の組合せ検証#3。
+   //    docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol=Sym_USDJPY; x.magic=20260622;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
-     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200; AddSleeve(x); }
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
+     x.adxThr=27.5; AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    //    v1.3: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
    //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
@@ -263,10 +267,11 @@ int OnInit()
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;   // v1.8: ADX閾値22.5→30
-     x.fastEMA=25; x.slowEMA=60; AddSleeve(x); }
+     x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }   // v1.9: SlowEMA 60→35（組合せ検証#4）
    // 3. PB AUDJPY (固定・除外枠)
+   //    v1.9: RR_Ratio 2.0→5.0（組合せ検証#5・両期間で明確に黒字化）
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
-     x.useRisk=false; x.lot=0.01; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD→XAUUSD (固定) ※商品CFD専用口座
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol=Sym_GOLD; x.magic=20260640;
      x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
@@ -278,8 +283,10 @@ int OnInit()
    rs.swingLB=3; rs.dpTolATR=0.5; rs.useRisk=false; rs.lot=0.01;
 
    // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
+   //    v1.9: DP_Tolerance_ATR 0.5→1.5（組合せ検証#6・両期間が均等に高い構成）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol=Sym_USDJPY; x.tf=PERIOD_H4; x.magic=20260610;
-     x.useDP=true; x.dpBars=100; x.slPips=50; x.tpPips=110; x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
+     x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
+     x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v1.8: StopLoss_Pips 45→25（全パラメータ再最適化・OOS赤字-1,867→+2,582へ黒字転換。
    //    docs/param_reopt_20260811.md）
@@ -303,7 +310,7 @@ int OnInit()
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol=Sym_AUDJPY; x.tf=PERIOD_D1;
      x.execTf=Carry_ExecTF;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
-     x.useHyst=true; x.hystMult=0.75;
+     x.useHyst=true; x.hystMult=0.75; x.cdBars=10;   // v1.9: cooldown 0→10（組合せ検証#7）
      x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
@@ -417,6 +424,7 @@ void ZeroSleeve(SLEEVE &x)
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
    x.useHyst=false; x.hystMult=0.75;
+   x.cdBars=0; x.cdExitBar=0;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
    x.lotMult=1.0; x.refCap=0.0;
    x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=22;
@@ -900,11 +908,16 @@ void ProcCarry(int i)
       if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
       entry_th=ma+S[i].hystMult*ab[0]; exit_th=ma-S[i].hystMult*ab[0];
    }
+   // クールダウン（S9・XM版から移植）: 退出後cdBarsは再entry禁止
+   bool cd_ok=true;
+   if(S[i].cdBars>0 && S[i].cdExitBar>0)
+      cd_ok=(iBarShift(sym,tf,S[i].cdExitBar,false)>=S[i].cdBars);
    trade.SetExpertMagicNumber(S[i].magic);
-   if(cp>entry_th && swap_ok && !has){
+   if(cp>entry_th && swap_ok && !has && cd_ok){
       trade.Buy(LotComplex(i,sym),sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"Carry");
    } else if(cp<exit_th && has){
       CloseSleeveAll(i);
+      S[i].cdExitBar=iTime(sym,tf,0);
    }
 }
 

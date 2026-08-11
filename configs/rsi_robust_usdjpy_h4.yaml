@@ -28,7 +28,7 @@ parameters:
   UseDoublePattern:        true
   Swing_Lookback:          3
   DP_Pattern_Bars:         100
-  DP_Tolerance_ATR:        0.5
+  DP_Tolerance_ATR:        1.5
   UseTrailingStop:         false
   UseBreakeven:            false
   UseVolatilityFilter:     false

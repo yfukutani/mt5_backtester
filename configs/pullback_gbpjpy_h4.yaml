@@ -41,7 +41,7 @@ model: "open_prices"
 parameters:
   TrendMA_Period:          200
   FastEMA_Period:          25
-  SlowEMA_Period:          60
+  SlowEMA_Period:          35
   RequireBullishCandle:    true
   UsePullbackQuality:      true
   UseMomentumConfirm:      true

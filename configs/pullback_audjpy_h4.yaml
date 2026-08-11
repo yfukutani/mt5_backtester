@@ -35,7 +35,7 @@ parameters:
   UseATRStops:             true
   ATR_Period:              14
   ATR_SL_Mult:             2.0
-  RR_Ratio:                2.0
+  RR_Ratio:                5.0
   StopLoss_Pips:           50
   TakeProfit_Pips:         110
   LotSize:                 0.01

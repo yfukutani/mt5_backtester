@@ -31,6 +31,7 @@ parameters:
   UseHysteresis:       true
   ATR_Period:          14
   Hyst_ATR_Mult:       0.75
+  ReentryCooldown:     10
   LotSize:             0.05
   UseRiskSizing:       true
   RefDeposit:          100000.0

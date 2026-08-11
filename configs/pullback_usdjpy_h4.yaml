@@ -32,7 +32,7 @@ parameters:
   UseMomentumConfirm:      true
   UseADXFilter:            true
   ADX_Period:              14
-  ADX_Threshold:           22.5
+  ADX_Threshold:           27.5
   UseTrendStrength:        true
   MA_Slope_Lookback:       20
   MA_Slope_Min_ATR:        1.2
