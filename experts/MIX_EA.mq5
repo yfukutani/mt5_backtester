@@ -355,11 +355,18 @@ int OnInit()
    //     ⚠️利益+30〜53%と引き換えにDDも悪化(IS 24.01→26.45%・OOS 17.37→19.32%)＝
    //     利益とリスクのトレードオフをユーザー承認のうえ採用。
    //     docs/codex500_verification2_20260810.md）
+   //     v2.0: Boost_Mult 4.0→6.0（Codex 500案ラウンド3 R3F09・IS+50,609→+73,773/
+   //     OOS+35,775→+60,423＝利益+46〜69%。⚠️DDも悪化(IS 26.45→30.03%・OOS 19.32→22.95%)。
+   //     取引数は全水準で完全同一(IS684/OOS658)＝エントリー集合不変のサイジング変更だが、
+   //     利益/DD比は単調改善(IS1913→2457・OOS1851→2632)＝Boost対象が高エッジの部分集合の
+   //     ためリスク調整後も合理的。⚠️IS-DD30.03%はDD30%制約に接触（枠単独・0.01ロット基準）。
+   //     ⚠️Boost4.5は0.01×4.5=0.045がロットステップで0.04に丸められ4.0と完全同値＝
+   //     0.01ロット基準では整数倍しか意味を持たない。docs/codex500_round3_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_GBPJPY; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
      x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=4.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
    for(int i=0;i<NS;i++)

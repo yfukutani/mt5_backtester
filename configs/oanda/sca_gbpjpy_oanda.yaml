@@ -36,7 +36,7 @@ parameters:
   UseRiskSizing:     false
   MagicNumber:       20261001
   UseReversalBoost:  true
-  Boost_Mult:        4.0
+  Boost_Mult:        6.0
   ResultFileName:    "sca_gbpjpy_oanda_result.csv"
 
 report_dir:  "results"
