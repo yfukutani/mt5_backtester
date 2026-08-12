@@ -89,6 +89,14 @@ input double SimVerifyRiskScale  = 0.5;
 // 個別EA（各deposit=100,000）の複利risk sizingを統合EA内で再現する。
 input bool   SimVerifyVirtualSleeveEquity = false;
 
+input group "=== ROUND6 GOLD DD検証専用（既定OFF） ==="
+// 0=OFF（既存挙動と完全同一）、1=直近確定足の価格ショック後は新規を見送る、
+// 2=保有中の逆行がATR閾値を超えたら成行退出。GOLDのPB/SCAだけが対象。
+input int    R6GoldMode          = 0;
+input int    R6GoldLookbackBars  = 1;
+input double R6GoldShockATR      = 1.5;
+input double R6GoldAdverseATR    = 1.0;
+
 input group "=== per-sleeve ロット倍率（増レバ配分用・既定1.0で不変） ==="
 input double Mult_PB_USDJPY  = 1.0;
 input double Mult_PB_GBPJPY  = 1.0;
@@ -684,6 +692,7 @@ void OnTick()
       if(bt==0 || bt==S[i].lastBar) continue;   // 新バーのみ
       // VBOはバー内トレーリングのため毎バー評価。他もバー確定で処理。
       S[i].lastBar = bt;
+      R6GoldManageExit(i); // mode=0なら即returnし既存挙動に影響しない
       // v1.4: アーム状態が変化したバーだけ保存（ライブのみ。テスターではsnap生成もしない）
       string snap = StLive() ? StSnap(i) : "";
       switch(S[i].strat){
@@ -864,6 +873,48 @@ double GetBuf(int h,int idx)
    return b[idx];
 }
 
+//============================ Round 6 GOLD DD制御 ============================
+bool R6GoldEntryOK(const int i)
+{
+   if(R6GoldMode!=1 || S[i].symbol!="GOLD") return true;
+   int n=MathMax(1,R6GoldLookbackBars);
+   double atr=GetBuf(S[i].hATR,0);
+   if(atr==EMPTY_VALUE || atr<=0.0) return true;
+   for(int k=1;k<=n;k++)
+   {
+      double hi=iHigh(S[i].symbol,S[i].tf,k), lo=iLow(S[i].symbol,S[i].tf,k);
+      if(hi>0.0 && lo>0.0 && (hi-lo)/atr>=R6GoldShockATR)
+      {
+         OpsWrite("R6_SKIP",S[i].magic,S[i].symbol,(hi-lo)/atr,R6GoldShockATR,n,0,0,0,"gold-shock");
+         return false;
+      }
+   }
+   return true;
+}
+
+void R6GoldManageExit(const int i)
+{
+   if(R6GoldMode!=2 || S[i].symbol!="GOLD" || R6GoldAdverseATR<=0.0) return;
+   double atr=GetBuf(S[i].hATR,0);
+   if(atr==EMPTY_VALUE || atr<=0.0) return;
+   double close1=iClose(S[i].symbol,S[i].tf,1);
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k);
+      if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+         PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      bool buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double op=PositionGetDouble(POSITION_PRICE_OPEN);
+      double adverse=(buy ? op-close1 : close1-op)/atr;
+      if(adverse>=R6GoldAdverseATR)
+      {
+         OpsWrite("R6_EXIT",S[i].magic,S[i].symbol,adverse,R6GoldAdverseATR,op,close1,
+                  PositionGetDouble(POSITION_VOLUME),0,"gold-adverse");
+         trade.PositionClose(tk);
+      }
+   }
+}
+
 //============================ PullbackTrend ============================
 // B10構造TP: 直近スイング高安とRR由来TPの「近い方」の距離を返す。
 // 構造が無い/近すぎる場合は従来RR距離のまま（＝エントリーは削らない）。
@@ -925,8 +976,9 @@ void ProcPullback(int i)
       higher_ok_sell = (higher_close < hb2);
    }
 
-   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy;
-   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell;
+   bool r6entry=R6GoldEntryOK(i);
+   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy && r6entry;
+   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell && r6entry;
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
    double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
@@ -1572,6 +1624,7 @@ void ProcSCA(int i)
                S[i].scaSkip ? 1 : 0, S[i].scaSkip ? "SKIP" : "ACTIVE");
    }
    if(!S[i].scaReady || S[i].scaSkip) return;
+   if(!R6GoldEntryOK(i)) return;
    if(dt.hour<S[i].scaRangeEnd || dt.hour>=S[i].scaTradeEnd) return;
    if(S[i].scaSkipFriday && dt.day_of_week==5) return;
 
