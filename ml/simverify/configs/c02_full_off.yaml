@@ -1,0 +1,35 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: MIX_EA_SIMVERIFY
+symbol: USDJPY
+period: M15
+from_date: 2016.06.21
+to_date: 2026.06.20
+deposit: 1500000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  En_PB_USDJPY: true
+  En_PB_GBPJPY: true
+  En_PB_AUDJPY: true
+  En_PB_GOLD: true
+  En_RSI_USDJPY: true
+  En_RSI_EURUSD: true
+  En_RSI_GBPUSD: true
+  En_PAIR: true
+  En_CARRY: true
+  En_VBO: false
+  En_ETH: true
+  En_BTC_FUND: true
+  En_BFXREV: true
+  En_SCA_GOLD: true
+  En_SCA_USDJPY: true
+  En_SCA_GBPJPY: true
+  FundUseWebRequest: false
+  BfxUseWebRequest: false
+  SimVerifyMode: 0
+  SimVerifyVirtualSleeveEquity: true
+  EquityLogFile: c02_full_positions.csv
+  ResultFileName: c02_full_result.csv
+report_dir: results
+report_name: c02_full_off
