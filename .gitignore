@@ -24,6 +24,20 @@ ml/chunks/
 ml/*.yaml
 ml/*.txt
 
+# 検証ラウンドの生成物（再現スクリプトから再生成可能なため追跡しない。
+# 数千ファイル規模になりコミットを汚染するため必ず除外すること）
+ml/*/configs/
+ml/*/configs2/
+ml/*/configs3/
+ml/*/logs/
+ml/*/logs2/
+ml/*/logs3/
+ml/*/deals/
+ml/*/cfg/
+ml/*/cfg6/
+ml/*/cfg6_prodcmp/
+ml/*/__pycache__/
+
 # 環境
 .venv/
 venv/
