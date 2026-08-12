@@ -1,0 +1,37 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: MIX_EA_SIMVERIFY
+symbol: USDJPY
+period: M15
+from_date: 2016.06.21
+to_date: 2026.06.20
+deposit: 400000
+currency: JPY
+leverage: 25
+model: open_prices
+parameters:
+  En_PB_USDJPY: true
+  En_PB_GBPJPY: true
+  En_PB_AUDJPY: true
+  En_PB_GOLD: true
+  En_RSI_USDJPY: false
+  En_RSI_EURUSD: false
+  En_RSI_GBPUSD: false
+  En_PAIR: false
+  En_CARRY: false
+  En_VBO: false
+  En_ETH: false
+  En_BTC_FUND: false
+  En_BFXREV: false
+  En_SCA_GOLD: false
+  En_SCA_USDJPY: false
+  En_SCA_GBPJPY: false
+  RefCap_PB_USDJPY: 0
+  RefCap_PB_GBPJPY: 0
+  SimVerifyVirtualSleeveEquity: true
+  SimVerifyMode: 2
+  SimVerifyLookback: 8
+  SimVerifyRiskScale: 0.0
+  EquityLogFile: simverify_pb_on_equity.csv
+  ResultFileName: simverify_pb_on_result.csv
+report_dir: results
+report_name: simverify_pb_on
