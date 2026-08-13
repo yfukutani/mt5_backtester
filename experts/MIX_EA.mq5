@@ -405,6 +405,11 @@ int OnInit()
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
+   //   ⚠️2026-08-13: 従来はiMA/iATR等の戻り値を検査しておらず、OnInit時点で対象銘柄の
+   //   バーが1本も存在しないとhandle生成が失敗（error 4805）したまま無音でスリーブが死んだ。
+   //   その場合ProcCarry等はCopyBufferのreturnでエントリーも決済も止まり、災害SLだけが残る。
+   //   検査＋OnTickでの遅延再生成＋建玉保持中のアラートを追加した。
+   //   詳細: docs/eth_history_investigation_20260813.md
    for(int i=0;i<NS;i++)
    {
       if(!S[i].enabled) continue;
@@ -414,25 +419,10 @@ int OnInit()
       S[i].point  = SymbolInfoDouble(S[i].symbol, SYMBOL_POINT);
       S[i].pip    = (S[i].digits==3 || S[i].digits==5) ? 10*S[i].point : S[i].point;
       S[i].lastBar = 0;
-      if(S[i].strat==ST_PULLBACK){
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
-         S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
-         S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
-         S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
-         if(S[i].useHigherTF)
-            S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
-      } else if(S[i].strat==ST_RSI){
-         S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
-         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
-      } else if(S[i].strat==ST_CARRY){
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
-         if(S[i].useHyst) S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
-         if(S[i].exitPeriod>0)
-            S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
-      } else if(S[i].strat==ST_FUNDING){
+      if(!MakeHandles(i))
+         PrintFormat("⚠️枠%d(%s magic=%d): 指標ハンドル生成に失敗。OnTickで再生成を試みます",
+                     i, S[i].symbol, (int)S[i].magic);
+      if(S[i].strat==ST_FUNDING){
          if(!FundingInit())
          {
             S[i].enabled=false;
@@ -444,10 +434,6 @@ int OnInit()
             S[i].enabled=false;
             Print("BfxRev枠: データ初期化失敗のため無効化（決済のみ有効・他枠は正常）");
          }
-      } else if(S[i].strat==ST_VBO){
-         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
-      } else if(S[i].strat==ST_SCA){
-         S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
       }
    }
    // v1.4: アーム状態の復元（ライブのみ。テスターでは何もしない）
@@ -462,6 +448,90 @@ int OnInit()
          " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult,
          " | CryptoCap=", MaxCryptoConcurrent>0 ? IntegerToString(MaxCryptoConcurrent) : "OFF");
    return INIT_SUCCEEDED;
+}
+
+//============================ 指標ハンドル生成（検査付き・再生成可能） ============================
+// 2026-08-13追加。従来はiMA/iATR等の戻り値を検査していなかったため、OnInit時点で対象銘柄の
+// バーが1本も存在しないとhandle生成が失敗（error 4805）したまま無音でスリーブが死んでいた。
+// その状態ではProcCarry等がCopyBufferで早期returnし、**エントリーも決済も止まる**（災害SLのみ残る）。
+// 全ハンドルの生成に成功したときだけtrueを返す。失敗時はOnTickのEnsureHandles()で再試行する。
+// 詳細: docs/eth_history_investigation_20260813.md
+bool MakeHandles(int i)
+{
+   bool ok=true;
+   if(S[i].strat==ST_PULLBACK){
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
+      S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
+      S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
+      S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
+      S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
+      ok = (S[i].hTrend!=INVALID_HANDLE && S[i].hFast!=INVALID_HANDLE &&
+            S[i].hSlow!=INVALID_HANDLE && S[i].hATR!=INVALID_HANDLE && S[i].hADX!=INVALID_HANDLE);
+      if(S[i].useHigherTF){
+         S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
+         ok = ok && (S[i].hHigherTrend!=INVALID_HANDLE);
+      }
+   } else if(S[i].strat==ST_RSI){
+      S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
+      S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
+      S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      ok = (S[i].hRSI!=INVALID_HANDLE && S[i].hTrend!=INVALID_HANDLE &&
+            S[i].hBB!=INVALID_HANDLE && S[i].hATR!=INVALID_HANDLE);
+   } else if(S[i].strat==ST_CARRY){
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
+      ok = (S[i].hTrend!=INVALID_HANDLE);
+      if(S[i].useHyst){
+         S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
+         ok = ok && (S[i].hATR!=INVALID_HANDLE);
+      }
+      if(S[i].exitPeriod>0){
+         S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
+         ok = ok && (S[i].hExit!=INVALID_HANDLE);
+      }
+   } else if(S[i].strat==ST_VBO){
+      S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      ok = (S[i].hATR!=INVALID_HANDLE);
+   } else if(S[i].strat==ST_SCA){
+      S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
+      ok = (S[i].hATR!=INVALID_HANDLE);
+   }
+   // ST_PAIR/ST_FUNDING/ST_BFXREVは指標ハンドルを使わない（データ初期化は別途検査済み）
+   return ok;
+}
+
+// 死んだハンドルを持つ枠を毎バー1回だけ再生成する。建玉を保持したまま死んでいる場合は
+// 決済も止まっている＝危険なので、その旨を明示して警告する。
+datetime g_lastHandleCheck=0;
+void EnsureHandles()
+{
+   datetime now=TimeCurrent();
+   if(now-g_lastHandleCheck < 60) return;   // 1分に1回まで
+   g_lastHandleCheck=now;
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      if(S[i].strat==ST_PAIR || S[i].strat==ST_FUNDING || S[i].strat==ST_BFXREV) continue;
+      bool dead = (S[i].strat==ST_PULLBACK && (S[i].hTrend==INVALID_HANDLE || S[i].hFast==INVALID_HANDLE ||
+                                               S[i].hSlow==INVALID_HANDLE || S[i].hATR==INVALID_HANDLE ||
+                                               S[i].hADX==INVALID_HANDLE ||
+                                               (S[i].useHigherTF && S[i].hHigherTrend==INVALID_HANDLE)))
+               || (S[i].strat==ST_RSI && (S[i].hRSI==INVALID_HANDLE || S[i].hTrend==INVALID_HANDLE ||
+                                          S[i].hBB==INVALID_HANDLE || S[i].hATR==INVALID_HANDLE))
+               || (S[i].strat==ST_CARRY && (S[i].hTrend==INVALID_HANDLE ||
+                                            (S[i].useHyst && S[i].hATR==INVALID_HANDLE) ||
+                                            (S[i].exitPeriod>0 && S[i].hExit==INVALID_HANDLE)))
+               || ((S[i].strat==ST_VBO || S[i].strat==ST_SCA) && S[i].hATR==INVALID_HANDLE);
+      if(!dead) continue;
+      bool held = HasAny(i);
+      if(MakeHandles(i))
+         PrintFormat("枠%d(%s magic=%d): 指標ハンドルを再生成しました%s",
+                     i, S[i].symbol, (int)S[i].magic, held ? "（建玉保持中）" : "");
+      else
+         PrintFormat("⚠️枠%d(%s magic=%d): 指標ハンドルが無効のままです%s",
+                     i, S[i].symbol, (int)S[i].magic,
+                     held ? " — **建玉を保持したままエントリーも決済も停止中。至急確認してください**" : "");
+   }
 }
 
 void ZeroSleeve(SLEEVE &x)
@@ -647,6 +717,7 @@ void ProfitTrail()
 void OnTick()
 {
    if(!MasterEnable) return;
+   EnsureHandles();  // 2026-08-13: 死んだ指標ハンドルの遅延再生成＋建玉保持中の警告
    ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
