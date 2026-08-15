@@ -97,6 +97,45 @@ input int    R6GoldLookbackBars  = 1;
 input double R6GoldShockATR      = 1.5;
 input double R6GoldAdverseATR    = 1.0;
 
+input group "=== GOLD DD reduction lab（検証専用・既定OFF） ==="
+// bit 1=PB/SCA同時保有禁止、bit 2=GOLDパラメータ上書き、bit 4=曜日ゲート。
+// Mode=0では以下を一切参照せず、従来挙動と完全同一にする。
+input int    GoldDDMode             = 0;
+input int    GoldDDPBWeekMask       = 127; // bit0=日曜 ... bit6=土曜
+input int    GoldDDSCAWeekMask      = 127;
+input double GoldDDPBATRSL          = 2.0;
+input double GoldDDPBRR             = 2.0;
+input double GoldDDPBADX            = 22.5;
+input double GoldDDPBSlopeATR       = 1.2;
+input double GoldDDSCAMinRange      = 0.40;
+input double GoldDDSCAMaxRange      = 1.00;
+input double GoldDDSCABuffer        = 0.05;
+input double GoldDDSCARR            = 1.5;
+input bool   GoldDDSCAUseBoost      = true;
+input double GoldDDSCABoostMult     = 2.0;
+input int    GoldDDSCATradeEnd      = 15;
+input int    GoldDDSCAForceClose    = 20;
+
+input group "=== GOLD weekday x hour entry gate（検証専用・既定OFF） ==="
+// 0=OFF, 1=ON。曜日は bit0=日曜 ... bit6=土曜。
+// 時刻はブローカーのサーバ時刻（Strategy TesterではシミュレートされたTimeCurrent）で、
+// [開始時, 終了時) の半開区間。例: 0～6時台は Start=0 / End=7、終日は0 / 24。
+// 各枠2ルールまで指定できるため、月曜と金曜で異なる時間帯の組合せも実測できる。
+// このゲートは新規エントリー判定だけに適用し、既存建玉の決済・強制決済は止めない。
+input int    GoldHourGateMode       = 0;
+input int    GoldHourPBWeekMask1    = 0;
+input int    GoldHourPBStart1       = 0;
+input int    GoldHourPBEnd1         = 0;
+input int    GoldHourPBWeekMask2    = 0;
+input int    GoldHourPBStart2       = 0;
+input int    GoldHourPBEnd2         = 0;
+input int    GoldHourSCAWeekMask1   = 0;
+input int    GoldHourSCAStart1      = 0;
+input int    GoldHourSCAEnd1        = 0;
+input int    GoldHourSCAWeekMask2   = 0;
+input int    GoldHourSCAStart2      = 0;
+input int    GoldHourSCAEnd2        = 0;
+
 input group "=== ROUND6 CRYPTO DD検証専用（既定OFF） ==="
 // 0=OFF / 1=D1急落後の新規抑制 / 2=建値からのティック逆行率で危機退出
 input int    R6CryptoMode         = 0;
@@ -264,9 +303,30 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 //+------------------------------------------------------------------+
 void AddSleeve(SLEEVE &x){ S[NS] = x; NS++; }
 
+bool GoldHourRuleValid(const int week_mask,const int start_hour,const int end_hour)
+{
+   if(week_mask==0) return true; // 未使用ルール
+   return week_mask>=0 && week_mask<=127 && start_hour>=0 && start_hour<=23 &&
+          end_hour>=1 && end_hour<=24 && start_hour<end_hour;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(GoldHourGateMode!=0 && GoldHourGateMode!=1)
+   {
+      Print("GoldHourGateMode must be 0 or 1");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(GoldHourGateMode==1 &&
+      (!GoldHourRuleValid(GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
+       !GoldHourRuleValid(GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2) ||
+       !GoldHourRuleValid(GoldHourSCAWeekMask1,GoldHourSCAStart1,GoldHourSCAEnd1) ||
+       !GoldHourRuleValid(GoldHourSCAWeekMask2,GoldHourSCAStart2,GoldHourSCAEnd2)))
+   {
+      Print("Invalid GOLD hour rule: mask=0 disables a rule; otherwise require mask 1..127 and 0<=Start<End<=24");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    NS = 0;
    SLEEVE z; // ゼロ初期化テンプレ
    ZeroSleeve(z);
@@ -320,7 +380,10 @@ int OnInit()
      x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD (固定)
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
-     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD;
+     if((GoldDDMode&2)!=0){ x.atrSLmult=GoldDDPBATRSL; x.rr=GoldDDPBRR;
+       x.adxThr=GoldDDPBADX; x.slopeMinATR=GoldDDPBSlopeATR; }
+     AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
    SLEEVE rs = z;
@@ -397,7 +460,12 @@ int OnInit()
      x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.5; x.lotMult=Mult_SCA_GOLD;
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
-     x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
+     x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     if((GoldDDMode&2)!=0){ x.rr=GoldDDSCARR; x.scaMinRange=GoldDDSCAMinRange;
+       x.scaMaxRange=GoldDDSCAMaxRange; x.scaBuf=GoldDDSCABuffer;
+       x.scaRevBoost=GoldDDSCAUseBoost; x.scaBoostMult=GoldDDSCABoostMult;
+       x.scaTradeEnd=GoldDDSCATradeEnd; x.scaForceClose=GoldDDSCAForceClose; }
+     AddSleeve(x); }
    // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
    //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
    //     **OOS-4,875→+110＝OOS赤字を黒字転換**・DD両期間改善。
@@ -938,6 +1006,62 @@ bool R6GoldEntryOK(const int i)
    return true;
 }
 
+bool GoldDDEntryOK(const int i)
+{
+   if(GoldDDMode==0 || S[i].symbol!="GOLD") return true;
+   if((GoldDDMode&4)!=0)
+   {
+      MqlDateTime dt; TimeToStruct(TimeCurrent(),dt);
+      int mask=(S[i].magic==20260640 ? GoldDDPBWeekMask : GoldDDSCAWeekMask);
+      if((mask&(1<<dt.day_of_week))==0)
+      {
+         OpsWrite("GDD_SKIP",S[i].magic,S[i].symbol,dt.day_of_week,mask,0,0,0,0,"weekday");
+         return false;
+      }
+   }
+   if((GoldDDMode&1)!=0)
+   {
+      long other=(S[i].magic==20260640 ? 20261002 : 20260640);
+      for(int k=PositionsTotal()-1;k>=0;k--)
+      {
+         if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==other)
+         {
+            OpsWrite("GDD_SKIP",S[i].magic,S[i].symbol,other,0,0,0,0,0,"gold-overlap");
+            return false;
+         }
+      }
+   }
+   return true;
+}
+
+bool GoldHourRuleMatches(const MqlDateTime &dt,const int week_mask,
+                         const int start_hour,const int end_hour)
+{
+   if(week_mask==0 || (week_mask&(1<<dt.day_of_week))==0) return false;
+   return dt.hour>=start_hour && dt.hour<end_hour;
+}
+
+bool GoldHourEntryOK(const int i)
+{
+   if(GoldHourGateMode==0 || S[i].symbol!="GOLD") return true;
+   MqlDateTime dt;
+   // TimeCurrentはブローカーのサーバ時刻。テスターではテスト中のシミュレート時刻。
+   TimeToStruct(TimeCurrent(),dt);
+   bool blocked=false;
+   if(S[i].magic==20260640) // PB GOLD
+      blocked=GoldHourRuleMatches(dt,GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
+              GoldHourRuleMatches(dt,GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2);
+   else if(S[i].magic==20261002) // SCA GOLD
+      blocked=GoldHourRuleMatches(dt,GoldHourSCAWeekMask1,GoldHourSCAStart1,GoldHourSCAEnd1) ||
+              GoldHourRuleMatches(dt,GoldHourSCAWeekMask2,GoldHourSCAStart2,GoldHourSCAEnd2);
+   if(blocked)
+   {
+      OpsWrite("GH_SKIP",S[i].magic,S[i].symbol,dt.day_of_week,dt.hour,0,0,0,0,"weekday-hour-entry");
+      return false;
+   }
+   return true;
+}
+
 void R6GoldManageExit(const int i)
 {
    if(R6GoldMode!=2 || S[i].symbol!="GOLD" || R6GoldAdverseATR<=0.0) return;
@@ -1022,7 +1146,7 @@ void ProcPullback(int i)
       higher_ok_sell = (higher_close < hb2);
    }
 
-   bool r6entry=R6GoldEntryOK(i);
+   bool r6entry=R6GoldEntryOK(i) && GoldDDEntryOK(i) && GoldHourEntryOK(i);
    bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy && r6entry;
    bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell && r6entry;
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
@@ -1670,7 +1794,7 @@ void ProcSCA(int i)
                S[i].scaSkip ? 1 : 0, S[i].scaSkip ? "SKIP" : "ACTIVE");
    }
    if(!S[i].scaReady || S[i].scaSkip) return;
-   if(!R6GoldEntryOK(i)) return;
+   if(!R6GoldEntryOK(i) || !GoldDDEntryOK(i) || !GoldHourEntryOK(i)) return;
    if(dt.hour<S[i].scaRangeEnd || dt.hour>=S[i].scaTradeEnd) return;
    if(S[i].scaSkipFriday && dt.day_of_week==5) return;
 
