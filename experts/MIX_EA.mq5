@@ -73,6 +73,12 @@ input group "=== 利益トレール（v1.5・既定OFF） ==="
 //   含み益+1,500円(1.5%) → SL=+1,100円(1.1%)
 // SLは改善方向にのみ動かし、現値やストップレベルを跨ぐ位置には置かない。
 // 対象は本EAが建てた全ポジション（PairTrade/Carryなど本来SLを持たない枠にもSLが付く点に注意）。
+// v2.4: PB GOLDの時間帯ゲート（月曜0-6時台＋金曜12-15時台の新規エントリー停止・サーバ時刻）
+//   docs/gold_hour_gate_20260816.md。XM5枠合算で純利益4,140→4,243(+2.5%)・DD 12.746→10.403%。
+//   ⚠️除外している取引はXM5で751→746の5件のみ。数件の大負けを除く形であり過剰適合の兆候が
+//     強い。IS/OOS両期間で符号は一致したが各期間の根拠は2-3取引。フォワードで要監視。
+//     効きが確認できない場合はfalseに戻すこと。
+input bool   UseGoldHourGate  = true;   // PB GOLD 時間帯ゲート
 input bool   UseProfitTrail   = false;  // 利益トレールを使用する
 input double ProfitTrail_Step  = 0.5;   // 発動・引き上げの刻み（口座残高に対する%）
 input double ProfitTrail_Lock  = 0.1;   // 初回発動時に確保する利益（口座残高に対する%）
@@ -883,6 +889,18 @@ double StructTPDist(int i,const bool is_buy,const double entry,const double sl_d
    return MathMin(dist,rr_tp);
 }
 
+// PB GOLD 時間帯ゲート（v2.4）。新規エントリーのみを止め、既存建玉の決済は妨げない。
+// 時刻はブローカーのサーバ時刻（XMはGMT+2/+3）。テスターではシミュレート時刻。
+// 枠の判定はmagicで行う。銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため。
+bool GoldHourEntryOK(int i)
+{
+   if(!UseGoldHourGate || S[i].magic!=20260640) return true;   // PB GOLD以外は素通し
+   MqlDateTime dt; TimeToStruct(TimeCurrent(),dt);             // day_of_week: 0=日曜
+   if(dt.day_of_week==1 && dt.hour>=0  && dt.hour<7 ) return false;  // 月曜 0-6時台
+   if(dt.day_of_week==5 && dt.hour>=12 && dt.hour<16) return false;  // 金曜 12-15時台
+   return true;
+}
+
 void ProcPullback(int i)
 {
    string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
@@ -926,8 +944,10 @@ void ProcPullback(int i)
       higher_ok_sell = (higher_close < hb2);
    }
 
-   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy;
-   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell;
+   // v2.4: 時間帯ゲート。検証EAと同じ位置・同じ形（ebとesへの連言）で適用し挙動を一致させる。
+   bool gh=GoldHourEntryOK(i);
+   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy &&gh;
+   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell&&gh;
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
    double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
