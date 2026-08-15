@@ -73,6 +73,12 @@ input group "=== 利益トレール（v1.5・既定OFF） ==="
 //   含み益+1,500円(1.5%) → SL=+1,100円(1.1%)
 // SLは改善方向にのみ動かし、現値やストップレベルを跨ぐ位置には置かない。
 // 対象は本EAが建てた全ポジション（PairTrade/Carryなど本来SLを持たない枠にもSLが付く点に注意）。
+// v2.4: PB GOLDの時間帯ゲート（月曜0-6時台＋金曜12-15時台の新規エントリー停止・サーバ時刻）
+//   docs/gold_hour_gate_20260816.md。XM5枠合算で純利益4,140→4,243(+2.5%)・DD 12.746→10.403%。
+//   ⚠️除外している取引はXM5で751→746の5件のみ。数件の大負けを除く形であり過剰適合の兆候が
+//     強い。IS/OOS両期間で符号は一致したが各期間の根拠は2-3取引。フォワードで要監視。
+//     効きが確認できない場合はfalseに戻すこと。
+input bool   UseGoldHourGate  = true;   // PB GOLD 時間帯ゲート
 input bool   UseProfitTrail   = false;  // 利益トレールを使用する
 input double ProfitTrail_Step  = 0.5;   // 発動・引き上げの刻み（口座残高に対する%）
 input double ProfitTrail_Lock  = 0.1;   // 初回発動時に確保する利益（口座残高に対する%）
@@ -295,8 +301,14 @@ int OnInit()
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD (固定)
+   //    v2.3: RR_Ratio 2.0→1.8（GOLD DD低減1000案 GDD07_14・厳格改善2件のうちの1件。
+   //    GOLD2枠 IS+331,177→+359,259(PF1.8719→1.9770)／OOS+60,051→+60,078(PF1.3962→1.3974)、
+   //    XM5枠合算 +538,303→+566,412(+5.2%)。DDは両構成とも基準と同値で悪化なし。
+   //    ⚠️OOSの利益改善は+27円(+0.05%)で実質ゼロ＝OOSは中立と読むこと。実体はIS+8.5%と
+   //      XM5+5.2%、およびOOS DD -1.71pt。docs/gold_dd_final_20260815.md）
+   //    ※プリセット pb.rr=2.0 を継承していた枠。他のPB枠に影響させないため個別に上書きする。
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
-     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.rr=1.8; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
    SLEEVE rs = z;
@@ -368,9 +380,13 @@ int OnInit()
      x.lotMult=Mult_BFXREV; AddSleeve(x); }
 
    //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
-   // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.5/金曜スキップ/Revブースト）
+   // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.7/金曜スキップ/Revブースト）
+   //    v2.3: RR_Ratio 1.5→1.7（GOLD DD低減1000案 GDD24_13・厳格改善2件のうちの1件。
+   //    GOLD2枠 IS+331,177→+336,475(PF1.8719→1.8858)／OOS+60,051→+61,673(PF1.3962→1.4069)、
+   //    XM5枠合算 +538,303→+545,224(+1.3%)。DDは両構成とも基準と同値で悪化なし。
+   //    小幅だが両期間とも実質的な改善。docs/gold_dd_final_20260815.md）
    { SLEEVE x=z; x.enabled=En_SCA_GOLD; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
-     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.5; x.lotMult=Mult_SCA_GOLD;
+     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.7; x.lotMult=Mult_SCA_GOLD;
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
      x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
@@ -405,6 +421,11 @@ int OnInit()
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
+   //   ⚠️2026-08-13: 従来はiMA/iATR等の戻り値を検査しておらず、OnInit時点で対象銘柄の
+   //   バーが1本も存在しないとhandle生成が失敗（error 4805）したまま無音でスリーブが死んだ。
+   //   その場合ProcCarry等はCopyBufferのreturnでエントリーも決済も止まり、災害SLだけが残る。
+   //   検査＋OnTickでの遅延再生成＋建玉保持中のアラートを追加した。
+   //   詳細: docs/eth_history_investigation_20260813.md
    for(int i=0;i<NS;i++)
    {
       if(!S[i].enabled) continue;
@@ -414,25 +435,10 @@ int OnInit()
       S[i].point  = SymbolInfoDouble(S[i].symbol, SYMBOL_POINT);
       S[i].pip    = (S[i].digits==3 || S[i].digits==5) ? 10*S[i].point : S[i].point;
       S[i].lastBar = 0;
-      if(S[i].strat==ST_PULLBACK){
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
-         S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
-         S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
-         S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
-         if(S[i].useHigherTF)
-            S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
-      } else if(S[i].strat==ST_RSI){
-         S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
-         S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
-         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
-      } else if(S[i].strat==ST_CARRY){
-         S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
-         if(S[i].useHyst) S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
-         if(S[i].exitPeriod>0)
-            S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
-      } else if(S[i].strat==ST_FUNDING){
+      if(!MakeHandles(i))
+         PrintFormat("⚠️枠%d(%s magic=%d): 指標ハンドル生成に失敗。OnTickで再生成を試みます",
+                     i, S[i].symbol, (int)S[i].magic);
+      if(S[i].strat==ST_FUNDING){
          if(!FundingInit())
          {
             S[i].enabled=false;
@@ -444,10 +450,6 @@ int OnInit()
             S[i].enabled=false;
             Print("BfxRev枠: データ初期化失敗のため無効化（決済のみ有効・他枠は正常）");
          }
-      } else if(S[i].strat==ST_VBO){
-         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
-      } else if(S[i].strat==ST_SCA){
-         S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
       }
    }
    // v1.4: アーム状態の復元（ライブのみ。テスターでは何もしない）
@@ -462,6 +464,90 @@ int OnInit()
          " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult,
          " | CryptoCap=", MaxCryptoConcurrent>0 ? IntegerToString(MaxCryptoConcurrent) : "OFF");
    return INIT_SUCCEEDED;
+}
+
+//============================ 指標ハンドル生成（検査付き・再生成可能） ============================
+// 2026-08-13追加。従来はiMA/iATR等の戻り値を検査していなかったため、OnInit時点で対象銘柄の
+// バーが1本も存在しないとhandle生成が失敗（error 4805）したまま無音でスリーブが死んでいた。
+// その状態ではProcCarry等がCopyBufferで早期returnし、**エントリーも決済も止まる**（災害SLのみ残る）。
+// 全ハンドルの生成に成功したときだけtrueを返す。失敗時はOnTickのEnsureHandles()で再試行する。
+// 詳細: docs/eth_history_investigation_20260813.md
+bool MakeHandles(int i)
+{
+   bool ok=true;
+   if(S[i].strat==ST_PULLBACK){
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
+      S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
+      S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
+      S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
+      S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
+      ok = (S[i].hTrend!=INVALID_HANDLE && S[i].hFast!=INVALID_HANDLE &&
+            S[i].hSlow!=INVALID_HANDLE && S[i].hATR!=INVALID_HANDLE && S[i].hADX!=INVALID_HANDLE);
+      if(S[i].useHigherTF){
+         S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
+         ok = ok && (S[i].hHigherTrend!=INVALID_HANDLE);
+      }
+   } else if(S[i].strat==ST_RSI){
+      S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
+      S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
+      S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      ok = (S[i].hRSI!=INVALID_HANDLE && S[i].hTrend!=INVALID_HANDLE &&
+            S[i].hBB!=INVALID_HANDLE && S[i].hATR!=INVALID_HANDLE);
+   } else if(S[i].strat==ST_CARRY){
+      S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
+      ok = (S[i].hTrend!=INVALID_HANDLE);
+      if(S[i].useHyst){
+         S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
+         ok = ok && (S[i].hATR!=INVALID_HANDLE);
+      }
+      if(S[i].exitPeriod>0){
+         S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
+         ok = ok && (S[i].hExit!=INVALID_HANDLE);
+      }
+   } else if(S[i].strat==ST_VBO){
+      S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      ok = (S[i].hATR!=INVALID_HANDLE);
+   } else if(S[i].strat==ST_SCA){
+      S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
+      ok = (S[i].hATR!=INVALID_HANDLE);
+   }
+   // ST_PAIR/ST_FUNDING/ST_BFXREVは指標ハンドルを使わない（データ初期化は別途検査済み）
+   return ok;
+}
+
+// 死んだハンドルを持つ枠を毎バー1回だけ再生成する。建玉を保持したまま死んでいる場合は
+// 決済も止まっている＝危険なので、その旨を明示して警告する。
+datetime g_lastHandleCheck=0;
+void EnsureHandles()
+{
+   datetime now=TimeCurrent();
+   if(now-g_lastHandleCheck < 60) return;   // 1分に1回まで
+   g_lastHandleCheck=now;
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      if(S[i].strat==ST_PAIR || S[i].strat==ST_FUNDING || S[i].strat==ST_BFXREV) continue;
+      bool dead = (S[i].strat==ST_PULLBACK && (S[i].hTrend==INVALID_HANDLE || S[i].hFast==INVALID_HANDLE ||
+                                               S[i].hSlow==INVALID_HANDLE || S[i].hATR==INVALID_HANDLE ||
+                                               S[i].hADX==INVALID_HANDLE ||
+                                               (S[i].useHigherTF && S[i].hHigherTrend==INVALID_HANDLE)))
+               || (S[i].strat==ST_RSI && (S[i].hRSI==INVALID_HANDLE || S[i].hTrend==INVALID_HANDLE ||
+                                          S[i].hBB==INVALID_HANDLE || S[i].hATR==INVALID_HANDLE))
+               || (S[i].strat==ST_CARRY && (S[i].hTrend==INVALID_HANDLE ||
+                                            (S[i].useHyst && S[i].hATR==INVALID_HANDLE) ||
+                                            (S[i].exitPeriod>0 && S[i].hExit==INVALID_HANDLE)))
+               || ((S[i].strat==ST_VBO || S[i].strat==ST_SCA) && S[i].hATR==INVALID_HANDLE);
+      if(!dead) continue;
+      bool held = HasAny(i);
+      if(MakeHandles(i))
+         PrintFormat("枠%d(%s magic=%d): 指標ハンドルを再生成しました%s",
+                     i, S[i].symbol, (int)S[i].magic, held ? "（建玉保持中）" : "");
+      else
+         PrintFormat("⚠️枠%d(%s magic=%d): 指標ハンドルが無効のままです%s",
+                     i, S[i].symbol, (int)S[i].magic,
+                     held ? " — **建玉を保持したままエントリーも決済も停止中。至急確認してください**" : "");
+   }
 }
 
 void ZeroSleeve(SLEEVE &x)
@@ -647,6 +733,7 @@ void ProfitTrail()
 void OnTick()
 {
    if(!MasterEnable) return;
+   EnsureHandles();  // 2026-08-13: 死んだ指標ハンドルの遅延再生成＋建玉保持中の警告
    ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
@@ -802,6 +889,18 @@ double StructTPDist(int i,const bool is_buy,const double entry,const double sl_d
    return MathMin(dist,rr_tp);
 }
 
+// PB GOLD 時間帯ゲート（v2.4）。新規エントリーのみを止め、既存建玉の決済は妨げない。
+// 時刻はブローカーのサーバ時刻（XMはGMT+2/+3）。テスターではシミュレート時刻。
+// 枠の判定はmagicで行う。銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため。
+bool GoldHourEntryOK(int i)
+{
+   if(!UseGoldHourGate || S[i].magic!=20260640) return true;   // PB GOLD以外は素通し
+   MqlDateTime dt; TimeToStruct(TimeCurrent(),dt);             // day_of_week: 0=日曜
+   if(dt.day_of_week==1 && dt.hour>=0  && dt.hour<7 ) return false;  // 月曜 0-6時台
+   if(dt.day_of_week==5 && dt.hour>=12 && dt.hour<16) return false;  // 金曜 12-15時台
+   return true;
+}
+
 void ProcPullback(int i)
 {
    string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
@@ -845,8 +944,10 @@ void ProcPullback(int i)
       higher_ok_sell = (higher_close < hb2);
    }
 
-   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy;
-   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell;
+   // v2.4: 時間帯ゲート。検証EAと同じ位置・同じ形（ebとesへの連言）で適用し挙動を一致させる。
+   bool gh=GoldHourEntryOK(i);
+   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up  &&higher_ok_buy &&gh;
+   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell&&gh;
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
    double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
