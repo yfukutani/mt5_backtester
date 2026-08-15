@@ -273,8 +273,12 @@ int OnInit()
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol=Sym_AUDJPY; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD→XAUUSD (固定) ※商品CFD専用口座
+   //    v2.3: RR_Ratio 2.0→1.8（GOLD DD低減1000案 GDD07_14・XM版と同一変更。
+   //    GOLD2枠 IS+331,177→+359,259／OOS+60,051→+60,078、DD悪化なし。
+   //    ⚠️OOS改善は+27円で実質ゼロ＝OOSは中立。docs/gold_dd_final_20260815.md）
+   //    ※プリセット pb.rr=2.0 を継承していた枠。他のPB枠に影響させないため個別に上書きする。
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol=Sym_GOLD; x.magic=20260640;
-     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.rr=1.8; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
    SLEEVE rs = z;
@@ -326,9 +330,12 @@ int OnInit()
      x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
 
    //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
-   // 11. SCA XAUUSD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.5/金曜スキップ/Revブースト）
+   // 11. SCA XAUUSD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.7/金曜スキップ/Revブースト）
+   //    v2.3: RR_Ratio 1.5→1.7（GOLD DD低減1000案 GDD24_13・XM版と同一変更。
+   //    GOLD2枠 IS+331,177→+336,475／OOS+60,051→+61,673、DD悪化なし。
+   //    小幅だが両期間とも実質的な改善。docs/gold_dd_final_20260815.md）
    { SLEEVE x=z; x.enabled=En_SCA_GOLD; x.strat=ST_SCA; x.symbol=Sym_GOLD; x.tf=PERIOD_M15;
-     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.5; x.lotMult=Mult_SCA_GOLD;
+     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.7; x.lotMult=Mult_SCA_GOLD;
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
      x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }

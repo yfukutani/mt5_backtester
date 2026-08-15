@@ -295,8 +295,14 @@ int OnInit()
    { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
      x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
    // 4. PB GOLD (固定)
+   //    v2.3: RR_Ratio 2.0→1.8（GOLD DD低減1000案 GDD07_14・厳格改善2件のうちの1件。
+   //    GOLD2枠 IS+331,177→+359,259(PF1.8719→1.9770)／OOS+60,051→+60,078(PF1.3962→1.3974)、
+   //    XM5枠合算 +538,303→+566,412(+5.2%)。DDは両構成とも基準と同値で悪化なし。
+   //    ⚠️OOSの利益改善は+27円(+0.05%)で実質ゼロ＝OOSは中立と読むこと。実体はIS+8.5%と
+   //      XM5+5.2%、およびOOS DD -1.71pt。docs/gold_dd_final_20260815.md）
+   //    ※プリセット pb.rr=2.0 を継承していた枠。他のPB枠に影響させないため個別に上書きする。
    { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
-     x.useRisk=false; x.lot=0.01; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
+     x.useRisk=false; x.lot=0.01; x.rr=1.8; x.lotMult=Mult_PB_GOLD; AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
    SLEEVE rs = z;
@@ -368,9 +374,13 @@ int OnInit()
      x.lotMult=Mult_BFXREV; AddSleeve(x); }
 
    //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
-   // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.5/金曜スキップ/Revブースト）
+   // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.7/金曜スキップ/Revブースト）
+   //    v2.3: RR_Ratio 1.5→1.7（GOLD DD低減1000案 GDD24_13・厳格改善2件のうちの1件。
+   //    GOLD2枠 IS+331,177→+336,475(PF1.8719→1.8858)／OOS+60,051→+61,673(PF1.3962→1.4069)、
+   //    XM5枠合算 +538,303→+545,224(+1.3%)。DDは両構成とも基準と同値で悪化なし。
+   //    小幅だが両期間とも実質的な改善。docs/gold_dd_final_20260815.md）
    { SLEEVE x=z; x.enabled=En_SCA_GOLD; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
-     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.5; x.lotMult=Mult_SCA_GOLD;
+     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.7; x.lotMult=Mult_SCA_GOLD;
      x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
      x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
      x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
