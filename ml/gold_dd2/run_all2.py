@@ -116,7 +116,7 @@ BASE_CONFIG: dict[str, Any] = {
         "GoldHourPBWeekMask2": 32, "GoldHourPBStart2": 12, "GoldHourPBEnd2": 16,
         "GoldHourSCAWeekMask1": 0, "GoldHourSCAStart1": 0, "GoldHourSCAEnd1": 0,
         "GoldHourSCAWeekMask2": 0, "GoldHourSCAStart2": 0, "GoldHourSCAEnd2": 0,
-        "GoldLabMode": 0,
+        "GoldLabMode": 0, "GoldLabMode2": 0,
     },
 }
 
@@ -226,7 +226,7 @@ def verify_runtime() -> None:
     if binary.stat().st_mtime < source.stat().st_mtime:
         raise RuntimeError("installed SIMVERIFY ex5 is older than mq5; compile first")
     known = ea_inputs()
-    required = {"GoldLabMode", "GoldDDPBRR", "GoldDDSCARR", "GoldHourGateMode"}
+    required = {"GoldLabMode", "GoldLabMode2", "GoldDDPBRR", "GoldDDSCARR", "GoldHourGateMode"}
     for activation in FAMILY_ACTIVATION.values():
         required.update(activation)
     missing = sorted(required - known)

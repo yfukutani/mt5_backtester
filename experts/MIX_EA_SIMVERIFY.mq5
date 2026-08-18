@@ -138,8 +138,10 @@ input int    GoldHourSCAEnd2        = 0;
 
 input group "=== GOLD DD lab round 2（検証専用・既定OFF） ==="
 // GoldLabMode: 0=OFF, 1..28 は run_all2.py の FAMILY_ACTIVATION と一対一。
+// GoldLabMode2: 2つ目の機構。0なら従来と完全に同じ単一Mode動作。
 // 値が0の候補もあるため、個々の値ではなく Mode で有効/無効を判定する。
 input int    GoldLabMode                    = 0;
+input int    GoldLabMode2                   = 0;
 input int    GoldLabOverlapPolicy           = 0;
 input int    GoldLabOverlapCooldownHours    = 0;
 input int    GoldLabPBFastEMA               = 20;
@@ -284,6 +286,22 @@ datetime g_labPortfolioLoss = 0;
 datetime g_labSleeveLoss[32];
 datetime g_labSCALoss[32];
 
+bool GoldLabModeEnabled(const int mode)
+{
+   return GoldLabMode==mode || GoldLabMode2==mode;
+}
+
+bool GoldLabAnyModeEnabled()
+{
+   return GoldLabMode!=0 || GoldLabMode2!=0;
+}
+
+bool GoldLabModeRangeEnabled(const int first_mode,const int last_mode)
+{
+   return (GoldLabMode>=first_mode && GoldLabMode<=last_mode) ||
+          (GoldLabMode2>=first_mode && GoldLabMode2<=last_mode);
+}
+
 //============================ 運用ログ ============================
 string OpsLogFile()
 {
@@ -325,7 +343,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
               + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
               + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
    // Lab state is driven only by deals already confirmed at this point in time.
-   if(GoldLabMode!=0 && entry!=DEAL_ENTRY_IN && pnl<0.0 &&
+   if(GoldLabAnyModeEnabled() && entry!=DEAL_ENTRY_IN && pnl<0.0 &&
       (magic==20260640 || magic==20261002))
    {
       datetime when=(datetime)HistoryDealGetInteger(trans.deal,DEAL_TIME);
@@ -361,9 +379,9 @@ bool GoldHourRuleValid(const int week_mask,const int start_hour,const int end_ho
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   if(GoldLabMode<0 || GoldLabMode>28)
+   if(GoldLabMode<0 || GoldLabMode>28 || GoldLabMode2<0 || GoldLabMode2>28)
    {
-      Print("GoldLabMode must be 0..28");
+      Print("GoldLabMode and GoldLabMode2 must be 0..28");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(GoldHourGateMode!=0 && GoldHourGateMode!=1)
@@ -439,10 +457,10 @@ int OnInit()
      x.useRisk=false; x.lot=0.01; x.rr=1.8; x.lotMult=Mult_PB_GOLD;
      if((GoldDDMode&2)!=0){ x.atrSLmult=GoldDDPBATRSL; x.rr=GoldDDPBRR;
        x.adxThr=GoldDDPBADX; x.slopeMinATR=GoldDDPBSlopeATR; }
-     if(GoldLabMode==16){ x.fastEMA=GoldLabPBFastEMA; x.slowEMA=GoldLabPBSlowEMA; }
-     if(GoldLabMode==17) x.trendPeriod=GoldLabPBTrendMA;
-     if(GoldLabMode==26) x.adxPeriod=GoldLabPBADXPeriod;
-     if(GoldLabMode==23){ x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=GoldLabPBHigherTFMA; }
+     if(GoldLabModeEnabled(16)){ x.fastEMA=GoldLabPBFastEMA; x.slowEMA=GoldLabPBSlowEMA; }
+     if(GoldLabModeEnabled(17)) x.trendPeriod=GoldLabPBTrendMA;
+     if(GoldLabModeEnabled(26)) x.adxPeriod=GoldLabPBADXPeriod;
+     if(GoldLabModeEnabled(23)){ x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=GoldLabPBHigherTFMA; }
      AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
@@ -525,8 +543,8 @@ int OnInit()
        x.scaMaxRange=GoldDDSCAMaxRange; x.scaBuf=GoldDDSCABuffer;
        x.scaRevBoost=GoldDDSCAUseBoost; x.scaBoostMult=GoldDDSCABoostMult;
        x.scaTradeEnd=GoldDDSCATradeEnd; x.scaForceClose=GoldDDSCAForceClose; }
-     if(GoldLabMode==7) x.scaRangeStart=GoldLabSCARangeStart;
-     if(GoldLabMode==4) x.scaRangeEnd=GoldLabSCARangeEnd;
+     if(GoldLabModeEnabled(7)) x.scaRangeStart=GoldLabSCARangeStart;
+     if(GoldLabModeEnabled(4)) x.scaRangeEnd=GoldLabSCARangeEnd;
      AddSleeve(x); }
    // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
    //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
@@ -1235,34 +1253,41 @@ bool GoldLabFloatingOK(const int i)
 
 bool GoldLabRegimeOK(const int i)
 {
-   if(GoldLabMode!=8 && GoldLabMode!=9) return true;
+   bool use_range=GoldLabModeEnabled(8);
+   bool use_gap=GoldLabModeEnabled(9);
+   if(!use_range && !use_gap) return true;
    double atr=GoldLabDailyATR(S[i].symbol);
    if(atr<=0.0) return false;
-   if(GoldLabMode==8)
-      return (iHigh(S[i].symbol,PERIOD_D1,1)-iLow(S[i].symbol,PERIOD_D1,1))/atr<=GoldLabPrevRangeATRMax;
-   double gap=MathAbs(iOpen(S[i].symbol,PERIOD_D1,0)-iClose(S[i].symbol,PERIOD_D1,1));
-   return gap/atr<=GoldLabGapATRMax;
+   if(use_range &&
+      (iHigh(S[i].symbol,PERIOD_D1,1)-iLow(S[i].symbol,PERIOD_D1,1))/atr>GoldLabPrevRangeATRMax)
+      return false;
+   if(use_gap)
+   {
+      double gap=MathAbs(iOpen(S[i].symbol,PERIOD_D1,0)-iClose(S[i].symbol,PERIOD_D1,1));
+      if(gap/atr>GoldLabGapATRMax) return false;
+   }
+   return true;
 }
 
 bool GoldLabEntryOK(const int i,const ENUM_POSITION_TYPE wanted)
 {
-   if(GoldLabMode==0 || !GoldLabIsGold(i)) return true;
-   if(GoldLabMode==2 && g_labSCALoss[i]>0 &&
+   if(!GoldLabAnyModeEnabled() || !GoldLabIsGold(i)) return true;
+   if(GoldLabModeEnabled(2) && g_labSCALoss[i]>0 &&
       TimeCurrent()-g_labSCALoss[i]<GoldLabSCAFailedBreakLockHours*3600) return false;
-   if(GoldLabMode==3 && g_labPortfolioLoss>0 &&
+   if(GoldLabModeEnabled(3) && g_labPortfolioLoss>0 &&
       TimeCurrent()-g_labPortfolioLoss<GoldLabPortfolioCooldownHours*3600) return false;
-   if(GoldLabMode==12 && g_labSleeveLoss[i]>0 &&
+   if(GoldLabModeEnabled(12) && g_labSleeveLoss[i]>0 &&
       TimeCurrent()-g_labSleeveLoss[i]<GoldLabSleeveCooldownHours*3600) return false;
-   if(GoldLabMode==10)
+   if(GoldLabModeEnabled(10))
    {
       double spread=(SymbolInfoDouble(S[i].symbol,SYMBOL_ASK)-SymbolInfoDouble(S[i].symbol,SYMBOL_BID))/S[i].point;
       if(spread>GoldLabMaxSpreadPoints) return false;
    }
-   if(GoldLabMode==11 && !GoldLabFloatingOK(i)) return false;
-   if(GoldLabMode==13 && !GoldLabLossCapOK(false,GoldLabDailyLossCapJPY)) return false;
-   if(GoldLabMode==14 && !GoldLabLossCapOK(true,GoldLabWeeklyLossCapJPY)) return false;
-   if((GoldLabMode==8 || GoldLabMode==9) && !GoldLabRegimeOK(i)) return false;
-   if(GoldLabMode>=15 && GoldLabMode<=21 && !GoldLabOverlapOK(i,wanted)) return false;
+   if(GoldLabModeEnabled(11) && !GoldLabFloatingOK(i)) return false;
+   if(GoldLabModeEnabled(13) && !GoldLabLossCapOK(false,GoldLabDailyLossCapJPY)) return false;
+   if(GoldLabModeEnabled(14) && !GoldLabLossCapOK(true,GoldLabWeeklyLossCapJPY)) return false;
+   if((GoldLabModeEnabled(8) || GoldLabModeEnabled(9)) && !GoldLabRegimeOK(i)) return false;
+   if(GoldLabModeRangeEnabled(15,21) && !GoldLabOverlapOK(i,wanted)) return false;
    return true;
 }
 
@@ -1270,15 +1295,15 @@ bool GoldLabPBSignalOK(const int i,const bool buy,const double cp,const double o
                        const double hp,const double lp,const double fastema,
                        const double trendma,const double atr)
 {
-   if(GoldLabMode==22 && MathAbs(cp-trendma)/atr>GoldLabPBExtensionCapATR) return false;
-   if(GoldLabMode==25)
+   if(GoldLabModeEnabled(22) && MathAbs(cp-trendma)/atr>GoldLabPBExtensionCapATR) return false;
+   if(GoldLabModeEnabled(25))
    {
       double depth=buy ? (fastema-lp)/atr : (hp-fastema)/atr;
       if(depth>GoldLabPBPullbackDepthATR) return false;
    }
    double range=hp-lp;
-   if(GoldLabMode==27 && (range<=0.0 || MathAbs(cp-op)/range<GoldLabPBCandleBodyMin)) return false;
-   if(GoldLabMode==28)
+   if(GoldLabModeEnabled(27) && (range<=0.0 || MathAbs(cp-op)/range<GoldLabPBCandleBodyMin)) return false;
+   if(GoldLabModeEnabled(28))
    {
       double location=range>0.0 ? (buy ? (cp-lp)/range : (hp-cp)/range) : 0.0;
       if(location<GoldLabPBCloseLocationMin) return false;
@@ -1288,7 +1313,7 @@ bool GoldLabPBSignalOK(const int i,const bool buy,const double cp,const double o
 
 bool GoldLabSCADirectionOK(const int i,const bool buy,const double atr)
 {
-   if(GoldLabMode!=1) return true;
+   if(!GoldLabModeEnabled(1)) return true;
    if(S[i].scaTradedL || S[i].scaTradedS)
       return buy ? S[i].scaTradedL : S[i].scaTradedS;
    double drift=S[i].scaDrift/atr;
@@ -1302,7 +1327,7 @@ bool GoldLabSCADirectionOK(const int i,const bool buy,const double atr)
 void GoldLabManagePB(const int i)
 {
    if(!GoldLabIsGold(i) || S[i].magic!=20260640 ||
-      (GoldLabMode!=5 && GoldLabMode!=6 && GoldLabMode!=24)) return;
+      (!GoldLabModeEnabled(5) && !GoldLabModeEnabled(6) && !GoldLabModeEnabled(24))) return;
    double atr=GetBuf(S[i].hATR,0);
    if(atr==EMPTY_VALUE || atr<=0.0) return;
    for(int k=PositionsTotal()-1;k>=0;k--)
@@ -1313,13 +1338,13 @@ void GoldLabManagePB(const int i)
       double op=PositionGetDouble(POSITION_PRICE_OPEN),sl=PositionGetDouble(POSITION_SL);
       double tp=PositionGetDouble(POSITION_TP),px=buy ? SymbolInfoDouble(S[i].symbol,SYMBOL_BID)
                                                      : SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
-      if(GoldLabMode==24 && GoldLabPBHoldBars>0 &&
+      if(GoldLabModeEnabled(24) && GoldLabPBHoldBars>0 &&
          TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME)>=GoldLabPBHoldBars*PeriodSeconds(S[i].tf))
       { trade.PositionClose(tk); continue; }
       double nsl=sl;
-      if(GoldLabMode==5 && GoldLabPBBETriggerATR>0.0 &&
+      if(GoldLabModeEnabled(5) && GoldLabPBBETriggerATR>0.0 &&
          (buy ? px-op : op-px)>=GoldLabPBBETriggerATR*atr) nsl=op;
-      if(GoldLabMode==6 && GoldLabPBTrailATR>0.0)
+      if(GoldLabModeEnabled(6) && GoldLabPBTrailATR>0.0)
          nsl=buy ? px-GoldLabPBTrailATR*atr : px+GoldLabPBTrailATR*atr;
       bool improve=buy ? nsl>sl : (sl==0.0 || nsl<sl);
       if(improve && (buy ? nsl<px : nsl>px)) trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),tp);
