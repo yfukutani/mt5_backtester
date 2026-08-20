@@ -112,9 +112,18 @@ input double Mult_SCA_USDJPY = 1.0;
 input double Mult_SCA_GBPJPY = 1.0;
 
 input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分資金固定） ==="
-input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
-input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
-input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+// v2.6: フォワードテストの実資金に合わせて明示指定する（2026-08-15時点の実測）。
+//   XM口座 370406351: balance 52,366 / credit 65,000 / equity 117,366
+//   0のままだと AccountInfoDouble(ACCOUNT_EQUITY) を拾うため挙動は同じだが、
+//   フォワード期間中にサイズを固定してバックテストとの突合を正確にするため実額を書く。
+//   ⚠️クレジット65,000を含むequity基準（ユーザー判断）。自己資金52,366に対して
+//     実質レバレッジは約2.2倍になる。クレジットは損失を吸収するがDDバッファであって
+//     引き出せる資金ではない点に留意すること。
+//   ⚠️固定値のため損失が続いてもロットは自動では縮まない。残高が大きく動いた場合は
+//     この値を見直すこと。
+input double RefCap_PB_USDJPY = 117000;  // PB USDJPY risk%の基準資金（配分額）
+input double RefCap_PB_GBPJPY = 117000;  // PB GBPJPY risk%の基準資金
+input double RefCap_CARRY      = 117000; // Carry複利の基準資金
 
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";

@@ -1,0 +1,9 @@
+﻿OANDA_FX   IS   入金  77954 純利益   +277106 PF1.3945 DD 35.65% 月利  5.92% RF 10.0 n=1573 ←DD30%超
+OANDA_FX   FULL 入金  77954 純利益   +390740 PF1.3163 DD 30.75% 月利  4.36% RF 16.3 n=2926 ←DD30%超
+OANDA_CFD  IS   入金 102183 純利益   +411249 PF2.2315 DD 11.48% 月利  6.71% RF 35.1 n=301
+OANDA_CFD  FULL 入金 102183 純利益   +457089 PF1.9358 DD  8.50% 月利  3.89% RF 52.6 n=630
+XM         IS   入金 117366 純利益   +842616 PF1.7067 DD 21.97% 月利 11.97% RF 32.7 n=1967
+  孤立metatester64を回収しました
+XM         FULL 入金 117366 純利益  +1097256 PF1.5709 DD 22.43% 月利  8.13% RF 41.7 n=3717
+
+→ C:\Users\f\source\repos\mt5_backtester\ml\deploy50\forward_settings.csv

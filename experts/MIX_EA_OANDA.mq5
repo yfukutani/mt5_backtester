@@ -95,9 +95,16 @@ input double Mult_SCA_USDJPY = 1.0;
 input double Mult_SCA_GBPJPY = 1.0;
 
 input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分資金固定） ==="
-input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
-input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
-input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+// v2.6: フォワードテストの実資金に合わせて明示指定する（2026-08-15時点の実測）。
+//   OANDA FX口座 900282956: balance = equity = 77,954（クレジットなし）
+//   リスク建て枠(PB USDJPY / PB GBPJPY / Carry)はFX口座のみで有効なため、
+//   FX口座の実額を既定値とする。CFD口座(900282957・equity 102,183)はGOLD 2枠のみで
+//   リスク建て枠を使わないため、この値の影響を受けない。
+//   ⚠️固定値のため損失が続いてもロットは自動では縮まない。残高が大きく動いた場合は
+//     この値を見直すこと。
+input double RefCap_PB_USDJPY = 78000;   // PB USDJPY risk%の基準資金（配分額）
+input double RefCap_PB_GBPJPY = 78000;   // PB GBPJPY risk%の基準資金
+input double RefCap_CARRY      = 78000;  // Carry複利の基準資金
 
 input group "=== Carry執行TF（OANDA: D1始値の market closed 回避） ==="
 // Carry枠の新バー検出/執行TF。判定（MA200・終値）はD1のまま。
