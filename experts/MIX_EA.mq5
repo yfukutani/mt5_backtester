@@ -79,6 +79,13 @@ input group "=== 利益トレール（v1.5・既定OFF） ==="
 //     強い。IS/OOS両期間で符号は一致したが各期間の根拠は2-3取引。フォワードで要監視。
 //     効きが確認できない場合はfalseに戻すこと。
 input bool   UseGoldHourGate  = true;   // PB GOLD 時間帯ゲート
+// v2.5: PB GOLDの保有期間上限（GDD18_16）。H4の64バー＝約10.7日で強制決済する。
+//   docs/gold_dd2_final_20260818.md。長期停滞からの尾損失を限定する狙い。
+//   52→64バーで単調改善し64でピーク、76以降で緩やかに戻る滑らかな応答曲面を確認。
+//   GOLD2枠 IS+3.3%／OOS+11.2%、XM5枠合算 4,242.6→4,396.1(+3.62%)・DD -0.34pt。
+//   0で無効。GDD35_07(損失後クールダウン)との併用は逆効果のため入れていない
+//   （クールダウンが先に効いて本機構が一度も発火しなくなる）。
+input int    GoldPBHoldBars   = 64;     // PB GOLD 保有上限（バー数・0で無効）
 input bool   UseProfitTrail   = false;  // 利益トレールを使用する
 input double ProfitTrail_Step  = 0.5;   // 発動・引き上げの刻み（口座残高に対する%）
 input double ProfitTrail_Lock  = 0.1;   // 初回発動時に確保する利益（口座残高に対する%）
@@ -734,6 +741,7 @@ void OnTick()
 {
    if(!MasterEnable) return;
    EnsureHandles();  // 2026-08-13: 死んだ指標ハンドルの遅延再生成＋建玉保持中の警告
+   GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価
    ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
@@ -887,6 +895,28 @@ double StructTPDist(int i,const bool is_buy,const double entry,const double sl_d
    double dist = is_buy ? (lvl-entry) : (entry-lvl);
    if(dist<=0.0 || dist < S[i].structMinRR*sl_dist) return rr_tp;
    return MathMin(dist,rr_tp);
+}
+
+// PB GOLD 保有期間上限（v2.5）。長期停滞からの尾損失を限定する。
+// PB GOLDのtfはH4なので64バー＝約10.7日。検証EAと同じ判定式にする。
+// 枠の判定はmagicで行う（銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため）。
+void GoldPBHoldLimit()
+{
+   if(GoldPBHoldBars<=0) return;
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled || S[i].magic!=20260640) continue;   // PB GOLDのみ
+      long limit=(long)GoldPBHoldBars*PeriodSeconds(S[i].tf);
+      for(int k=PositionsTotal()-1;k>=0;k--)
+      {
+         ulong tk=PositionGetTicket(k);
+         if(tk==0) continue;
+         if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+            PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+         if(TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME) >= limit)
+            trade.PositionClose(tk);
+      }
+   }
 }
 
 // PB GOLD 時間帯ゲート（v2.4）。新規エントリーのみを止め、既存建玉の決済は妨げない。
