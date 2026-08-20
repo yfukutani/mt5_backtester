@@ -1,0 +1,17 @@
+﻿OANDA_FX  IS    -       x2 net=    +747210円 pf=1.5099 DD=     79260円 n=1573
+OANDA_FX  FULL  -       x1 net=    +509365円 pf=1.4019 DD=     42755円 n=2926
+OANDA_FX  FULL  -       x2 net=   +1280520円 pf=1.5039 DD=     80540円 n=2926
+OANDA_FX  FULL  -       x3 net=   +1940564円 pf=1.5075 DD=    118975円 n=2926
+OANDA_FX  FULL  -       x4 net=   +2595982円 pf=1.5086 DD=    157775円 n=2926
+OANDA_FX  FULL  -       x5 net=   +3265929円 pf=1.5114 DD=    195420円 n=2926
+XM_CFD    FULL  HOLD64  x1 net=    +602532円 pf=2.0246 DD=     30565円 n=748
+  孤立metatester64を回収しました
+XM_CFD    FULL  HOLD64  x2 net=   +1205134円 pf=2.0246 DD=     58575円 n=748
+  孤立metatester64を回収しました
+XM_CFD    FULL  HOLD64  x3 net=   +1807678円 pf=2.0246 DD=     84340円 n=748
+  孤立metatester64を回収しました
+XM_CFD    FULL  HOLD64  x4 net=   +2410258円 pf=2.0246 DD=    108115円 n=748
+  孤立metatester64を回収しました
+XM_CFD    FULL  HOLD64  x5 net=   +3012757円 pf=2.0246 DD=    130120円 n=748
+
+→ C:\Users\f\source\repos\mt5_backtester\ml\deploy50\books_full.csv

@@ -1,0 +1,27 @@
+﻿XM     x6  IS   純利益   +2964516 PF2.2108 DD 15.75% 月利  9.88% RF 37.65 n=372
+  孤立metatester64を回収しました
+XM     x6  FULL FAIL
+XM     x8  IS   FAIL
+  孤立metatester64を回収しました
+XM     x8  FULL 純利益   +4820429 PF2.0246 DD 15.18% 月利  8.38% RF 63.49 n=748
+  孤立metatester64を回収しました
+XM     x10 IS   純利益   +4940846 PF2.2108 DD 18.84% 月利 16.47% RF 52.44 n=372
+  孤立metatester64を回収しました
+XM     x10 FULL 純利益   +6025558 PF2.0246 DD 18.28% 月利 10.48% RF 65.91 n=748
+  孤立metatester64を回収しました
+XM     x12 IS   純利益   +5929014 PF2.2108 DD 19.82% 月利 19.76% RF 59.83 n=372
+  孤立metatester64を回収しました
+XM     x12 FULL 純利益   +7230685 PF2.0246 DD 21.17% 月利 12.58% RF 68.33 n=748
+  孤立metatester64を回収しました
+XM     x15 IS   純利益   +7411269 PF2.2108 DD 23.38% 月利 24.70% RF 63.40 n=372
+  孤立metatester64を回収しました
+XM     x15 FULL 純利益   +9038341 PF2.0246 DD 25.12% 月利 15.72% RF 71.95 n=748
+  孤立metatester64を回収しました
+OANDA  x5  IS   純利益   +2188528 PF1.5935 DD 36.31% 月利  7.30% RF 12.05 n=1573 ←DD30%超
+OANDA  x5  FULL 純利益   +3116265 PF1.4825 DD 27.26% 月利  5.42% RF 22.87 n=2926
+OANDA  x8  IS   純利益   +3502708 PF1.5927 DD 58.06% 月利 11.68% RF 12.07 n=1573 ←DD30%超
+OANDA  x8  FULL 純利益   +4981598 PF1.4816 DD 35.49% 月利  8.66% RF 28.08 n=2926 ←DD30%超
+OANDA  x10 IS   純利益    -377553 PF0.6392 DD 78.03% 月利 -1.26% RF -0.97 n=214 ←DD30%超
+OANDA  x10 FULL 純利益   +6241329 PF1.4824 DD 39.40% 月利 10.85% RF 31.68 n=2926 ←DD30%超
+
+→ C:\Users\f\source\repos\mt5_backtester\ml\deploy50\confirm_high.csv

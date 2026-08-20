@@ -1,0 +1,22 @@
+﻿OANDA_FX  -       x1 net=    +364229円 pf=1.5029 DD=     39675円 n=1573
+OANDA_FX  -       x2 FAIL
+OANDA_FX  -       x3 net=   +1125881円 pf=1.5103 DD=    118945円 n=1573
+OANDA_FX  -       x4 net=   +1513062円 pf=1.5136 DD=    158605円 n=1573
+OANDA_FX  -       x5 net=   +1897352円 pf=1.5145 DD=    198635円 n=1573
+XM_CFD    OFF     x1 net=    +481991円 pf=2.1574 DD=     31210円 n=372
+XM_CFD    OFF     x2 net=    +964054円 pf=2.1574 DD=     61000円 n=372
+XM_CFD    OFF     x3 net=   +1446053円 pf=2.1574 DD=     89460円 n=372
+XM_CFD    OFF     x4 net=   +1928081円 pf=2.1574 DD=    116675円 n=372
+XM_CFD    OFF     x5 net=   +2410057円 pf=2.1574 DD=    142725円 n=372
+XM_CFD    HOLD64  x1 net=    +494058円 pf=2.2108 DD=     31210円 n=372
+XM_CFD    HOLD64  x2 net=    +988191円 pf=2.2108 DD=     61000円 n=372
+XM_CFD    HOLD64  x3 net=   +1482258円 pf=2.2108 DD=     89460円 n=372
+XM_CFD    HOLD64  x4 net=   +1976355円 pf=2.2108 DD=    116675円 n=372
+XM_CFD    HOLD64  x5 net=   +2470400円 pf=2.2108 DD=    142725円 n=372
+XM_CFD    BOTH    x1 net=    +483941円 pf=2.1706 DD=     31185円 n=370
+XM_CFD    BOTH    x2 net=    +967956円 pf=2.1706 DD=     60895円 n=370
+XM_CFD    BOTH    x3 net=   +1451906円 pf=2.1706 DD=     89230円 n=370
+XM_CFD    BOTH    x4 net=   +1935887円 pf=2.1706 DD=    116290円 n=370
+XM_CFD    BOTH    x5 net=   +2419811円 pf=2.1706 DD=    142150円 n=370
+
+→ C:\Users\f\source\repos\mt5_backtester\ml\deploy50\books.csv
