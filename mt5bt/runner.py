@@ -141,7 +141,9 @@ class MT5Runner:
     def _write_set_file(self, path: Path) -> None:
         """EAパラメータのSETファイルを書き込む（Profiles/Tester形式）。
 
-        MT5標準形式: ParamName=value||default||min||max||N
+        MT5標準形式: ParamName=value||start||step||stop||flag(Y/N)
+        （3番目のフィールドはステップ。ここを0や負値にするとテスターが
+        「optimization settings error」で起動しない）
         文字列型:    ParamName=value
         """
         cfg = self.config
@@ -164,11 +166,13 @@ class MT5Runner:
             else:
                 lines.append(f"{name}={value}||{value}||{value}||{value}||N")
 
-        # 最適化パラメータ
+        # 最適化パラメータ（value||start||step||stop||Y — stepの位置に必ずopt.stepを書く。
+        # 旧実装はここにopt.startを書いており、step=0や負値となって
+        # 「tester optimization settings error」で最適化が一切起動しなかった）
         for name, opt in cfg.optimize_parameters.items():
             start_val = cfg.parameters.get(name, opt.start)
             lines.append(
-                f"{name}={start_val}||{start_val}||{opt.start}||{opt.stop}||Y"
+                f"{name}={start_val}||{opt.start}||{opt.step}||{opt.stop}||Y"
             )
 
         path.write_text("\n".join(lines), encoding="utf-16")
