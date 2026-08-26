@@ -1,0 +1,113 @@
+{
+  "status": "PASS",
+  "ea_sha256": "BB9C8FFAD21BBCA2237D488AA9AE94D10D04B44DC75618308B2B0E8D2CE46BC3",
+  "schema": [
+    "time",
+    "profit",
+    "magic",
+    "entry",
+    "position_id",
+    "type",
+    "volume",
+    "price",
+    "sl",
+    "usdjpy",
+    "profit_jpy"
+  ],
+  "windows": {
+    "IS": {
+      "status": "PASS",
+      "checks": {
+        "production_schema": true,
+        "simverify_schema": true,
+        "summary_match": true,
+        "row_count_match": true,
+        "time_profit_sequence_match": true,
+        "projected_sha256_match": true,
+        "magic_gate": true,
+        "profit_jpy_is_account_jpy": true
+      },
+      "summary": {
+        "net": "277114.0",
+        "pf": "1.3945",
+        "dd_pct": "35.6479",
+        "trades": "1573"
+      },
+      "saved_reference": {
+        "net": "277106.0",
+        "pf": "1.3945",
+        "dd_pct": "35.6479",
+        "trades": "1573"
+      },
+      "saved_reference_delta": {
+        "net": "8.0",
+        "pf": "0.0000",
+        "dd_pct": "0.0000",
+        "trades": "0"
+      },
+      "deal_rows": 3146,
+      "production_deal_sha256": "12E6975D5BC52CE85BADD7CB1904A6FAF78CDD9B431B01BD7D27B3269EB118EA",
+      "simverify_deal_sha256": "521613F8935E2D7BEADA2DD6D02D9FD209E068734EAC5F29910C1C041445C329",
+      "projected_time_profit_sha256": "81517DC67DAF18475C8F351821FEED485D3EF0D53C65EEE7607C3ACD29DAD248",
+      "magic_rows": {
+        "En_PB_USDJPY": 110,
+        "En_PB_GBPJPY": 22,
+        "En_RSI_USDJPY": 212,
+        "En_RSI_EURUSD": 546,
+        "En_RSI_GBPUSD": 116,
+        "En_PAIR": 122,
+        "En_CARRY": 13,
+        "En_SCA_USDJPY": 632,
+        "En_SCA_GBPJPY": 1370
+      },
+      "tester_forced_close_magic_zero_rows": 3
+    },
+    "FULL": {
+      "status": "PASS",
+      "checks": {
+        "production_schema": true,
+        "simverify_schema": true,
+        "summary_match": true,
+        "row_count_match": true,
+        "time_profit_sequence_match": true,
+        "projected_sha256_match": true,
+        "magic_gate": true,
+        "profit_jpy_is_account_jpy": true
+      },
+      "summary": {
+        "net": "390753.0",
+        "pf": "1.3163",
+        "dd_pct": "30.749",
+        "trades": "2926"
+      },
+      "saved_reference": {
+        "net": "390740.0",
+        "pf": "1.3163",
+        "dd_pct": "30.7523",
+        "trades": "2926"
+      },
+      "saved_reference_delta": {
+        "net": "13.0",
+        "pf": "0.0000",
+        "dd_pct": "-0.0033",
+        "trades": "0"
+      },
+      "deal_rows": 5852,
+      "production_deal_sha256": "B34D4BE61BB703DC4C57AF2B2BFA1FCC93C81CCB81B7DCD11664D5732E259D29",
+      "simverify_deal_sha256": "885BCD37AB82631D3A28B33393EADF57312C12CE32E6C7F2EE9981CC7F0AB2D9",
+      "projected_time_profit_sha256": "CCA641EF5F7EFB714B2687AFE14713235B6C004A2CA7664B0514D74E7690E38C",
+      "magic_rows": {
+        "En_PB_USDJPY": 148,
+        "En_PB_GBPJPY": 40,
+        "En_RSI_USDJPY": 372,
+        "En_RSI_EURUSD": 1076,
+        "En_RSI_GBPUSD": 242,
+        "En_PAIR": 178,
+        "En_CARRY": 25,
+        "En_SCA_USDJPY": 1166,
+        "En_SCA_GBPJPY": 2602
+      },
+      "tester_forced_close_magic_zero_rows": 3
+    }
+  }
+}

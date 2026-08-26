@@ -1,0 +1,578 @@
+{
+  "method": "initial balance + profit in exact deal CSV order; diagnostic only",
+  "initial_balance_jpy": 77954.0,
+  "magic_zero_rule": "map forced tester exits to the non-zero magic of the same position_id",
+  "overlap_rule": "strict positive holding-time intersection between different sleeves",
+  "windows": {
+    "IS": {
+      "source": "deals\\oafx_regression_simverify_is_deals.csv",
+      "deal_rows": 3146,
+      "positions": 1573,
+      "net": 277114.0,
+      "closed_deal_max_dd": {
+        "amount": 30101.0,
+        "pct_of_peak": 9.62,
+        "peak_balance": 312892.0,
+        "trough_balance": 282791.0,
+        "peak_time": "2024-11-15 20:28:36",
+        "trough_time": "2025-03-03 13:52:27",
+        "recovery_time": "2025-05-08 20:24:38"
+      },
+      "max_dd_interval_breakdown": [
+        {
+          "magic": 20261001,
+          "sleeve": "En_SCA_GBPJPY",
+          "deal_rows": 66,
+          "net": -26854.0,
+          "gross_profit": 12478.0,
+          "gross_loss": -39332.0,
+          "net_dd_share_pct": 89.21
+        },
+        {
+          "magic": 20260650,
+          "sleeve": "En_CARRY",
+          "deal_rows": 1,
+          "net": -4297.0,
+          "gross_profit": 0.0,
+          "gross_loss": -4297.0,
+          "net_dd_share_pct": 14.28
+        },
+        {
+          "magic": 20261000,
+          "sleeve": "En_SCA_USDJPY",
+          "deal_rows": 42,
+          "net": -2273.0,
+          "gross_profit": 5533.0,
+          "gross_loss": -7806.0,
+          "net_dd_share_pct": 7.55
+        },
+        {
+          "magic": 20260629,
+          "sleeve": "En_PAIR",
+          "deal_rows": 4,
+          "net": -1808.0,
+          "gross_profit": 245.0,
+          "gross_loss": -2053.0,
+          "net_dd_share_pct": 6.01
+        },
+        {
+          "magic": 20260622,
+          "sleeve": "En_PB_USDJPY",
+          "deal_rows": 6,
+          "net": -1214.0,
+          "gross_profit": 1579.0,
+          "gross_loss": -2793.0,
+          "net_dd_share_pct": 4.03
+        },
+        {
+          "magic": 20260627,
+          "sleeve": "En_PB_GBPJPY",
+          "deal_rows": 0,
+          "net": 0.0,
+          "gross_profit": 0.0,
+          "gross_loss": 0.0,
+          "net_dd_share_pct": 0.0
+        },
+        {
+          "magic": 20260774,
+          "sleeve": "En_RSI_GBPUSD",
+          "deal_rows": 0,
+          "net": 0.0,
+          "gross_profit": 0.0,
+          "gross_loss": 0.0,
+          "net_dd_share_pct": 0.0
+        },
+        {
+          "magic": 20260610,
+          "sleeve": "En_RSI_USDJPY",
+          "deal_rows": 8,
+          "net": 2772.0,
+          "gross_profit": 3304.0,
+          "gross_loss": -532.0,
+          "net_dd_share_pct": -9.21
+        },
+        {
+          "magic": 20260605,
+          "sleeve": "En_RSI_EURUSD",
+          "deal_rows": 30,
+          "net": 3573.0,
+          "gross_profit": 6970.0,
+          "gross_loss": -3397.0,
+          "net_dd_share_pct": -11.87
+        }
+      ],
+      "overlap_attribution": {
+        "closed_positions": 79,
+        "loss_positions": 43,
+        "gross_loss": -60210.0,
+        "cross_sleeve_overlap_loss_positions": 33,
+        "cross_sleeve_overlap_gross_loss": -49576.0,
+        "isolated_loss_positions": 10,
+        "isolated_gross_loss": -10634.0,
+        "co_loss_overlap_positions": 25,
+        "co_loss_overlap_gross_loss": -31823.0,
+        "not_co_loss_overlap_positions": 18,
+        "not_co_loss_overlap_gross_loss": -28387.0,
+        "max_concurrent_positions": 6,
+        "max_concurrent_time": "2025-01-15 10:00:00"
+      },
+      "worst_months": [
+        {
+          "month": "2025-08",
+          "net": -12720.0
+        },
+        {
+          "month": "2021-11",
+          "net": -10434.0
+        },
+        {
+          "month": "2026-01",
+          "net": -9915.0
+        },
+        {
+          "month": "2023-09",
+          "net": -9584.0
+        },
+        {
+          "month": "2026-05",
+          "net": -6791.0
+        },
+        {
+          "month": "2021-07",
+          "net": -6446.0
+        },
+        {
+          "month": "2025-10",
+          "net": -6209.0
+        },
+        {
+          "month": "2024-12",
+          "net": -6043.0
+        },
+        {
+          "month": "2025-02",
+          "net": -4923.0
+        },
+        {
+          "month": "2021-06",
+          "net": -4727.0
+        }
+      ],
+      "sca_shape": {
+        "En_SCA_GBPJPY": {
+          "direction": [
+            {
+              "value": "BUY",
+              "positions": 392,
+              "net": 89185.0,
+              "gross_loss": -155995.0
+            },
+            {
+              "value": "SELL",
+              "positions": 293,
+              "net": -4264.0,
+              "gross_loss": -232852.0
+            }
+          ],
+          "volume": [
+            {
+              "value": "0.01",
+              "positions": 530,
+              "net": 24339.0,
+              "gross_loss": -148835.0
+            },
+            {
+              "value": "0.06",
+              "positions": 155,
+              "net": 60582.0,
+              "gross_loss": -240012.0
+            }
+          ],
+          "hold": [
+            {
+              "value": "6h_to_24h",
+              "positions": 571,
+              "net": 182853.0,
+              "gross_loss": -234330.0
+            },
+            {
+              "value": "lt_6h",
+              "positions": 114,
+              "net": -97932.0,
+              "gross_loss": -154517.0
+            }
+          ],
+          "entry_hour": [
+            {
+              "value": "10",
+              "positions": 252,
+              "net": 13927.0,
+              "gross_loss": -164333.0
+            },
+            {
+              "value": "11",
+              "positions": 144,
+              "net": 35851.0,
+              "gross_loss": -93208.0
+            },
+            {
+              "value": "9",
+              "positions": 289,
+              "net": 35143.0,
+              "gross_loss": -131306.0
+            }
+          ]
+        },
+        "En_SCA_USDJPY": {
+          "direction": [
+            {
+              "value": "BUY",
+              "positions": 175,
+              "net": 19092.0,
+              "gross_loss": -37889.0
+            },
+            {
+              "value": "SELL",
+              "positions": 141,
+              "net": 2953.0,
+              "gross_loss": -44233.0
+            }
+          ],
+          "volume": [
+            {
+              "value": "0.01",
+              "positions": 250,
+              "net": 7201.0,
+              "gross_loss": -59148.0
+            },
+            {
+              "value": "0.02",
+              "positions": 66,
+              "net": 14844.0,
+              "gross_loss": -22974.0
+            }
+          ],
+          "hold": [
+            {
+              "value": "6h_to_24h",
+              "positions": 283,
+              "net": 40062.0,
+              "gross_loss": -58836.0
+            },
+            {
+              "value": "lt_6h",
+              "positions": 33,
+              "net": -18017.0,
+              "gross_loss": -23286.0
+            }
+          ],
+          "entry_hour": [
+            {
+              "value": "10",
+              "positions": 147,
+              "net": 15586.0,
+              "gross_loss": -35905.0
+            },
+            {
+              "value": "11",
+              "positions": 98,
+              "net": 1472.0,
+              "gross_loss": -28252.0
+            },
+            {
+              "value": "9",
+              "positions": 71,
+              "net": 4987.0,
+              "gross_loss": -17965.0
+            }
+          ]
+        }
+      }
+    },
+    "FULL": {
+      "source": "deals\\oafx_regression_simverify_full_deals.csv",
+      "deal_rows": 5852,
+      "positions": 2926,
+      "net": 390753.0,
+      "closed_deal_max_dd": {
+        "amount": 36860.0,
+        "pct_of_peak": 30.75,
+        "peak_balance": 119874.0,
+        "trough_balance": 83014.0,
+        "peak_time": "2017-07-10 10:09:15",
+        "trough_time": "2018-09-06 03:14:17",
+        "recovery_time": "2020-01-06 22:00:00"
+      },
+      "max_dd_interval_breakdown": [
+        {
+          "magic": 20261001,
+          "sleeve": "En_SCA_GBPJPY",
+          "deal_rows": 317,
+          "net": -30033.0,
+          "gross_profit": 59463.0,
+          "gross_loss": -89496.0,
+          "net_dd_share_pct": 81.48
+        },
+        {
+          "magic": 20260622,
+          "sleeve": "En_PB_USDJPY",
+          "deal_rows": 14,
+          "net": -5659.0,
+          "gross_profit": 2686.0,
+          "gross_loss": -8345.0,
+          "net_dd_share_pct": 15.35
+        },
+        {
+          "magic": 20261000,
+          "sleeve": "En_SCA_USDJPY",
+          "deal_rows": 136,
+          "net": -3951.0,
+          "gross_profit": 8595.0,
+          "gross_loss": -12546.0,
+          "net_dd_share_pct": 10.72
+        },
+        {
+          "magic": 20260605,
+          "sleeve": "En_RSI_EURUSD",
+          "deal_rows": 130,
+          "net": -3091.0,
+          "gross_profit": 11547.0,
+          "gross_loss": -14638.0,
+          "net_dd_share_pct": 8.39
+        },
+        {
+          "magic": 20260629,
+          "sleeve": "En_PAIR",
+          "deal_rows": 16,
+          "net": -1212.0,
+          "gross_profit": 1574.0,
+          "gross_loss": -2786.0,
+          "net_dd_share_pct": 3.29
+        },
+        {
+          "magic": 20260627,
+          "sleeve": "En_PB_GBPJPY",
+          "deal_rows": 2,
+          "net": -871.0,
+          "gross_profit": 0.0,
+          "gross_loss": -871.0,
+          "net_dd_share_pct": 2.36
+        },
+        {
+          "magic": 20260610,
+          "sleeve": "En_RSI_USDJPY",
+          "deal_rows": 34,
+          "net": 1253.0,
+          "gross_profit": 6430.0,
+          "gross_loss": -5177.0,
+          "net_dd_share_pct": -3.4
+        },
+        {
+          "magic": 20260650,
+          "sleeve": "En_CARRY",
+          "deal_rows": 3,
+          "net": 2741.0,
+          "gross_profit": 4866.0,
+          "gross_loss": -2125.0,
+          "net_dd_share_pct": -7.44
+        },
+        {
+          "magic": 20260774,
+          "sleeve": "En_RSI_GBPUSD",
+          "deal_rows": 23,
+          "net": 3963.0,
+          "gross_profit": 7282.0,
+          "gross_loss": -3319.0,
+          "net_dd_share_pct": -10.75
+        }
+      ],
+      "overlap_attribution": {
+        "closed_positions": 339,
+        "loss_positions": 209,
+        "gross_loss": -139303.0,
+        "cross_sleeve_overlap_loss_positions": 179,
+        "cross_sleeve_overlap_gross_loss": -116125.0,
+        "isolated_loss_positions": 30,
+        "isolated_gross_loss": -23178.0,
+        "co_loss_overlap_positions": 120,
+        "co_loss_overlap_gross_loss": -74278.0,
+        "not_co_loss_overlap_positions": 89,
+        "not_co_loss_overlap_gross_loss": -65025.0,
+        "max_concurrent_positions": 8,
+        "max_concurrent_time": "2017-08-24 20:00:00"
+      },
+      "worst_months": [
+        {
+          "month": "2018-12",
+          "net": -14809.0
+        },
+        {
+          "month": "2025-08",
+          "net": -12720.0
+        },
+        {
+          "month": "2017-05",
+          "net": -11499.0
+        },
+        {
+          "month": "2017-09",
+          "net": -10705.0
+        },
+        {
+          "month": "2018-06",
+          "net": -10455.0
+        },
+        {
+          "month": "2021-11",
+          "net": -10434.0
+        },
+        {
+          "month": "2026-01",
+          "net": -9915.0
+        },
+        {
+          "month": "2020-01",
+          "net": -9593.0
+        },
+        {
+          "month": "2023-09",
+          "net": -9584.0
+        },
+        {
+          "month": "2017-03",
+          "net": -8354.0
+        }
+      ],
+      "sca_shape": {
+        "En_SCA_GBPJPY": {
+          "direction": [
+            {
+              "value": "BUY",
+              "positions": 734,
+              "net": 103131.0,
+              "gross_loss": -326520.0
+            },
+            {
+              "value": "SELL",
+              "positions": 567,
+              "net": 16606.0,
+              "gross_loss": -409990.0
+            }
+          ],
+          "volume": [
+            {
+              "value": "0.01",
+              "positions": 986,
+              "net": 1051.0,
+              "gross_loss": -279160.0
+            },
+            {
+              "value": "0.06",
+              "positions": 315,
+              "net": 118686.0,
+              "gross_loss": -457350.0
+            }
+          ],
+          "hold": [
+            {
+              "value": "6h_to_24h",
+              "positions": 1014,
+              "net": 327567.0,
+              "gross_loss": -384129.0
+            },
+            {
+              "value": "lt_6h",
+              "positions": 287,
+              "net": -207830.0,
+              "gross_loss": -352381.0
+            }
+          ],
+          "entry_hour": [
+            {
+              "value": "10",
+              "positions": 478,
+              "net": 39577.0,
+              "gross_loss": -301651.0
+            },
+            {
+              "value": "11",
+              "positions": 275,
+              "net": 63861.0,
+              "gross_loss": -195579.0
+            },
+            {
+              "value": "9",
+              "positions": 548,
+              "net": 16299.0,
+              "gross_loss": -239280.0
+            }
+          ]
+        },
+        "En_SCA_USDJPY": {
+          "direction": [
+            {
+              "value": "BUY",
+              "positions": 331,
+              "net": 18528.0,
+              "gross_loss": -62347.0
+            },
+            {
+              "value": "SELL",
+              "positions": 252,
+              "net": -705.0,
+              "gross_loss": -63013.0
+            }
+          ],
+          "volume": [
+            {
+              "value": "0.01",
+              "positions": 471,
+              "net": 5115.0,
+              "gross_loss": -90042.0
+            },
+            {
+              "value": "0.02",
+              "positions": 112,
+              "net": 12708.0,
+              "gross_loss": -35318.0
+            }
+          ],
+          "hold": [
+            {
+              "value": "6h_to_24h",
+              "positions": 527,
+              "net": 44266.0,
+              "gross_loss": -92612.0
+            },
+            {
+              "value": "lt_6h",
+              "positions": 56,
+              "net": -26443.0,
+              "gross_loss": -32748.0
+            }
+          ],
+          "entry_hour": [
+            {
+              "value": "10",
+              "positions": 272,
+              "net": 5408.0,
+              "gross_loss": -60649.0
+            },
+            {
+              "value": "11",
+              "positions": 188,
+              "net": 6268.0,
+              "gross_loss": -41012.0
+            },
+            {
+              "value": "9",
+              "positions": 123,
+              "net": 6147.0,
+              "gross_loss": -23699.0
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+﻿
+######## BT1 ########
+登録前: EURUSD, GBPJPY.cl, GBPUSD, GER30, US100, US500, USDCHF, USDJPY, XAUUSD
+  USDJPY   既に存在: USDJPY
+  GBPJPY   既に存在: GBPJPY.cl
+  EURUSD   既に存在: EURUSD
+  GBPUSD   既に存在: GBPUSD
+  AUDJPY   ⚠️登録できず（この口座には無い可能性）
+  XAUUSD   既に存在: XAUUSD
+登録後: EURUSD, GBPJPY.cl, GBPUSD, GER30, US100, US500, USDCHF, USDJPY, XAUUSD
+
+######## BT2 ########
+登録前: EURUSD, GBPUSD, USDCHF, USDJPY
+  USDJPY   既に存在: USDJPY
+  GBPJPY   登録成功: GBPJPY
+  EURUSD   既に存在: EURUSD
+  GBPUSD   既に存在: GBPUSD
+  AUDJPY   登録成功: AUDJPY
+  XAUUSD   ⚠️登録できず（この口座には無い可能性）
+登録後: AUDJPY, EURUSD, GBPJPY, GBPUSD, USDCHF, USDJPY
+
+######## 解決した銘柄名 ########
+BT1  {'USDJPY': 'USDJPY', 'GBPJPY': 'GBPJPY.cl', 'EURUSD': 'EURUSD', 'GBPUSD': 'GBPUSD', 'XAUUSD': 'XAUUSD'}
+     ⚠️不足: AUDJPY
+BT2  {'USDJPY': 'USDJPY', 'GBPJPY': 'GBPJPY', 'EURUSD': 'EURUSD', 'GBPUSD': 'GBPUSD', 'AUDJPY': 'AUDJPY'}
+     ⚠️不足: XAUUSD
