@@ -1,0 +1,23 @@
+→ 設定ファイルを読み込み中: C:\Users\f\source\repos\mt5_backtester\ml\oafx_dd2\regression_full.yaml
+→ EA: MIX_EA_OANDA_SIMVERIFY | シンボル: USDJPY | 期間: M15
+→ テスト期間: 2016.11.09 ～ 2026.06.20
+→ バックテストを開始します
+  MT5ターミナルを起動中: C:\Program Files\OANDA MetaTrader 5_BT2\terminal64.exe
+  設定ファイル: C:\Users\f\AppData\Local\Temp\tmpezjx8zep\backtest.ini
+  SETファイル: C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\06EBB62A36630B6356B2240C609DE508\MQL5\Profiles\Tester\MIX_EA_OANDA_SIMVERIFY.set
+  バックテスト実行中
+
+  結果CSV生成完了: C:\Users\f\AppData\Roaming\MetaQuotes\Tester\06EBB62A36630B6356B2240C609DE508\Agent-127.0.0.1-3001\MQL5\Files\oafx2_regression_full_result.csv
+✓ バックテスト完了
+→ 結果を解析中: oafx2_regression_full_result.csv
+
+━━━━━━ バックテスト結果サマリー ━━━━━━
+純利益          397,975.00
+プロフィットファクター  1.32
+最大DD%        30.03%
+勝率           42.1%
+総取引数         2926
+シャープレシオ      0.00
+リカバリーファクター   0.00
+
+✓ CSVサマリー: results\oafx2_regression_full\summary.csv
