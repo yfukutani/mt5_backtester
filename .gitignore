@@ -34,6 +34,8 @@ ml/*/logs2/
 ml/*/logs3/
 ml/*/deals/
 ml/*/run_deals/
+ml/*/runs/
+ml/*/*.lock
 ml/*/cfg/
 ml/*/cfg6/
 ml/*/cfg6_prodcmp/

@@ -163,6 +163,37 @@ input double Oafx2BoostFloorMult       = 1.0;
 input int    Oafx2OverlapMask          = 1;     // bit 1=SCA UJ, 2=RSI EU, 4=Carry, 8=PB UJ
 input double Oafx2OverlapRiskR         = 0.15;
 
+input group "=== 利益保護ラボ（PPROT・SIMVERIFY専用・既定OFF） ==="
+// PprotMode=0 では以下を一切参照せず、本番と完全に同一の挙動を保つ。
+// 1..N は ml/pprot1/run_pprot.py の FAMILY_ACTIVATION と一対一。番号自体は
+// 挙動に影響しないが、「全パラメータが既定値の案」を既定OFFと区別するために必要。
+input int    PprotMode            = 0;
+// bit0=PB GOLD 1=SCA GOLD 2=PB UJ 3=PB GJ 4=RSI UJ 5=RSI EU 6=RSI GU 7=SCA UJ 8=SCA GJ 9=VBO
+input int    PprotSleeveMask      = 0;
+// --- 武装条件（どの局面で守りに入るか）---
+input double PprotArmPeakATR      = 0.0;  // ピーク含み益が ATR×これ に到達したら武装（0=条件なし）
+input double PprotArmPeakR        = 0.0;  // 同・初期リスクR基準（0=条件なし）
+input int    PprotArmAfterBars    = 0;    // 保有Nバー以降のみ武装（0=制限なし）
+input int    PprotArmBeforeBars   = 0;    // 保有Nバー以内のみ武装（0=制限なし）
+input double PprotArmMinATRRatio  = 0.0;  // 現ATR÷長期ATR がこれ以上のときのみ武装（0=制限なし）
+input double PprotArmMaxATRRatio  = 0.0;  // 同・上限（0=制限なし）
+input int    PprotArmHourStart    = -1;   // 武装を許す時間帯（サーバー時刻・-1=制限なし）
+input int    PprotArmHourEnd      = -1;
+// --- 守り方 ---
+input double PprotBELockATR       = -9.0; // SLを 建値+ATR×これ へ（-9=未使用・0=建値ちょうど）
+input double PprotBELockR         = -9.0; // 同・初期リスクR基準（-9=未使用）
+input double PprotTrailATR        = 0.0;  // 現値から ATR×これ の距離へSLを追従（0=未使用）
+input double PprotTrailPeakATR    = 0.0;  // ピーク値から ATR×これ の距離へSLを追従（0=未使用）
+input double PprotGivebackFrac    = 0.0;  // ピーク含み益のこの割合を戻したら成行決済（0=未使用）
+input double PprotGivebackATR     = 0.0;  // ピークから ATR×これ 戻したら成行決済（0=未使用）
+input double PprotPartialLots     = 0.0;  // 部分利確するロット（0=未使用）
+input int    PprotTightenBars     = 0;    // 保有Nバー経過でSLを詰める（0=未使用）
+input double PprotTightenSLATR    = 0.0;  // 詰めた後のSL距離（ATR倍）
+input double PprotTPExtendATR     = 0.0;  // TPを ATR×これ だけ遠くへ（0=不変）
+input int    PprotFridayHour      = -1;   // 金曜この時刻以降、含み益が閾値以上なら決済（-1=未使用）
+input double PprotFridayMinATR    = 0.0;
+input int    PprotATRLongPeriod   = 100;  // ATR比の分母に使う本数
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -732,6 +763,7 @@ void OnTick()
    GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価
    ProfitTrail();   // v1.2（既定OFF）。毎ティック評価してピークを取り逃さない
    if(Oafx2LabMode!=0) Oafx2ManagePositions();
+   if(PprotMode!=0) PprotManagePositions();  // 利益保護ラボ（既定OFF）
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
    {
@@ -1414,6 +1446,214 @@ void Oafx2ManagePositions()
          if(close_volume>0.0 && (step<=0.0 || close_volume>=step) &&
             trade.PositionClosePartial(ticket,close_volume))
             g_oafx2PartialDone[slot]=true;
+      }
+   }
+}
+
+//============================ 利益保護ラボ（PPROT） ============================
+// 既存 Oafx2 機構との違い:
+//  - 単一magic固定ではなく枠マスクで複数枠に適用できる
+//  - しきい値を R だけでなく ATR でも指定できる（GOLDはR幅が巨大でR基準が発動しない）
+//  - 「いつ守りに入るか」（保有バー・ボラ局面・時間帯・ピーク到達度）を独立に指定できる
+//  - 建値移動とトレールを二段で併用できる
+long   g_pprotPositionId[64];
+double g_pprotInitialRisk[64];
+double g_pprotPeakFav[64];      // ピーク含み益（価格単位。ATR/R 双方に正規化できるよう生値で持つ）
+double g_pprotEntryATR[64];
+bool   g_pprotBEDone[64];
+bool   g_pprotPartialDone[64];
+bool   g_pprotTightenDone[64];
+bool   g_pprotTPDone[64];
+
+int PprotSleeveBit(const long magic)
+{
+   if(magic==20260640) return 0;   // PB GOLD
+   if(magic==20261002) return 1;   // SCA GOLD
+   if(magic==20260622) return 2;   // PB USDJPY
+   if(magic==20260627) return 3;   // PB GBPJPY
+   if(magic==20260610) return 4;   // RSI USDJPY
+   if(magic==20260605) return 5;   // RSI EURUSD
+   if(magic==20260774) return 6;   // RSI GBPUSD
+   if(magic==20261000) return 7;   // SCA USDJPY
+   if(magic==20261001) return 8;   // SCA GBPJPY
+   if(magic==20260680) return 9;   // VBO USDJPY
+   return -1;
+}
+
+int PprotStateSlot(const long position_id)
+{
+   int free_slot=-1;
+   for(int n=0;n<ArraySize(g_pprotPositionId);n++)
+   {
+      if(g_pprotPositionId[n]==position_id) return n;
+      if(free_slot<0 && g_pprotPositionId[n]==0) free_slot=n;
+   }
+   if(free_slot<0)
+   {
+      for(int n=0;n<ArraySize(g_pprotPositionId);n++)
+      {
+         bool active=false;
+         for(int k=PositionsTotal()-1;k>=0;k--)
+         {
+            ulong ticket=PositionGetTicket(k);
+            if(ticket!=0 && PositionGetInteger(POSITION_IDENTIFIER)==g_pprotPositionId[n])
+            { active=true; break; }
+         }
+         if(!active){ free_slot=n; break; }
+      }
+   }
+   if(free_slot<0) return -1;
+   g_pprotPositionId[free_slot]=position_id;
+   g_pprotInitialRisk[free_slot]=0.0;
+   g_pprotPeakFav[free_slot]=0.0;
+   g_pprotEntryATR[free_slot]=0.0;
+   g_pprotBEDone[free_slot]=false;
+   g_pprotPartialDone[free_slot]=false;
+   g_pprotTightenDone[free_slot]=false;
+   g_pprotTPDone[free_slot]=false;
+   return free_slot;
+}
+
+// 直近ATRと、長期平均に対する比を返す。ハンドルは枠のものを流用する。
+void PprotATR(const int sleeve,double &atr_now,double &atr_ratio)
+{
+   atr_now=0.0; atr_ratio=1.0;
+   double a[]; ArraySetAsSeries(a,true);
+   int need=MathMax(2,PprotATRLongPeriod);
+   int got=CopyBuffer(S[sleeve].hATR,0,1,need,a);
+   if(got<1) return;
+   atr_now=a[0];
+   if(atr_now<=0.0) return;
+   double sum=0.0; int n=0;
+   for(int i=0;i<got;i++){ if(a[i]>0.0){ sum+=a[i]; n++; } }
+   if(n>0 && sum>0.0) atr_ratio=atr_now/(sum/n);
+}
+
+void PprotManagePositions()
+{
+   if(PprotMode<=0 || PprotSleeveMask==0) return;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong ticket=PositionGetTicket(k);
+      if(ticket==0) continue;
+      long magic=PositionGetInteger(POSITION_MAGIC);
+      int bit=PprotSleeveBit(magic);
+      if(bit<0 || ((PprotSleeveMask>>bit)&1)==0) continue;
+      int sleeve=SleeveByMagic(magic);
+      if(sleeve<0) continue;
+
+      string sym=PositionGetString(POSITION_SYMBOL);
+      bool   is_buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double open_price=PositionGetDouble(POSITION_PRICE_OPEN);
+      double current_sl=PositionGetDouble(POSITION_SL);
+      double tp=PositionGetDouble(POSITION_TP);
+      double px=is_buy ? SymbolInfoDouble(sym,SYMBOL_BID) : SymbolInfoDouble(sym,SYMBOL_ASK);
+      long   position_id=PositionGetInteger(POSITION_IDENTIFIER);
+      int slot=PprotStateSlot(position_id);
+      if(slot<0) continue;
+
+      double atr_now=0.0, atr_ratio=1.0;
+      PprotATR(sleeve,atr_now,atr_ratio);
+      if(g_pprotInitialRisk[slot]<=0.0)
+      {
+         double r0=MathAbs(open_price-current_sl);
+         if(r0>0.0) g_pprotInitialRisk[slot]=r0;
+         if(atr_now>0.0) g_pprotEntryATR[slot]=atr_now;
+      }
+      double initial_risk=g_pprotInitialRisk[slot];
+      double favorable=is_buy ? px-open_price : open_price-px;
+      if(favorable>g_pprotPeakFav[slot]) g_pprotPeakFav[slot]=favorable;
+      double peak=g_pprotPeakFav[slot];
+
+      int bar_seconds=PeriodSeconds(S[sleeve].tf);
+      if(bar_seconds<=0) bar_seconds=900;
+      int age_bars=(int)((TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME))/bar_seconds);
+
+      MqlDateTime st; TimeToStruct(TimeCurrent(),st);
+
+      // --- 金曜の利益確定（武装条件とは独立に評価する） ---
+      if(PprotFridayHour>=0 && st.day_of_week==5 && st.hour>=PprotFridayHour &&
+         atr_now>0.0 && favorable>=PprotFridayMinATR*atr_now)
+      { trade.PositionClose(ticket); continue; }
+
+      // --- 保有経過によるSL圧縮（同上・ピーク到達を前提にしない） ---
+      if(PprotTightenBars>0 && !g_pprotTightenDone[slot] && age_bars>=PprotTightenBars &&
+         PprotTightenSLATR>0.0 && atr_now>0.0)
+      {
+         double cand=is_buy ? px-PprotTightenSLATR*atr_now : px+PprotTightenSLATR*atr_now;
+         if(Oafx2ModifyStop(ticket,is_buy,sym,cand,current_sl,tp))
+         { g_pprotTightenDone[slot]=true; current_sl=cand; }
+      }
+
+      // --- 武装条件 ---
+      bool armed=true;
+      if(PprotArmPeakATR>0.0 && (atr_now<=0.0 || peak<PprotArmPeakATR*atr_now)) armed=false;
+      if(PprotArmPeakR>0.0 && (initial_risk<=0.0 || peak<PprotArmPeakR*initial_risk)) armed=false;
+      if(PprotArmAfterBars>0 && age_bars<PprotArmAfterBars) armed=false;
+      if(PprotArmBeforeBars>0 && age_bars>PprotArmBeforeBars) armed=false;
+      if(PprotArmMinATRRatio>0.0 && atr_ratio<PprotArmMinATRRatio) armed=false;
+      if(PprotArmMaxATRRatio>0.0 && atr_ratio>PprotArmMaxATRRatio) armed=false;
+      if(PprotArmHourStart>=0 && PprotArmHourEnd>=0)
+      {
+         bool inwin = (PprotArmHourStart<=PprotArmHourEnd)
+                    ? (st.hour>=PprotArmHourStart && st.hour<=PprotArmHourEnd)
+                    : (st.hour>=PprotArmHourStart || st.hour<=PprotArmHourEnd);
+         if(!inwin) armed=false;
+      }
+      if(!armed) continue;
+
+      // --- 吐き出しキャップ（成行決済） ---
+      if(PprotGivebackFrac>0.0 && peak>0.0 && (peak-favorable)>=peak*PprotGivebackFrac)
+      { trade.PositionClose(ticket); continue; }
+      if(PprotGivebackATR>0.0 && atr_now>0.0 && (peak-favorable)>=PprotGivebackATR*atr_now)
+      { trade.PositionClose(ticket); continue; }
+
+      // --- 部分利確 ---
+      if(PprotPartialLots>0.0 && !g_pprotPartialDone[slot])
+      {
+         double volume=PositionGetDouble(POSITION_VOLUME);
+         double step=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
+         double min_keep=MathMax(0.01,SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN));
+         double cv=MathMin(PprotPartialLots,volume-min_keep);
+         if(step>0.0) cv=MathFloor((cv+1e-9)/step)*step;
+         if(cv>0.0 && (step<=0.0 || cv>=step) && trade.PositionClosePartial(ticket,cv))
+            g_pprotPartialDone[slot]=true;
+      }
+
+      // --- 利確位置の延長 ---
+      if(PprotTPExtendATR>0.0 && !g_pprotTPDone[slot] && atr_now>0.0 && tp>0.0)
+      {
+         int digits=(int)SymbolInfoInteger(sym,SYMBOL_DIGITS);
+         double newtp=is_buy ? tp+PprotTPExtendATR*atr_now : tp-PprotTPExtendATR*atr_now;
+         newtp=NormalizeDouble(newtp,digits);
+         if(trade.PositionModify(ticket,current_sl,newtp))
+         { g_pprotTPDone[slot]=true; tp=newtp; }
+      }
+
+      // --- 建値移動（ATR基準を優先。二段構成ではこの後トレールが続く） ---
+      double cand_sl=0.0; bool have=false;
+      if(!g_pprotBEDone[slot])
+      {
+         if(PprotBELockATR>-9.0 && atr_now>0.0)
+         { cand_sl=is_buy ? open_price+PprotBELockATR*atr_now : open_price-PprotBELockATR*atr_now; have=true; }
+         else if(PprotBELockR>-9.0 && initial_risk>0.0)
+         { cand_sl=is_buy ? open_price+PprotBELockR*initial_risk : open_price-PprotBELockR*initial_risk; have=true; }
+      }
+      if(have && Oafx2ModifyStop(ticket,is_buy,sym,cand_sl,current_sl,tp))
+      { g_pprotBEDone[slot]=true; current_sl=cand_sl; }
+
+      // --- トレール ---
+      if(PprotTrailATR>0.0 && atr_now>0.0)
+      {
+         double c=is_buy ? px-PprotTrailATR*atr_now : px+PprotTrailATR*atr_now;
+         Oafx2ModifyStop(ticket,is_buy,sym,c,current_sl,tp);
+      }
+      else if(PprotTrailPeakATR>0.0 && atr_now>0.0)
+      {
+         double peak_price=is_buy ? open_price+peak : open_price-peak;
+         double c=is_buy ? peak_price-PprotTrailPeakATR*atr_now
+                         : peak_price+PprotTrailPeakATR*atr_now;
+         Oafx2ModifyStop(ticket,is_buy,sym,c,current_sl,tp);
       }
    }
 }
