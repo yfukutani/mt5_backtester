@@ -1,0 +1,33 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: PullbackTrend
+symbol: CADJPY
+period: H4
+from_date: 2021.06.21
+to_date: 2026.06.20
+deposit: 100000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  TrendMA_Period: 200
+  FastEMA_Period: 20
+  SlowEMA_Period: 50
+  RequireBullishCandle: true
+  UsePullbackQuality: true
+  UseMomentumConfirm: true
+  UseADXFilter: true
+  ADX_Period: 14
+  ADX_Threshold: 22.5
+  UseTrendStrength: true
+  MA_Slope_Lookback: 20
+  MA_Slope_Min_ATR: 1.2
+  UseATRStops: true
+  ATR_Period: 14
+  ATR_SL_Mult: 2.0
+  RR_Ratio: 2.5
+  UseRiskSizing: false
+  MagicNumber: 99000001
+  LotSize: 0.01
+  ResultFileName: N285_IS_r.csv
+report_dir: results
+report_name: N285_IS

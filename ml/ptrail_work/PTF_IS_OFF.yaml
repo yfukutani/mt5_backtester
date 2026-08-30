@@ -1,0 +1,34 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: MIX_EA
+symbol: USDJPY
+period: M15
+from_date: 2021.06.21
+to_date: 2026.06.20
+deposit: 500000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  En_PB_USDJPY: true
+  En_PB_GBPJPY: true
+  En_PB_AUDJPY: false
+  En_PB_GOLD: false
+  En_RSI_USDJPY: true
+  En_RSI_EURUSD: true
+  En_RSI_GBPUSD: true
+  En_PAIR: false
+  En_CARRY: false
+  En_VBO: true
+  En_ETH: false
+  En_BTC_FUND: false
+  En_BFXREV: false
+  En_SCA_GOLD: false
+  En_SCA_USDJPY: true
+  En_SCA_GBPJPY: true
+  RefCap_PB_USDJPY: 100000
+  RefCap_PB_GBPJPY: 100000
+  EnableOpsLog: true
+  OpsLogPrefix: ptf_is_off
+  ResultFileName: PTF_IS_OFF_r.csv
+report_dir: results
+report_name: PTF_IS_OFF

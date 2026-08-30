@@ -1,0 +1,73 @@
+id,family,base,overrides,model,is_net,is_pf,is_dd,is_n,oos_net,oos_pf,oos_dd,oos_n,verdict
+A_drift_0,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0},every_tick,39027.0,1.1351,24.0065,684,23451.0,1.0936,17.3702,658,PASS
+A_drift_0.025,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.025},every_tick,33703.0,1.1185,24.713,684,16441.0,1.0675,18.3761,658,PASS
+A_drift_0.05,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.05},every_tick,27093.0,1.0958,27.0099,684,15747.0,1.0668,15.7883,658,PASS
+A_drift_0.075,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.075},every_tick,20829.0,1.0755,29.2806,684,16733.0,1.0739,16.6962,658,PASS
+A_drift_0.1,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.1},every_tick,21297.0,1.0804,25.3315,684,11969.0,1.0541,16.4223,658,PASS
+A_drift_0.15,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.15},every_tick,7239.0,1.0286,26.8707,684,12291.0,1.0593,13.8756,658,PASS
+A_drift_0.2,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.2},every_tick,17457.0,1.0768,15.454,684,7907.0,1.04,12.9329,658,PASS
+A_drift_0.25,A_SCA_GBPJPY_MinDrift,configs/sca_gbpjpy_m15.yaml,{'Boost_MinDrift_ATRd': 0.25},every_tick,23731.0,1.1095,13.1172,684,2349.0,1.0125,11.0099,658,PASS
+B_rsi_10_bb_16,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 10, 'BB_Period': 16}",open_prices,9561.0,1.2876,3.2989,77,12725.0,1.5477,3.1715,76,PASS
+B_rsi_10_bb_20,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 10, 'BB_Period': 20}",open_prices,12433.0,1.4058,3.223,74,15458.0,1.7136,3.0784,74,PASS
+B_rsi_10_bb_24,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 10, 'BB_Period': 24}",open_prices,12249.0,1.4,4.2915,74,14064.0,1.68,3.1583,70,PASS
+B_rsi_10_bb_30,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 10, 'BB_Period': 30}",open_prices,13389.0,1.508,3.5225,65,18224.0,1.9538,2.6917,69,PASS
+B_rsi_12_bb_16,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 12, 'BB_Period': 16}",open_prices,9570.0,1.2878,3.2986,77,12725.0,1.5477,3.1715,76,PASS
+B_rsi_12_bb_20,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 12, 'BB_Period': 20}",open_prices,12442.0,1.4061,3.223,74,15458.0,1.7136,3.0784,74,PASS
+B_rsi_12_bb_24,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 12, 'BB_Period': 24}",open_prices,12258.0,1.4003,4.2912,74,14064.0,1.68,3.1583,70,PASS
+B_rsi_12_bb_30,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 12, 'BB_Period': 30}",open_prices,13398.0,1.5083,3.5222,65,18224.0,1.9538,2.6917,69,PASS
+B_rsi_14_bb_16,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 14, 'BB_Period': 16}",open_prices,9570.0,1.2878,3.2986,77,13299.0,1.5869,2.8295,75,PASS
+B_rsi_14_bb_20,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 14, 'BB_Period': 20}",open_prices,12442.0,1.4061,3.223,74,16045.0,1.7613,3.0621,73,PASS
+B_rsi_14_bb_24,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 14, 'BB_Period': 24}",open_prices,12258.0,1.4003,4.2912,74,15336.0,1.7901,2.6328,68,PASS
+B_rsi_14_bb_30,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 14, 'BB_Period': 30}",open_prices,13398.0,1.5083,3.5222,65,18922.0,2.0279,2.676,68,PASS
+B_rsi_18_bb_16,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 18, 'BB_Period': 16}",open_prices,9570.0,1.2878,3.2986,77,12135.0,1.5355,3.8567,74,PASS
+B_rsi_18_bb_20,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 18, 'BB_Period': 20}",open_prices,12442.0,1.4061,3.223,74,14881.0,1.7061,3.7835,72,PASS
+B_rsi_18_bb_24,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 18, 'BB_Period': 24}",open_prices,12258.0,1.4003,4.2912,74,14687.0,1.7773,3.6218,66,PASS
+B_rsi_18_bb_30,B_RSI_GBPUSD_RSIxBB,configs/rsi_robust_gbpusd_h4.yaml,"{'RSI_Period': 18, 'BB_Period': 30}",open_prices,13398.0,1.5083,3.5222,65,18922.0,2.0279,2.676,68,PASS
+C_adx_10_slopeLB_12,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 10, 'MA_Slope_Lookback': 12}",open_prices,-5495.0,0.0,5.495,4,2887.0,1.2884,7.7139,8,reject
+C_adx_10_slopeLB_16,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 10, 'MA_Slope_Lookback': 16}",open_prices,20406.0,3.6882,3.2701,9,-812.0,0.9507,10.4,13,reject
+C_adx_10_slopeLB_20,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 10, 'MA_Slope_Lookback': 20}",open_prices,31611.0,2.8415,5.9298,17,14670.0,1.4872,18.132,27,PASS
+C_adx_10_slopeLB_28,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 10, 'MA_Slope_Lookback': 28}",open_prices,-2443.0,0.9508,15.7547,38,7634.0,1.2068,17.0008,32,reject
+C_adx_12_slopeLB_12,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 12, 'MA_Slope_Lookback': 12}",open_prices,-5495.0,0.0,5.495,4,-6390.0,0.4628,11.2752,8,reject
+C_adx_12_slopeLB_16,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 12, 'MA_Slope_Lookback': 16}",open_prices,12506.0,2.8505,4.1672,8,-7469.0,0.5647,11.097,13,reject
+C_adx_12_slopeLB_20,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 12, 'MA_Slope_Lookback': 20}",open_prices,30569.0,2.7206,4.9464,17,13902.0,1.452,18.778,28,PASS
+C_adx_12_slopeLB_28,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 12, 'MA_Slope_Lookback': 28}",open_prices,-1523.0,0.9687,15.6324,37,6830.0,1.1753,17.5305,33,reject
+C_adx_14_slopeLB_12,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 14, 'MA_Slope_Lookback': 12}",open_prices,-3319.0,0.0,3.319,2,-5400.0,0.4849,9.9768,7,reject
+C_adx_14_slopeLB_16,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 14, 'MA_Slope_Lookback': 16}",open_prices,6132.0,1.9074,4.1672,7,-2878.0,0.771,9.386,10,reject
+C_adx_14_slopeLB_20,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 14, 'MA_Slope_Lookback': 20}",open_prices,29315.0,2.8215,5.0517,16,10197.0,1.3355,17.23,28,PASS
+C_adx_14_slopeLB_28,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 14, 'MA_Slope_Lookback': 28}",open_prices,-118.0,0.9975,15.7193,36,539.0,1.0126,19.7053,36,reject
+C_adx_18_slopeLB_12,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 18, 'MA_Slope_Lookback': 12}",open_prices,-3319.0,0.0,3.319,2,-10655.0,0.0,10.655,7,reject
+C_adx_18_slopeLB_16,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 18, 'MA_Slope_Lookback': 16}",open_prices,4122.0,1.4701,5.9821,8,-6485.0,0.3157,7.869,7,reject
+C_adx_18_slopeLB_20,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 18, 'MA_Slope_Lookback': 20}",open_prices,29381.0,2.8331,4.6242,16,941.0,1.0416,15.01,20,PASS
+C_adx_18_slopeLB_28,C_PB_GBPJPY_ADXxSlopeLB,configs/pullback_gbpjpy_h4.yaml,"{'ADX_Period': 18, 'MA_Slope_Lookback': 28}",open_prices,3929.0,1.0915,15.1624,34,-4162.0,0.8772,20.115,30,reject
+D_ma_180_hyst_0.5_atr_10,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 180, 'Hyst_ATR_Mult': 0.5, 'ATR_Period': 10}",open_prices,101625.0,2.9771,27.831,9,24938.0,1.7941,25.1093,9,PASS
+D_ma_180_hyst_0.75_atr_10,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 180, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 10}",open_prices,104200.0,2.9667,29.244,8,26792.0,1.9649,22.1422,8,PASS
+D_ma_180_hyst_0.75_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 180, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 14}",open_prices,130142.0,3.8918,29.244,7,26792.0,1.9649,22.1422,8,PASS
+D_ma_180_hyst_1_atr_20,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 180, 'Hyst_ATR_Mult': 1.0, 'ATR_Period': 20}",open_prices,98915.0,2.9573,31.579,7,27765.0,2.0362,21.2372,7,PASS
+D_ma_200_hyst_0.5_atr_10,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 0.5, 'ATR_Period': 10}",open_prices,135149.0,4.4581,27.831,7,23819.0,1.6369,29.6071,10,PASS
+D_ma_200_hyst_0.5_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 0.5, 'ATR_Period': 14}",open_prices,135937.0,4.5995,27.831,7,26751.0,1.7762,27.0507,9,PASS
+D_ma_200_hyst_0.75_atr_10,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 10}",open_prices,125777.0,4.1613,28.536,7,32083.0,2.0622,25.3377,7,PASS
+D_ma_200_hyst_0.75_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 14}",open_prices,105817.0,3.5057,28.536,7,33912.0,2.1952,23.8033,7,PASS
+D_ma_200_hyst_0.75_atr_20,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 20}",open_prices,105817.0,3.5057,28.536,7,33912.0,2.1952,23.8033,7,PASS
+D_ma_200_hyst_1_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 200, 'Hyst_ATR_Mult': 1.0, 'ATR_Period': 14}",open_prices,95795.0,3.1552,30.755,7,34135.0,2.5144,19.8438,6,PASS
+D_ma_220_hyst_0.5_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 220, 'Hyst_ATR_Mult': 0.5, 'ATR_Period': 14}",open_prices,71624.0,2.2833,30.763,10,37968.0,2.1775,25.3634,7,PASS
+D_ma_220_hyst_0.75_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 220, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 14}",open_prices,66055.0,2.1015,31.37,9,32063.0,1.9127,28.3058,6,PASS
+D_ma_220_hyst_0.75_atr_20,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 220, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 20}",open_prices,65267.0,2.1128,31.37,9,32063.0,1.9127,28.3058,6,PASS
+D_ma_240_hyst_0.5_atr_14,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 240, 'Hyst_ATR_Mult': 0.5, 'ATR_Period': 14}",open_prices,62456.0,2.2205,29.603,10,41367.0,2.6018,20.8091,6,PASS
+D_ma_240_hyst_0.75_atr_20,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 240, 'Hyst_ATR_Mult': 0.75, 'ATR_Period': 20}",open_prices,62145.0,2.2407,35.264,9,38341.0,2.3289,23.2473,6,PASS
+D_ma_240_hyst_1_atr_20,D_Carry_AUDJPY_MAxHystxATR,configs/carry_audjpy_d1.yaml,"{'TrendMA_Period': 240, 'Hyst_ATR_Mult': 1.0, 'ATR_Period': 20}",open_prices,24941.0,1.4383,38.664,9,26782.0,1.9382,23.8901,5,PASS
+E_lb_120_stop_4.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 120, 'Stop_Z': 4.5}",open_prices,7797.0,1.1382,5.8565,114,11233.0,1.3704,7.697,80,PASS
+E_lb_120_stop_5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 120, 'Stop_Z': 5.0}",open_prices,7052.0,1.1131,6.3309,110,15494.0,1.5552,5.256,74,PASS
+E_lb_120_stop_5.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 120, 'Stop_Z': 5.5}",open_prices,7941.0,1.1154,9.958,104,17046.0,1.6355,5.256,70,PASS
+E_lb_120_stop_6,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 120, 'Stop_Z': 6.0}",open_prices,7903.0,1.1149,9.958,102,16574.0,1.6396,5.256,66,PASS
+E_lb_160_stop_4.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 160, 'Stop_Z': 4.5}",open_prices,962.0,1.0131,15.8553,122,9141.0,1.5869,3.7308,56,PASS
+E_lb_160_stop_5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 160, 'Stop_Z': 5.0}",open_prices,5067.0,1.0669,13.9808,112,12455.0,1.9907,3.72,48,PASS
+E_lb_160_stop_5.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 160, 'Stop_Z': 5.5}",open_prices,5013.0,1.0662,14.0285,110,12493.0,1.9814,3.7214,46,PASS
+E_lb_160_stop_6,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 160, 'Stop_Z': 6.0}",open_prices,5068.0,1.0671,13.9799,106,12516.0,2.0099,3.7206,44,PASS
+E_lb_240_stop_4.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 240, 'Stop_Z': 4.5}",open_prices,415.0,1.0056,12.1373,102,627.0,1.044,4.9446,32,PASS
+E_lb_240_stop_5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 240, 'Stop_Z': 5.0}",open_prices,1473.0,1.0199,12.1082,90,603.0,1.0415,7.5393,26,PASS
+E_lb_240_stop_5.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 240, 'Stop_Z': 5.5}",open_prices,3357.0,1.0504,11.3455,82,603.0,1.0415,7.5393,26,PASS
+E_lb_240_stop_6,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 240, 'Stop_Z': 6.0}",open_prices,3303.0,1.0497,11.3958,80,603.0,1.0415,7.5393,26,PASS
+E_lb_320_stop_4.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 320, 'Stop_Z': 4.5}",open_prices,9909.0,1.2159,9.6518,70,746.0,1.0594,4.2733,22,PASS
+E_lb_320_stop_5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 320, 'Stop_Z': 5.0}",open_prices,9800.0,1.1894,9.661,62,746.0,1.0594,4.2733,22,PASS
+E_lb_320_stop_5.5,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 320, 'Stop_Z': 5.5}",open_prices,10832.0,1.2216,9.0418,54,746.0,1.0594,4.2733,22,PASS
+E_lb_320_stop_6,E_PairTrade_LookbackxStopZ,configs/pairtrade_eurusd_gbpusd.yaml,"{'Lookback': 320, 'Stop_Z': 6.0}",open_prices,10887.0,1.2238,9.0375,50,746.0,1.0594,4.2733,22,PASS

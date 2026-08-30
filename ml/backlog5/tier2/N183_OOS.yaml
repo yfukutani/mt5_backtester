@@ -1,0 +1,39 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: RSI_Reversal
+symbol: EURNZD
+period: H4
+from_date: 2016.06.21
+to_date: 2021.06.20
+deposit: 100000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  MA_Period: 200
+  BB_Period: 20
+  BB_Deviation: 2.5
+  RSI_Period: 14
+  RSI_OverboughtExtreme: 75.0
+  RSI_Overbought: 72.5
+  RSI_OversoldExtreme: 27.5
+  RSI_Oversold: 30.0
+  UseDoublePattern: false
+  UseTrailingStop: false
+  UseBreakeven: false
+  UseVolatilityFilter: false
+  UseTimeFilter: false
+  UseATRStopLoss: true
+  UseADXFilter: false
+  UseRangeFilter: true
+  Range_Slope_Lookback: 20
+  Range_Slope_Max_ATR: 0.2
+  StopLoss_Pips: 45
+  TakeProfit_Pips: 105
+  UseRiskSizing: false
+  MagicNumber: 99000002
+  ATR_SL_Multiplier: 1.5
+  ATR_RR_Ratio: 2.0
+  LotSize: 0.01
+  ResultFileName: N183_OOS_r.csv
+report_dir: results
+report_name: N183_OOS
