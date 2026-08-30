@@ -1,0 +1,26 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: VolBreakout
+symbol: HK50Cash
+period: H4
+from_date: 2016.06.21
+to_date: 2021.06.20
+deposit: 100000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  Channel_Period: 20
+  AllowLong: true
+  AllowShort: true
+  UseSqueezeFilter: true
+  Squeeze_Lookback: 50
+  Squeeze_Factor: 1.0
+  ATR_Period: 14
+  ATR_SL_Mult: 2.0
+  Trail_Mult: 3.0
+  UseRiskSizing: false
+  MagicNumber: 99000003
+  LotSize: 1.0
+  ResultFileName: N104_OOS_r.csv
+report_dir: results
+report_name: N104_OOS

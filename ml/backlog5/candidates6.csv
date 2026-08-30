@@ -1,0 +1,422 @@
+id,family,template,symbol,period,params,priority,lot,note
+M001,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M002,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M003,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M004,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M005,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M006,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M007,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M008,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M009,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M010,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M011,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M012,PB応答曲面_ADXxRR,PullbackTrend,USDJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M013,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M014,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M015,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M016,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M017,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M018,PB応答曲面_傾きxSL,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M019,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M020,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M021,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M022,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M023,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M024,PB_MTF合流変種,PullbackTrend,USDJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M025,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M026,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M027,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M028,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M029,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M030,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M031,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M032,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M033,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M034,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M035,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M036,PB応答曲面_ADXxRR,PullbackTrend,GBPJPY,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M037,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M038,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M039,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M040,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M041,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M042,PB応答曲面_傾きxSL,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M043,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M044,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M045,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M046,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M047,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M048,PB_MTF合流変種,PullbackTrend,GBPJPY,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M049,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M050,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M051,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 15, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M052,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M053,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M054,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 18, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M055,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M056,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M057,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 25, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M058,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 1.5}",S,0.01,ADX閾値×RR比の格子
+M059,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 2.5}",S,0.01,ADX閾値×RR比の格子
+M060,PB応答曲面_ADXxRR,PullbackTrend,GOLD,H4,"{'ADX_Threshold': 30, 'RR_Ratio': 3.0}",S,0.01,ADX閾値×RR比の格子
+M061,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M062,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M063,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M064,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M065,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 1.5}",S,0.01,環境フィルター強度×SL幅の格子
+M066,PB応答曲面_傾きxSL,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'ATR_SL_Mult': 2.5}",S,0.01,環境フィルター強度×SL幅の格子
+M067,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M068,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M069,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '16408', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M070,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 100}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M071,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 200}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M072,PB_MTF合流変種,PullbackTrend,GOLD,H4,"{'UseHigherTFFilter': True, 'HigherTF': '20', 'HigherTF_MA': 300}",A,0.01,MTF合流フィルターのMA期間変種（既存採用の周辺探索）
+M073,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 70, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M074,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 70, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M075,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 70, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M076,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 75, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M077,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 75, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M078,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 75, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M079,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 80, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M080,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 80, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M081,RSI応答曲面_OBxOS,RSI_Reversal,EURUSD,H1,"{'RSI_Overbought': 80, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M082,RSI応答曲面_レンジ閾値,RSI_Reversal,EURUSD,H1,{'Range_Slope_Max_ATR': 0.1},S,0.01,レンジフィルター閾値の細密格子
+M083,RSI応答曲面_レンジ閾値,RSI_Reversal,EURUSD,H1,{'Range_Slope_Max_ATR': 0.15},S,0.01,レンジフィルター閾値の細密格子
+M084,RSI応答曲面_レンジ閾値,RSI_Reversal,EURUSD,H1,{'Range_Slope_Max_ATR': 0.25},S,0.01,レンジフィルター閾値の細密格子
+M085,RSI応答曲面_レンジ閾値,RSI_Reversal,EURUSD,H1,{'Range_Slope_Max_ATR': 0.3},S,0.01,レンジフィルター閾値の細密格子
+M086,RSI応答曲面_レンジ閾値,RSI_Reversal,EURUSD,H1,{'Range_Slope_Max_ATR': 0.4},S,0.01,レンジフィルター閾値の細密格子
+M087,RSI応答曲面_BB,RSI_Reversal,EURUSD,H1,{'BB_Deviation': 2.0},A,0.01,BB偏差の格子
+M088,RSI応答曲面_BB,RSI_Reversal,EURUSD,H1,{'BB_Deviation': 3.0},A,0.01,BB偏差の格子
+M089,RSI応答曲面_BB,RSI_Reversal,EURUSD,H1,{'BB_Deviation': 3.5},A,0.01,BB偏差の格子
+M090,RSI応答曲面_SLxTP,RSI_Reversal,EURUSD,H1,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M091,RSI応答曲面_SLxTP,RSI_Reversal,EURUSD,H1,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M092,RSI応答曲面_SLxTP,RSI_Reversal,EURUSD,H1,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M093,RSI応答曲面_SLxTP,RSI_Reversal,EURUSD,H1,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M094,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M095,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M096,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M097,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M098,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M099,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M100,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M101,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M102,RSI応答曲面_OBxOS,RSI_Reversal,USDJPY,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M103,RSI応答曲面_レンジ閾値,RSI_Reversal,USDJPY,H4,{'Range_Slope_Max_ATR': 0.1},S,0.01,レンジフィルター閾値の細密格子
+M104,RSI応答曲面_レンジ閾値,RSI_Reversal,USDJPY,H4,{'Range_Slope_Max_ATR': 0.15},S,0.01,レンジフィルター閾値の細密格子
+M105,RSI応答曲面_レンジ閾値,RSI_Reversal,USDJPY,H4,{'Range_Slope_Max_ATR': 0.25},S,0.01,レンジフィルター閾値の細密格子
+M106,RSI応答曲面_レンジ閾値,RSI_Reversal,USDJPY,H4,{'Range_Slope_Max_ATR': 0.3},S,0.01,レンジフィルター閾値の細密格子
+M107,RSI応答曲面_レンジ閾値,RSI_Reversal,USDJPY,H4,{'Range_Slope_Max_ATR': 0.4},S,0.01,レンジフィルター閾値の細密格子
+M108,RSI応答曲面_BB,RSI_Reversal,USDJPY,H4,{'BB_Deviation': 2.0},A,0.01,BB偏差の格子
+M109,RSI応答曲面_BB,RSI_Reversal,USDJPY,H4,{'BB_Deviation': 3.0},A,0.01,BB偏差の格子
+M110,RSI応答曲面_BB,RSI_Reversal,USDJPY,H4,{'BB_Deviation': 3.5},A,0.01,BB偏差の格子
+M111,RSI応答曲面_SLxTP,RSI_Reversal,USDJPY,H4,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M112,RSI応答曲面_SLxTP,RSI_Reversal,USDJPY,H4,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M113,RSI応答曲面_SLxTP,RSI_Reversal,USDJPY,H4,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M114,RSI応答曲面_SLxTP,RSI_Reversal,USDJPY,H4,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M115,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M116,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M117,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 70, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M118,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M119,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M120,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 75, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M121,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 20}",S,0.01,RSI閾値の格子
+M122,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 25}",S,0.01,RSI閾値の格子
+M123,RSI応答曲面_OBxOS,RSI_Reversal,GBPUSD,H4,"{'RSI_Overbought': 80, 'RSI_Oversold': 30}",S,0.01,RSI閾値の格子
+M124,RSI応答曲面_レンジ閾値,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Max_ATR': 0.1},S,0.01,レンジフィルター閾値の細密格子
+M125,RSI応答曲面_レンジ閾値,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Max_ATR': 0.15},S,0.01,レンジフィルター閾値の細密格子
+M126,RSI応答曲面_レンジ閾値,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Max_ATR': 0.25},S,0.01,レンジフィルター閾値の細密格子
+M127,RSI応答曲面_レンジ閾値,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Max_ATR': 0.3},S,0.01,レンジフィルター閾値の細密格子
+M128,RSI応答曲面_レンジ閾値,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Max_ATR': 0.4},S,0.01,レンジフィルター閾値の細密格子
+M129,RSI応答曲面_BB,RSI_Reversal,GBPUSD,H4,{'BB_Deviation': 2.0},A,0.01,BB偏差の格子
+M130,RSI応答曲面_BB,RSI_Reversal,GBPUSD,H4,{'BB_Deviation': 3.0},A,0.01,BB偏差の格子
+M131,RSI応答曲面_BB,RSI_Reversal,GBPUSD,H4,{'BB_Deviation': 3.5},A,0.01,BB偏差の格子
+M132,RSI応答曲面_SLxTP,RSI_Reversal,GBPUSD,H4,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M133,RSI応答曲面_SLxTP,RSI_Reversal,GBPUSD,H4,"{'StopLoss_Pips': 40, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M134,RSI応答曲面_SLxTP,RSI_Reversal,GBPUSD,H4,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 90}",A,0.01,固定pips SL/TPの格子
+M135,RSI応答曲面_SLxTP,RSI_Reversal,GBPUSD,H4,"{'StopLoss_Pips': 55, 'TakeProfit_Pips': 120}",A,0.01,固定pips SL/TPの格子
+M136,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 10, 'Squeeze_Factor': 0.7}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M137,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 10, 'Squeeze_Factor': 0.8}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M138,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 10, 'Squeeze_Factor': 1.2}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M139,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 10, 'Squeeze_Factor': 1.5}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M140,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 15, 'Squeeze_Factor': 0.7}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M141,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 15, 'Squeeze_Factor': 0.8}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M142,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 15, 'Squeeze_Factor': 1.2}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M143,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 15, 'Squeeze_Factor': 1.5}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M144,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 25, 'Squeeze_Factor': 0.7}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M145,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 25, 'Squeeze_Factor': 0.8}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M146,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 25, 'Squeeze_Factor': 1.2}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M147,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 25, 'Squeeze_Factor': 1.5}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M148,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 30, 'Squeeze_Factor': 0.7}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M149,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 30, 'Squeeze_Factor': 0.8}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M150,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 30, 'Squeeze_Factor': 1.2}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M151,VBO応答曲面_チャネルxスクイーズ,VolBreakout,USDJPY,H4,"{'Channel_Period': 30, 'Squeeze_Factor': 1.5}",S,0.01,チャネル期間×スクイーズ閾値の格子
+M152,VBO応答曲面_トレール,VolBreakout,USDJPY,H4,{'Trail_Mult': 1.5},A,0.01,トレール幅の格子
+M153,VBO応答曲面_トレール,VolBreakout,USDJPY,H4,{'Trail_Mult': 2.0},A,0.01,トレール幅の格子
+M154,VBO応答曲面_トレール,VolBreakout,USDJPY,H4,{'Trail_Mult': 2.5},A,0.01,トレール幅の格子
+M155,VBO応答曲面_トレール,VolBreakout,USDJPY,H4,{'Trail_Mult': 4.0},A,0.01,トレール幅の格子
+M156,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.25, 'TrendMA_Period': 100}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M157,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.25, 'TrendMA_Period': 150}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M158,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.25, 'TrendMA_Period': 250}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M159,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.25, 'TrendMA_Period': 300}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M160,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.5, 'TrendMA_Period': 100}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M161,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.5, 'TrendMA_Period': 150}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M162,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.5, 'TrendMA_Period': 250}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M163,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 0.5, 'TrendMA_Period': 300}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M164,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.0, 'TrendMA_Period': 100}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M165,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.0, 'TrendMA_Period': 150}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M166,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.0, 'TrendMA_Period': 250}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M167,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.0, 'TrendMA_Period': 300}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M168,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.25, 'TrendMA_Period': 100}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M169,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.25, 'TrendMA_Period': 150}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M170,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.25, 'TrendMA_Period': 250}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M171,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.25, 'TrendMA_Period': 300}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M172,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.5, 'TrendMA_Period': 100}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M173,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.5, 'TrendMA_Period': 150}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M174,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.5, 'TrendMA_Period': 250}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M175,Carry応答曲面_帯xMA,Carry,AUDJPY,D1,"{'Hyst_ATR_Mult': 1.5, 'TrendMA_Period': 300}",S,0.01,ヒステリシス帯×トレンドMA期間の格子
+M176,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 6, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M177,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 6, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M178,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 6, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M179,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 9, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M180,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 9, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M181,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 9, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M182,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 12, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M183,SCA応答曲面_セッション窓,SCA_EA,GOLD,M15,"{'RangeEndHour': 12, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M184,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M185,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M186,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M187,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M188,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M189,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M190,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M191,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M192,SCA応答曲面_レンジ幅,SCA_EA,GOLD,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M193,SCA応答曲面_Boost倍率,SCA_EA,GOLD,M15,{'Boost_Mult': 1.5},A,0.01,リバーサルBoost倍率の格子
+M194,SCA応答曲面_Boost倍率,SCA_EA,GOLD,M15,{'Boost_Mult': 2.5},A,0.01,リバーサルBoost倍率の格子
+M195,SCA応答曲面_Boost倍率,SCA_EA,GOLD,M15,{'Boost_Mult': 3.0},A,0.01,リバーサルBoost倍率の格子
+M196,SCA応答曲面_強制決済,SCA_EA,GOLD,M15,{'ForceCloseHour': 18},B,0.01,強制決済時刻の格子
+M197,SCA応答曲面_強制決済,SCA_EA,GOLD,M15,{'ForceCloseHour': 20},B,0.01,強制決済時刻の格子
+M198,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M199,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M200,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M201,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M202,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M203,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M204,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 12, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M205,SCA応答曲面_セッション窓,SCA_EA,USDJPY,M15,"{'RangeEndHour': 12, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M206,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M207,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M208,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M209,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M210,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M211,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M212,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M213,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M214,SCA応答曲面_レンジ幅,SCA_EA,USDJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M215,SCA応答曲面_Boost倍率,SCA_EA,USDJPY,M15,{'Boost_Mult': 1.5},A,0.01,リバーサルBoost倍率の格子
+M216,SCA応答曲面_Boost倍率,SCA_EA,USDJPY,M15,{'Boost_Mult': 2.5},A,0.01,リバーサルBoost倍率の格子
+M217,SCA応答曲面_Boost倍率,SCA_EA,USDJPY,M15,{'Boost_Mult': 3.0},A,0.01,リバーサルBoost倍率の格子
+M218,SCA応答曲面_強制決済,SCA_EA,USDJPY,M15,{'ForceCloseHour': 18},B,0.01,強制決済時刻の格子
+M219,SCA応答曲面_強制決済,SCA_EA,USDJPY,M15,{'ForceCloseHour': 20},B,0.01,強制決済時刻の格子
+M220,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M221,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M222,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 6, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M223,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 12}",S,0.01,レンジ確定/取引終了時刻の格子
+M224,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M225,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 9, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M226,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 12, 'TradeEndHour': 15}",S,0.01,レンジ確定/取引終了時刻の格子
+M227,SCA応答曲面_セッション窓,SCA_EA,GBPJPY,M15,"{'RangeEndHour': 12, 'TradeEndHour': 18}",S,0.01,レンジ確定/取引終了時刻の格子
+M228,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M229,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M230,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.15, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M231,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M232,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M233,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.3, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M234,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 0.8}",S,0.01,レンジ幅フィルターの格子
+M235,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.2}",S,0.01,レンジ幅フィルターの格子
+M236,SCA応答曲面_レンジ幅,SCA_EA,GBPJPY,M15,"{'MinRange_ATRd': 0.45, 'MaxRange_ATRd': 1.5}",S,0.01,レンジ幅フィルターの格子
+M237,SCA応答曲面_Boost倍率,SCA_EA,GBPJPY,M15,{'Boost_Mult': 1.5},A,0.01,リバーサルBoost倍率の格子
+M238,SCA応答曲面_Boost倍率,SCA_EA,GBPJPY,M15,{'Boost_Mult': 2.5},A,0.01,リバーサルBoost倍率の格子
+M239,SCA応答曲面_Boost倍率,SCA_EA,GBPJPY,M15,{'Boost_Mult': 3.0},A,0.01,リバーサルBoost倍率の格子
+M240,SCA応答曲面_強制決済,SCA_EA,GBPJPY,M15,{'ForceCloseHour': 18},B,0.01,強制決済時刻の格子
+M241,SCA応答曲面_強制決済,SCA_EA,GBPJPY,M15,{'ForceCloseHour': 20},B,0.01,強制決済時刻の格子
+M242,PB応答曲面_トレンドMA,PullbackTrend,USDJPY,H4,{'TrendMA_Period': 100},A,0.01,大局トレンドMA期間の格子
+M243,PB応答曲面_トレンドMA,PullbackTrend,USDJPY,H4,{'TrendMA_Period': 150},A,0.01,大局トレンドMA期間の格子
+M244,PB応答曲面_トレンドMA,PullbackTrend,USDJPY,H4,{'TrendMA_Period': 250},A,0.01,大局トレンドMA期間の格子
+M245,PB応答曲面_トレンドMA,PullbackTrend,USDJPY,H4,{'TrendMA_Period': 300},A,0.01,大局トレンドMA期間の格子
+M246,PB応答曲面_EMA組,PullbackTrend,USDJPY,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M247,PB応答曲面_EMA組,PullbackTrend,USDJPY,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M248,PB応答曲面_EMA組,PullbackTrend,USDJPY,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M249,PB応答曲面_EMA組,PullbackTrend,USDJPY,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M250,PB応答曲面_トレンドMA,PullbackTrend,GBPJPY,H4,{'TrendMA_Period': 100},A,0.01,大局トレンドMA期間の格子
+M251,PB応答曲面_トレンドMA,PullbackTrend,GBPJPY,H4,{'TrendMA_Period': 150},A,0.01,大局トレンドMA期間の格子
+M252,PB応答曲面_トレンドMA,PullbackTrend,GBPJPY,H4,{'TrendMA_Period': 250},A,0.01,大局トレンドMA期間の格子
+M253,PB応答曲面_トレンドMA,PullbackTrend,GBPJPY,H4,{'TrendMA_Period': 300},A,0.01,大局トレンドMA期間の格子
+M254,PB応答曲面_EMA組,PullbackTrend,GBPJPY,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M255,PB応答曲面_EMA組,PullbackTrend,GBPJPY,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M256,PB応答曲面_EMA組,PullbackTrend,GBPJPY,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M257,PB応答曲面_EMA組,PullbackTrend,GBPJPY,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M258,PB応答曲面_トレンドMA,PullbackTrend,GOLD,H4,{'TrendMA_Period': 100},A,0.01,大局トレンドMA期間の格子
+M259,PB応答曲面_トレンドMA,PullbackTrend,GOLD,H4,{'TrendMA_Period': 150},A,0.01,大局トレンドMA期間の格子
+M260,PB応答曲面_トレンドMA,PullbackTrend,GOLD,H4,{'TrendMA_Period': 250},A,0.01,大局トレンドMA期間の格子
+M261,PB応答曲面_トレンドMA,PullbackTrend,GOLD,H4,{'TrendMA_Period': 300},A,0.01,大局トレンドMA期間の格子
+M262,PB応答曲面_EMA組,PullbackTrend,GOLD,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M263,PB応答曲面_EMA組,PullbackTrend,GOLD,H4,"{'FastEMA_Period': 10, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M264,PB応答曲面_EMA組,PullbackTrend,GOLD,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 40}",B,0.01,押し目EMA組の格子
+M265,PB応答曲面_EMA組,PullbackTrend,GOLD,H4,"{'FastEMA_Period': 15, 'SlowEMA_Period': 60}",B,0.01,押し目EMA組の格子
+M266,RSI応答曲面_ADX追加,RSI_Reversal,EURUSD,H1,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M267,RSI応答曲面_ADX追加,RSI_Reversal,EURUSD,H1,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M268,RSI応答曲面_ADX追加,RSI_Reversal,EURUSD,H1,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M269,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M270,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M271,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M272,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M273,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M274,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M275,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M276,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M277,RSI応答曲面_DP,RSI_Reversal,EURUSD,H1,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M278,RSI応答曲面_ADX追加,RSI_Reversal,USDJPY,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M279,RSI応答曲面_ADX追加,RSI_Reversal,USDJPY,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M280,RSI応答曲面_ADX追加,RSI_Reversal,USDJPY,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M281,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M282,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M283,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M284,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M285,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M286,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M287,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M288,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M289,RSI応答曲面_DP,RSI_Reversal,USDJPY,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M290,RSI応答曲面_ADX追加,RSI_Reversal,GBPUSD,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M291,RSI応答曲面_ADX追加,RSI_Reversal,GBPUSD,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M292,RSI応答曲面_ADX追加,RSI_Reversal,GBPUSD,H4,"{'UseADXFilter': True, 'ADX_Period': 14}",B,0.01,ADXフィルターを追加した変種（閾値はEA既定22.5固定・追加要否のみ検証）
+M293,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M294,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M295,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 2, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M296,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M297,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M298,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 4, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M299,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 50}",B,0.01,ダブルパターン検出のパラメータ格子
+M300,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 80}",B,0.01,ダブルパターン検出のパラメータ格子
+M301,RSI応答曲面_DP,RSI_Reversal,GBPUSD,H4,"{'UseDoublePattern': True, 'Swing_Lookback': 5, 'DP_Pattern_Bars': 120}",B,0.01,ダブルパターン検出のパラメータ格子
+M302,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 30, 'Squeeze_Factor': 0.9}",A,0.01,スクイーズ参照期間×閾値の格子
+M303,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 30, 'Squeeze_Factor': 1.0}",A,0.01,スクイーズ参照期間×閾値の格子
+M304,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 30, 'Squeeze_Factor': 1.1}",A,0.01,スクイーズ参照期間×閾値の格子
+M305,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 40, 'Squeeze_Factor': 0.9}",A,0.01,スクイーズ参照期間×閾値の格子
+M306,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 40, 'Squeeze_Factor': 1.0}",A,0.01,スクイーズ参照期間×閾値の格子
+M307,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 40, 'Squeeze_Factor': 1.1}",A,0.01,スクイーズ参照期間×閾値の格子
+M308,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 70, 'Squeeze_Factor': 0.9}",A,0.01,スクイーズ参照期間×閾値の格子
+M309,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 70, 'Squeeze_Factor': 1.0}",A,0.01,スクイーズ参照期間×閾値の格子
+M310,VBO応答曲面_スクイーズ参照,VolBreakout,USDJPY,H4,"{'Squeeze_Lookback': 70, 'Squeeze_Factor': 1.1}",A,0.01,スクイーズ参照期間×閾値の格子
+M311,VBO応答曲面_初期SL,VolBreakout,USDJPY,H4,{'ATR_SL_Mult': 1.5},B,0.01,初期ストップ幅の格子
+M312,VBO応答曲面_初期SL,VolBreakout,USDJPY,H4,{'ATR_SL_Mult': 2.5},B,0.01,初期ストップ幅の格子
+M313,VBO応答曲面_初期SL,VolBreakout,USDJPY,H4,{'ATR_SL_Mult': 3.0},B,0.01,初期ストップ幅の格子
+M314,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 0, 'ExitMA_Period': 0}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M315,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 0, 'ExitMA_Period': 20}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M316,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 0, 'ExitMA_Period': 40}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M317,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 3, 'ExitMA_Period': 0}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M318,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 3, 'ExitMA_Period': 20}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M319,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 3, 'ExitMA_Period': 40}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M320,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 5, 'ExitMA_Period': 0}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M321,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 5, 'ExitMA_Period': 20}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M322,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 5, 'ExitMA_Period': 40}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M323,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 10, 'ExitMA_Period': 0}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M324,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 10, 'ExitMA_Period': 20}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M325,Carry応答曲面_退出クールダウン,Carry,AUDJPY,D1,"{'ReentryCooldown': 10, 'ExitMA_Period': 40}",A,0.01,退出後クールダウン×デュアルMA退出の格子（BTC/ETHで採用済み機構のAUDJPY移植）
+M326,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M327,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M328,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M329,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M330,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M331,SCA応答曲面_バッファxSL方式,SCA_EA,GOLD,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M332,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M333,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M334,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M335,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M336,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M337,SCA応答曲面_バッファxSL方式,SCA_EA,USDJPY,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M338,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M339,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.0, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M340,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M341,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.05, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M342,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 0}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M343,SCA応答曲面_バッファxSL方式,SCA_EA,GBPJPY,M15,"{'Break_Buffer_ATRd': 0.1, 'SL_Mode': 1}",B,0.01,ブレイクバッファ×SL方式(レンジ反対端/ATR)の格子
+M344,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M345,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M346,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M347,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M348,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M349,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M350,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M351,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M352,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M353,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M354,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M355,PB応答曲面_傾きxRR,PullbackTrend,USDJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M356,PB_単一条件解除,PullbackTrend,USDJPY,H4,{'RequireBullishCandle': False},B,0.01,条件を1つだけ外した感度確認(RequireBullishCandle)
+M357,PB_単一条件解除,PullbackTrend,USDJPY,H4,{'UseMomentumConfirm': False},B,0.01,条件を1つだけ外した感度確認(UseMomentumConfirm)
+M358,PB_単一条件解除,PullbackTrend,USDJPY,H4,{'UsePullbackQuality': False},B,0.01,条件を1つだけ外した感度確認(UsePullbackQuality)
+M359,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M360,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M361,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M362,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M363,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M364,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M365,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M366,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M367,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M368,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M369,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M370,PB応答曲面_傾きxRR,PullbackTrend,GBPJPY,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M371,PB_単一条件解除,PullbackTrend,GBPJPY,H4,{'RequireBullishCandle': False},B,0.01,条件を1つだけ外した感度確認(RequireBullishCandle)
+M372,PB_単一条件解除,PullbackTrend,GBPJPY,H4,{'UseMomentumConfirm': False},B,0.01,条件を1つだけ外した感度確認(UseMomentumConfirm)
+M373,PB_単一条件解除,PullbackTrend,GBPJPY,H4,{'UsePullbackQuality': False},B,0.01,条件を1つだけ外した感度確認(UsePullbackQuality)
+M374,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M375,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M376,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M377,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 0.8, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M378,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M379,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M380,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M381,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M382,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 1.5}",A,0.01,環境フィルター強度×RR比の格子
+M383,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 2.5}",A,0.01,環境フィルター強度×RR比の格子
+M384,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.0}",A,0.01,環境フィルター強度×RR比の格子
+M385,PB応答曲面_傾きxRR,PullbackTrend,GOLD,H4,"{'MA_Slope_Min_ATR': 2.0, 'RR_Ratio': 3.5}",A,0.01,環境フィルター強度×RR比の格子
+M386,PB_単一条件解除,PullbackTrend,GOLD,H4,{'RequireBullishCandle': False},B,0.01,条件を1つだけ外した感度確認(RequireBullishCandle)
+M387,PB_単一条件解除,PullbackTrend,GOLD,H4,{'UseMomentumConfirm': False},B,0.01,条件を1つだけ外した感度確認(UseMomentumConfirm)
+M388,PB_単一条件解除,PullbackTrend,GOLD,H4,{'UsePullbackQuality': False},B,0.01,条件を1つだけ外した感度確認(UsePullbackQuality)
+M389,RSI応答曲面_傾き参照期間,RSI_Reversal,EURUSD,H1,{'Range_Slope_Lookback': 10},B,0.01,レンジ判定の傾き参照期間の格子
+M390,RSI応答曲面_傾き参照期間,RSI_Reversal,EURUSD,H1,{'Range_Slope_Lookback': 30},B,0.01,レンジ判定の傾き参照期間の格子
+M391,RSI応答曲面_傾き参照期間,RSI_Reversal,EURUSD,H1,{'Range_Slope_Lookback': 40},B,0.01,レンジ判定の傾き参照期間の格子
+M392,RSI_ダブルパターン単独,RSI_Reversal,EURUSD,H1,{'UseDoublePattern': True},B,0.01,ダブルパターンのみ追加（既定値のまま）
+M393,RSI応答曲面_傾き参照期間,RSI_Reversal,USDJPY,H4,{'Range_Slope_Lookback': 10},B,0.01,レンジ判定の傾き参照期間の格子
+M394,RSI応答曲面_傾き参照期間,RSI_Reversal,USDJPY,H4,{'Range_Slope_Lookback': 30},B,0.01,レンジ判定の傾き参照期間の格子
+M395,RSI応答曲面_傾き参照期間,RSI_Reversal,USDJPY,H4,{'Range_Slope_Lookback': 40},B,0.01,レンジ判定の傾き参照期間の格子
+M396,RSI_ダブルパターン単独,RSI_Reversal,USDJPY,H4,{'UseDoublePattern': True},B,0.01,ダブルパターンのみ追加（既定値のまま）
+M397,RSI応答曲面_傾き参照期間,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Lookback': 10},B,0.01,レンジ判定の傾き参照期間の格子
+M398,RSI応答曲面_傾き参照期間,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Lookback': 30},B,0.01,レンジ判定の傾き参照期間の格子
+M399,RSI応答曲面_傾き参照期間,RSI_Reversal,GBPUSD,H4,{'Range_Slope_Lookback': 40},B,0.01,レンジ判定の傾き参照期間の格子
+M400,RSI_ダブルパターン単独,RSI_Reversal,GBPUSD,H4,{'UseDoublePattern': True},B,0.01,ダブルパターンのみ追加（既定値のまま）
+M401,SCA_D1トレンドフィルター,SCA_EA,GOLD,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 100}",B,0.01,D1トレンド方向フィルターを追加した変種
+M402,SCA_D1トレンドフィルター,SCA_EA,GOLD,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 200}",B,0.01,D1トレンド方向フィルターを追加した変種
+M403,SCA_複数回エントリー許可,SCA_EA,GOLD,M15,{'OneShotPerDir': False},B,0.01,1日1方向1回の制約を外した変種
+M404,SCA_逆指値事前設置,SCA_EA,GOLD,M15,{'UseStopOrders': True},B,0.01,レンジ確定時に両端へ逆指値を事前設置する変種
+M405,SCA_D1トレンドフィルター,SCA_EA,USDJPY,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 100}",B,0.01,D1トレンド方向フィルターを追加した変種
+M406,SCA_D1トレンドフィルター,SCA_EA,USDJPY,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 200}",B,0.01,D1トレンド方向フィルターを追加した変種
+M407,SCA_複数回エントリー許可,SCA_EA,USDJPY,M15,{'OneShotPerDir': False},B,0.01,1日1方向1回の制約を外した変種
+M408,SCA_逆指値事前設置,SCA_EA,USDJPY,M15,{'UseStopOrders': True},B,0.01,レンジ確定時に両端へ逆指値を事前設置する変種
+M409,SCA_D1トレンドフィルター,SCA_EA,GBPJPY,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 100}",B,0.01,D1トレンド方向フィルターを追加した変種
+M410,SCA_D1トレンドフィルター,SCA_EA,GBPJPY,M15,"{'UseD1TrendFilter': True, 'D1Trend_MA': 200}",B,0.01,D1トレンド方向フィルターを追加した変種
+M411,SCA_複数回エントリー許可,SCA_EA,GBPJPY,M15,{'OneShotPerDir': False},B,0.01,1日1方向1回の制約を外した変種
+M412,SCA_逆指値事前設置,SCA_EA,GBPJPY,M15,{'UseStopOrders': True},B,0.01,レンジ確定時に両端へ逆指値を事前設置する変種
+M413,Carry応答曲面_ATR期間,Carry,AUDJPY,D1,{'ATR_Period': 10},B,0.01,ヒステリシス帯計算に使うATR期間の格子
+M414,Carry応答曲面_ATR期間,Carry,AUDJPY,D1,{'ATR_Period': 20},B,0.01,ヒステリシス帯計算に使うATR期間の格子
+M415,Carry応答曲面_ATR期間,Carry,AUDJPY,D1,{'ATR_Period': 28},B,0.01,ヒステリシス帯計算に使うATR期間の格子
+M416,VBO_単方向のみ,VolBreakout,USDJPY,H4,"{'AllowLong': True, 'AllowShort': False}",B,0.01,ロング/ショートいずれか一方のみ許可（long限定）
+M417,VBO_単方向のみ,VolBreakout,USDJPY,H4,"{'AllowLong': False, 'AllowShort': True}",B,0.01,ロング/ショートいずれか一方のみ許可（short限定）
+M418,新データ_BfxRevのETH移植,BfxRev_EA,ETHUSD,D1,{},S,0.01,Bitfinexマージン(long建玉急減リバウンド)機構のBTC→ETH移植。btc_backlog4.mdで『ETHはデータ取得後』として保留されたまま未着手の項目。ETHUSD Bitfinexマージンロング建玉データを新規取得しBTC版と同一シグナル定義で検証。
+M419,新データ_COTオーバーレイ_GOLD,PullbackTrend,GOLD,H4,{'__cot_overlay__': 'extreme_long'},A,0.01,CFTC COT(商品先物委員会建玉明細)のヘッジファンド買い越しが極端なときのみPB_GOLDのエントリーを許可するオーバーレイ。過去(btc_backlog4.md教訓)『COT週次n不足』は標準的シグナルとして使った際の反証で、既存エッジへのフィルターとしての利用は未検証。週次データのため対象はD1以上の低頻度戦略に限定
+M420,新データ_COTオーバーレイ_AUDJPY,Carry,AUDJPY,D1,{'__cot_overlay__': 'extreme_long'},A,0.01,AUDのCOT建玉極端値をCarry_AUDJPYのエントリー許可条件に追加するオーバーレイ
+M421,新データ_COTオーバーレイ_EURUSD,RSI_Reversal,EURUSD,H1,{'__cot_overlay__': 'extreme_short'},B,0.01,EURのCOT建玉極端値をRSI_EURUSDのオーバーレイに追加

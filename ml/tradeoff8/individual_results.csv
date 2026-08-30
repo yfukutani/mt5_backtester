@@ -1,0 +1,17 @@
+id,config,parameter,value,window,from_date,to_date,old_net,net,pf,dd_pct,trades
+01_sca_gbp,sca_gbpjpy_m15.yaml,RangeEndHour,10.0,IS,2021.06.21,2026.06.20,87562,87562.0,1.3071,15.3172,562
+01_sca_gbp,sca_gbpjpy_m15.yaml,RangeEndHour,10.0,OOS,2016.06.21,2021.06.20,41924,41924.0,1.1367,17.9567,587
+02_funding,fundingrev_btcusd_d1.yaml,Threshold_Pct8h,-0.003,IS,2021.06.21,2026.06.20,57087,57087.0,2.6583,9.1583,37
+02_funding,fundingrev_btcusd_d1.yaml,Threshold_Pct8h,-0.003,OOS,2019.09.01,2021.06.20,3081,3081.0,2.0523,1.061,10
+03_pb_usd,pullback_usdjpy_h4.yaml,ADX_Threshold,27.5,IS,2021.06.21,2026.06.20,41850,41850.0,1.6446,7.4685,58
+03_pb_usd,pullback_usdjpy_h4.yaml,ADX_Threshold,27.5,OOS,2016.06.21,2021.06.20,3332,3332.0,1.1551,10.9501,19
+04_pb_gbp,pullback_gbpjpy_h4.yaml,SlowEMA_Period,35.0,IS,2021.06.21,2026.06.20,35946,38136.0,4.5535,4.6192,13
+04_pb_gbp,pullback_gbpjpy_h4.yaml,SlowEMA_Period,35.0,OOS,2016.06.21,2021.06.20,20684,25204.0,2.4855,11.325,18
+05_pb_aud,pullback_audjpy_h4.yaml,RR_Ratio,5.0,IS,2021.06.21,2026.06.20,6157,6157.0,1.7406,2.5412,18
+05_pb_aud,pullback_audjpy_h4.yaml,RR_Ratio,5.0,OOS,2016.06.21,2021.06.20,5619,5619.0,1.4029,8.2142,30
+06_rsi_usd,rsi_robust_usdjpy_h4.yaml,DP_Tolerance_ATR,1.5,IS,2021.06.21,2026.06.20,7915,7915.0,1.2278,5.965,108
+06_rsi_usd,rsi_robust_usdjpy_h4.yaml,DP_Tolerance_ATR,1.5,OOS,2016.06.21,2021.06.20,7925,7925.0,1.2555,4.5739,99
+07_carry,carry_audjpy_d1.yaml,ReentryCooldown,10.0,IS,2021.06.21,2026.06.20,105817,105817.0,3.5057,28.536,7
+07_carry,carry_audjpy_d1.yaml,ReentryCooldown,10.0,OOS,2016.06.21,2021.06.20,37325,37325.0,2.4953,20.9401,7
+08_bfx,bfxrev_btcusd_d1.yaml,LookbackDays,10.0,IS,2021.06.21,2026.06.20,55156,55156.0,4.3131,7.5192,12
+08_bfx,bfxrev_btcusd_d1.yaml,LookbackDays,10.0,OOS,2016.12.01,2021.06.20,19376,19376.0,1.4478,13.0521,50

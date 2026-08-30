@@ -1,0 +1,61 @@
+{
+  "portfolio": [
+    "pullback_usdjpy_h4.yaml",
+    "pullback_gbpjpy_h4.yaml",
+    "pullback_audjpy_h4.yaml",
+    "rsi_robust_usdjpy_h4.yaml",
+    "rsi_robust_eurusd_h1.yaml",
+    "rsi_robust_gbpusd_h4.yaml",
+    "pairtrade_eurusd_gbpusd.yaml",
+    "pullback_gold_h4.yaml",
+    "carry_audjpy_d1.yaml",
+    "sca_usdjpy_m15.yaml",
+    "sca_gbpjpy_m15.yaml",
+    "sca_gold_m15.yaml",
+    "eth_ea_d1.yaml",
+    "fundingrev_btcusd_d1.yaml",
+    "bfxrev_btcusd_d1.yaml"
+  ],
+  "changes": {
+    "sca_gbpjpy_m15.yaml": [
+      "01_sca_gbp",
+      "RangeEndHour",
+      10
+    ],
+    "fundingrev_btcusd_d1.yaml": [
+      "02_funding",
+      "Threshold_Pct8h",
+      -0.003
+    ],
+    "pullback_usdjpy_h4.yaml": [
+      "03_pb_usd",
+      "ADX_Threshold",
+      27.5
+    ],
+    "pullback_gbpjpy_h4.yaml": [
+      "04_pb_gbp",
+      "SlowEMA_Period",
+      35
+    ],
+    "pullback_audjpy_h4.yaml": [
+      "05_pb_aud",
+      "RR_Ratio",
+      5.0
+    ],
+    "rsi_robust_usdjpy_h4.yaml": [
+      "06_rsi_usd",
+      "DP_Tolerance_ATR",
+      1.5
+    ],
+    "carry_audjpy_d1.yaml": [
+      "07_carry",
+      "ReentryCooldown",
+      10
+    ],
+    "bfxrev_btcusd_d1.yaml": [
+      "08_bfx",
+      "LookbackDays",
+      10
+    ]
+  }
+}

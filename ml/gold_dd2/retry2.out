@@ -1,0 +1,32 @@
+﻿2026-08-17T22:44:00+00:00 DRIVER_START pid=38688 stage=all targets=6
+2026-08-17T22:44:00+00:00 SKIP_EXISTING [1/6] id=GDD35_06 window=IS
+2026-08-17T22:44:00+00:00 SKIP_EXISTING [1/6] id=GDD35_06 window=OOS
+2026-08-17T22:44:00+00:00 RUN_START id=GDD35_06 family=portfolio_loss_cooldown window=XM5 run=gdd2p_xm5_gdd35_06_20260818074400_180c46
+2026-08-17T22:44:01+00:00 WAIT_MT5 elapsed=0s processes=terminal64.exe
+2026-08-17T22:45:03+00:00 WAIT_MT5 elapsed=62s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:46:05+00:00 WAIT_MT5 elapsed=124s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:47:07+00:00 WAIT_MT5 elapsed=186s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:48:19+00:00 RUN_END id=GDD35_06 window=XM5 status=FAILED decision=RUN_FAILED elapsed=258.050s
+2026-08-17T22:48:19+00:00 RUN_START id=GDD43_01 family=range_regime window=IS run=gdd2p_is_gdd43_01_20260818074819_0b6ee3
+2026-08-17T22:48:19+00:00 WAIT_MT5 elapsed=0s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:49:21+00:00 WAIT_MT5 elapsed=62s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:50:23+00:00 WAIT_MT5 elapsed=124s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:51:25+00:00 WAIT_MT5 elapsed=186s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:52:26+00:00 WAIT_MT5 elapsed=248s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:53:28+00:00 WAIT_MT5 elapsed=310s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:54:30+00:00 WAIT_MT5 elapsed=372s processes=metatester64.exe,terminal64.exe
+2026-08-17T22:55:51+00:00 RUN_END id=GDD43_01 window=IS status=FAILED decision=RUN_FAILED elapsed=452.170s
+2026-08-17T22:55:51+00:00 RUN_START id=GDD44_11 family=gap_regime window=IS run=gdd2p_is_gdd44_11_20260818075551_cb3117
+2026-08-17T22:57:01+00:00 RUN_END id=GDD44_11 window=IS status=OK decision=IS_REJECT elapsed=70.473s
+2026-08-17T22:57:01+00:00 GATE_SKIP id=GDD44_11 window=OOS reason=IS_NOT_SURVIVOR
+2026-08-17T22:57:01+00:00 GATE_SKIP id=GDD44_11 window=XM5 reason=OOS_NOT_STRICT
+2026-08-17T22:57:01+00:00 RUN_START id=GDD44_13 family=gap_regime window=IS run=gdd2p_is_gdd44_13_20260818075701_f4e0fb
+2026-08-17T22:58:12+00:00 RUN_END id=GDD44_13 window=IS status=OK decision=IS_REJECT elapsed=70.470s
+2026-08-17T22:58:12+00:00 GATE_SKIP id=GDD44_13 window=OOS reason=IS_NOT_SURVIVOR
+2026-08-17T22:58:12+00:00 GATE_SKIP id=GDD44_13 window=XM5 reason=OOS_NOT_STRICT
+2026-08-17T22:58:12+00:00 RUN_START id=GDD46_01 family=spread_gate window=IS run=gdd2p_is_gdd46_01_20260818075812_a85fab
+2026-08-17T22:59:17+00:00 RUN_END id=GDD46_01 window=IS status=FAILED decision=RUN_FAILED elapsed=65.394s
+2026-08-17T22:59:17+00:00 RUN_START id=GDD46_02 family=spread_gate window=IS run=gdd2p_is_gdd46_02_20260818075917_697e5f
+2026-08-17T23:00:22+00:00 RUN_END id=GDD46_02 window=IS status=FAILED decision=RUN_FAILED elapsed=65.424s
+2026-08-17T23:00:22+00:00 QUEUE_SUMMARY selected=6 started=6 skipped=2
+2026-08-17T23:00:22+00:00 DRIVER_END status=OK

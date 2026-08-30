@@ -1,0 +1,9 @@
+name,base,overrides,model,base_is_net,base_is_pf,base_is_n,base_oos_net,base_oos_pf,base_oos_n,cand_is_net,cand_is_pf,cand_is_n,cand_oos_net,cand_oos_pf,cand_oos_n
+RSI_GBPUSD_BB20,configs/rsi_robust_gbpusd_h4.yaml,{'BB_Deviation': 2.0},open_prices,5241.0,1.2118,56,11464.0,1.7057,55,12442.0,1.4064,74,16020.0,1.7592,73
+RSI_GBPUSD_BB20_Range25,configs/rsi_robust_gbpusd_h4.yaml,"{'BB_Deviation': 2.0, 'Range_Slope_Max_ATR': 0.25}",open_prices,5241.0,1.2118,56,11464.0,1.7057,55,7055.0,1.1934,84,22917.0,2.0665,80
+SCA_GBPJPY_Boost30,configs/sca_gbpjpy_m15.yaml,{'Boost_Mult': 3.0},every_tick,27445.0,1.1121,684,11127.0,1.0522,658,39027.0,1.1351,684,23451.0,1.0936,658
+PB_GBPJPY_Slope08_ATR25,configs/pullback_gbpjpy_h4.yaml,"{'MA_Slope_Min_ATR': 0.8, 'ATR_SL_Mult': 2.5}",open_prices,-90.0,0.9977,37,4641.0,1.1168,33,14818.0,1.3753,44,6539.0,1.1156,55
+PB_GBPJPY_Slope15_RR35,configs/pullback_gbpjpy_h4.yaml,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.5}",open_prices,-90.0,0.9977,37,13254.0,1.2925,42,18665.0,1.9031,19,4641.0,1.1168,33
+SCA_USDJPY_StopOrders,configs/sca_usdjpy_m15.yaml,{'UseStopOrders': True},every_tick,16913.0,1.141,453,-4875.0,0.9324,407,16324.0,1.1241,604,-8318.0,0.9233,602
+PB_USDJPY_Slope15_RR35,configs/pullback_usdjpy_h4.yaml,"{'MA_Slope_Min_ATR': 1.5, 'RR_Ratio': 3.5}",open_prices,60599.0,1.6688,71,-3299.0,0.8833,23,40166.0,1.5388,47,6080.0,1.3787,13
+PB_GBPJPY_RR40,configs/pullback_gbpjpy_h4.yaml,{'RR_Ratio': 4.0},open_prices,18665.0,1.9031,19,4641.0,1.1168,33,29315.0,2.8215,16,10197.0,1.3355,28

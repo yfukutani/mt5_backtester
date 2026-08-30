@@ -108,7 +108,9 @@ MAGICS = {
     "rsi_gbpusd": 20260774, "pair": 20260629, "carry": 20260650,
     "sca_usdjpy": 20261000, "sca_gbpjpy": 20261001,
 }
-STALE_TESTER_SECONDS = 300
+# 2026-08-30: 300秒だと孤立テスター1件につき最大5分を空費する(1 runが約400秒なので影響大)。
+# terminal64が不在でmetatester64だけが残る状態は明確な残骸なので、短めに回収する。
+STALE_TESTER_SECONDS = 90
 DEFAULT_RUN_TIMEOUT = 1200  # 通常run374秒(最大402)に対し7200は緩すぎ、1件で4.5時間を浪費したため短縮
 DEFAULT_TERMINAL_COUNT = 5
 TERMINAL_START_STAGGER_SECONDS = 25
