@@ -33,6 +33,7 @@ ml/*/logs/
 ml/*/logs2/
 ml/*/logs3/
 ml/*/deals/
+ml/*/run_deals/
 ml/*/cfg/
 ml/*/cfg6/
 ml/*/cfg6_prodcmp/
@@ -50,3 +51,9 @@ venv/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# コンパイル済みEA（experts/*.mq5 から MetaEditor64 で再生成可能）
+*.ex5
+
+# バックアップファイル
+*.bak
