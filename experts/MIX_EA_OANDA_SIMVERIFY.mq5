@@ -140,6 +140,29 @@ input int    OafxLossLookbackHours    = 24;
 input double OafxLossCapJPY           = 1000;
 input int    OafxLossScope            = 1;     // 1=GJ, 2=SCA, 3=all nine, 4=overlap peers
 
+input group "=== OANDA DD round 2 lab (SIMVERIFY only; 0=OFF) ==="
+input int    Oafx2LabMode              = 0;     // 101..110; zero preserves production behavior
+input double Oafx2StopCapATR           = 0.45;
+input double Oafx2TargetBlend          = 0.00;
+input int    Oafx2EarlyBars            = 1;
+input double Oafx2EarlyMAEATR          = 0.15;
+input int    Oafx2LossAgeBars          = 2;
+input double Oafx2LossAtR              = 0.05;
+input double Oafx2BETriggerR           = 0.30;
+input double Oafx2BELockR              = 0.00;
+input double Oafx2TrailTriggerR        = 0.30;
+input double Oafx2TrailATR             = 0.10;
+input double Oafx2PeakMinR             = 0.40;
+input double Oafx2GivebackFraction     = 0.10;
+input double Oafx2PartialTriggerR      = 0.20;
+input double Oafx2PartialLots          = 0.01;
+input double Oafx2BoostRiskJPY         = 500.0;
+input double Oafx2BoostMaxMult         = 2.0;
+input double Oafx2FullBoostDriftRatio  = 0.05;
+input double Oafx2BoostFloorMult       = 1.0;
+input int    Oafx2OverlapMask          = 1;     // bit 1=SCA UJ, 2=RSI EU, 4=Carry, 8=PB UJ
+input double Oafx2OverlapRiskR         = 0.15;
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -708,6 +731,7 @@ void OnTick()
    EnsureHandles();  // 2026-08-13: 死んだ指標ハンドルの遅延再生成＋建玉保持中の警告
    GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価
    ProfitTrail();   // v1.2（既定OFF）。毎ティック評価してピークを取り逃さない
+   if(Oafx2LabMode!=0) Oafx2ManagePositions();
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
    {
@@ -1246,6 +1270,227 @@ bool OafxGJLossCapBlocked()
    return gross_loss>=OafxLossCapJPY;
 }
 
+//============================ OANDA DD round 2 lab ============================
+// Every round-2 mode keeps all entry signals.  It only reduces loss depth,
+// manages an open position, or scales the reversal boost while preserving the
+// 0.01-lot base position.
+long   g_oafx2PositionId[64];
+double g_oafx2InitialRisk[64];
+double g_oafx2PeakR[64];
+bool   g_oafx2PartialDone[64];
+
+int Oafx2StateSlot(const long position_id,const double initial_risk)
+{
+   int free_slot=-1;
+   for(int n=0;n<ArraySize(g_oafx2PositionId);n++)
+   {
+      if(g_oafx2PositionId[n]==position_id) return n;
+      if(free_slot<0 && g_oafx2PositionId[n]==0) free_slot=n;
+   }
+   if(free_slot<0)
+   {
+      for(int n=0;n<ArraySize(g_oafx2PositionId);n++)
+      {
+         bool active=false;
+         for(int k=PositionsTotal()-1;k>=0;k--)
+         {
+            ulong ticket=PositionGetTicket(k);
+            if(ticket!=0 && PositionGetInteger(POSITION_IDENTIFIER)==g_oafx2PositionId[n])
+            {
+               active=true;
+               break;
+            }
+         }
+         if(!active){ free_slot=n; break; }
+      }
+   }
+   if(free_slot<0) return -1;
+   g_oafx2PositionId[free_slot]=position_id;
+   g_oafx2InitialRisk[free_slot]=initial_risk;
+   g_oafx2PeakR[free_slot]=0.0;
+   g_oafx2PartialDone[free_slot]=false;
+   return free_slot;
+}
+
+bool Oafx2ModifyStop(const ulong ticket,const bool is_buy,const string sym,
+                     const double candidate,const double current_sl,const double tp)
+{
+   double px=is_buy ? SymbolInfoDouble(sym,SYMBOL_BID) : SymbolInfoDouble(sym,SYMBOL_ASK);
+   double point=SymbolInfoDouble(sym,SYMBOL_POINT);
+   int digits=(int)SymbolInfoInteger(sym,SYMBOL_DIGITS);
+   double min_dist=(double)MathMax(SymbolInfoInteger(sym,SYMBOL_TRADE_STOPS_LEVEL),
+                                  SymbolInfoInteger(sym,SYMBOL_TRADE_FREEZE_LEVEL))*point;
+   double new_sl=candidate;
+   if(is_buy)
+   {
+      if(min_dist>0.0) new_sl=MathMin(new_sl,px-min_dist);
+      if(new_sl<=current_sl || new_sl>=px) return false;
+   }
+   else
+   {
+      if(min_dist>0.0) new_sl=MathMax(new_sl,px+min_dist);
+      if((current_sl>0.0 && new_sl>=current_sl) || new_sl<=px) return false;
+   }
+   return trade.PositionModify(ticket,NormalizeDouble(new_sl,digits),tp);
+}
+
+void Oafx2ManagePositions()
+{
+   if(Oafx2LabMode<102 || Oafx2LabMode>107) return;
+   const long gj_magic=20261001;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong ticket=PositionGetTicket(k);
+      if(ticket==0 || PositionGetInteger(POSITION_MAGIC)!=gj_magic) continue;
+      string sym=PositionGetString(POSITION_SYMBOL);
+      bool is_buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double open_price=PositionGetDouble(POSITION_PRICE_OPEN);
+      double current_sl=PositionGetDouble(POSITION_SL);
+      double tp=PositionGetDouble(POSITION_TP);
+      double px=is_buy ? SymbolInfoDouble(sym,SYMBOL_BID) : SymbolInfoDouble(sym,SYMBOL_ASK);
+      double initial_risk=MathAbs(open_price-current_sl);
+      if(initial_risk<=0.0) continue;
+      long position_id=PositionGetInteger(POSITION_IDENTIFIER);
+      int slot=Oafx2StateSlot(position_id,initial_risk);
+      if(slot<0 || g_oafx2InitialRisk[slot]<=0.0) continue;
+      initial_risk=g_oafx2InitialRisk[slot];
+      double favorable=is_buy ? px-open_price : open_price-px;
+      double current_r=favorable/initial_risk;
+      if(current_r>g_oafx2PeakR[slot]) g_oafx2PeakR[slot]=current_r;
+
+      int sleeve=SleeveByMagic(gj_magic);
+      if(sleeve<0) continue;
+      int bar_seconds=PeriodSeconds(S[sleeve].tf);
+      if(bar_seconds<=0) bar_seconds=900;
+      int age_seconds=(int)(TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME));
+
+      if(Oafx2LabMode==102)
+      {
+         double atr[]; ArraySetAsSeries(atr,true);
+         if(age_seconds<=MathMax(1,Oafx2EarlyBars)*bar_seconds &&
+            CopyBuffer(S[sleeve].hATR,0,1,1,atr)>=1 && atr[0]>0.0 &&
+            -favorable>=Oafx2EarlyMAEATR*atr[0])
+            trade.PositionClose(ticket);
+      }
+      else if(Oafx2LabMode==103)
+      {
+         if(age_seconds>=MathMax(1,Oafx2LossAgeBars)*bar_seconds &&
+            current_r<=-Oafx2LossAtR)
+            trade.PositionClose(ticket);
+      }
+      else if(Oafx2LabMode==104)
+      {
+         if(g_oafx2PeakR[slot]>=Oafx2BETriggerR)
+         {
+            double new_sl=is_buy ? open_price+Oafx2BELockR*initial_risk
+                                 : open_price-Oafx2BELockR*initial_risk;
+            Oafx2ModifyStop(ticket,is_buy,sym,new_sl,current_sl,tp);
+         }
+      }
+      else if(Oafx2LabMode==105)
+      {
+         double atr[]; ArraySetAsSeries(atr,true);
+         if(g_oafx2PeakR[slot]>=Oafx2TrailTriggerR &&
+            CopyBuffer(S[sleeve].hATR,0,1,1,atr)>=1 && atr[0]>0.0)
+         {
+            double new_sl=is_buy ? px-Oafx2TrailATR*atr[0] : px+Oafx2TrailATR*atr[0];
+            Oafx2ModifyStop(ticket,is_buy,sym,new_sl,current_sl,tp);
+         }
+      }
+      else if(Oafx2LabMode==106)
+      {
+         if(g_oafx2PeakR[slot]>=Oafx2PeakMinR &&
+            g_oafx2PeakR[slot]-current_r>=g_oafx2PeakR[slot]*Oafx2GivebackFraction)
+            trade.PositionClose(ticket);
+      }
+      else if(Oafx2LabMode==107 && !g_oafx2PartialDone[slot] &&
+              g_oafx2PeakR[slot]>=Oafx2PartialTriggerR)
+      {
+         double volume=PositionGetDouble(POSITION_VOLUME);
+         double step=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
+         double min_keep=MathMax(0.01,SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN));
+         double close_volume=MathMin(Oafx2PartialLots,volume-min_keep);
+         if(step>0.0) close_volume=MathFloor((close_volume+1e-9)/step)*step;
+         if(close_volume>0.0 && (step<=0.0 || close_volume>=step) &&
+            trade.PositionClosePartial(ticket,close_volume))
+            g_oafx2PartialDone[slot]=true;
+      }
+   }
+}
+
+bool Oafx2HasOverlap()
+{
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong ticket=PositionGetTicket(k);
+      if(ticket!=0 && OafxMaskHasMagic(PositionGetInteger(POSITION_MAGIC),Oafx2OverlapMask))
+         return true;
+   }
+   return false;
+}
+
+void Oafx2AdjustEntry(const int i,const bool is_buy,const double entry,const double atrd,
+                      double &sl,double &tp)
+{
+   if(S[i].magic!=20261001) return;
+   double original_risk=MathAbs(entry-sl);
+   if(original_risk<=0.0) return;
+   double new_risk=original_risk;
+   if(Oafx2LabMode==101 && atrd>0.0)
+      new_risk=MathMin(original_risk,Oafx2StopCapATR*atrd);
+   else if(Oafx2LabMode==110 && Oafx2HasOverlap())
+      new_risk=MathMin(original_risk,Oafx2OverlapRiskR*original_risk);
+   else
+      return;
+
+   double point=SymbolInfoDouble(S[i].symbol,SYMBOL_POINT);
+   double min_dist=(double)SymbolInfoInteger(S[i].symbol,SYMBOL_TRADE_STOPS_LEVEL)*point;
+   if(min_dist>0.0) new_risk=MathMax(new_risk,min_dist);
+   if(new_risk<=0.0 || new_risk>=original_risk) return;
+   sl=is_buy ? entry-new_risk : entry+new_risk;
+   if(Oafx2LabMode==101)
+   {
+      double blend=MathMax(0.0,MathMin(1.0,Oafx2TargetBlend));
+      double target_risk=new_risk+(original_risk-new_risk)*blend;
+      double target_distance=S[i].rr*target_risk;
+      if(min_dist>0.0) target_distance=MathMax(target_distance,min_dist);
+      tp=is_buy ? entry+target_distance : entry-target_distance;
+   }
+}
+
+double Oafx2EntryLot(const int i,const bool is_buy,const double sl_distance)
+{
+   double base_lot=MathMax(0.01,S[i].lot*GlobalLotMult*S[i].lotMult);
+   bool boosted=S[i].scaRevBoost && ((is_buy && S[i].scaDrift<0.0) ||
+                                     (!is_buy && S[i].scaDrift>0.0));
+   if(!boosted) return Clamp(S[i].symbol,base_lot);
+   double boost_mult=S[i].scaBoostMult;
+   if(Oafx2LabMode==109)
+   {
+      double width=S[i].scaRangeHigh-S[i].scaRangeLow;
+      double ratio=(width>0.0) ? MathAbs(S[i].scaDrift)/width : 0.0;
+      double full=MathMax(1e-9,Oafx2FullBoostDriftRatio);
+      double weight=MathMax(0.0,MathMin(1.0,ratio/full));
+      double floor_mult=MathMax(1.0,MathMin(boost_mult,Oafx2BoostFloorMult));
+      boost_mult=floor_mult+(boost_mult-floor_mult)*weight;
+   }
+   double lot=base_lot*boost_mult;
+   if(Oafx2LabMode==108 && sl_distance>0.0)
+   {
+      double tick_size=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_SIZE);
+      double tick_value=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_VALUE_LOSS);
+      if(tick_value<=0.0) tick_value=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_VALUE);
+      if(tick_size>0.0 && tick_value>0.0)
+      {
+         double loss_per_lot=(sl_distance/tick_size)*tick_value;
+         if(loss_per_lot>0.0) lot=MathMin(lot,Oafx2BoostRiskJPY/loss_per_lot);
+      }
+      lot=MathMin(lot,base_lot*MathMax(1.0,Oafx2BoostMaxMult));
+      lot=MathMax(base_lot,lot);
+   }
+   return Clamp(S[i].symbol,lot);
+}
+
 void ProcSCA(int i)
 {
    string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
@@ -1297,11 +1542,24 @@ void ProcSCA(int i)
          sl=S[i].scaRangeHigh-OafxGJSLRangeFraction*(S[i].scaRangeHigh-S[i].scaRangeLow);
       dist=ask-sl;
       if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(S[i].scaRevBoost && S[i].scaDrift<0) lot*=S[i].scaBoostMult;   // リバーサル型
-         double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
-         if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
-            S[i].scaTradedL=true;
+         if(S[i].magic==20261001 && Oafx2LabMode!=0)
+         {
+            double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+            Oafx2AdjustEntry(i,true,ask,atrd,sl,tp);
+            dist=ask-sl;
+            double lot=Oafx2EntryLot(i,true,dist);
+            if(trade.Buy(lot,sym,ask,NormalizeDouble(sl,S[i].digits),
+                         NormalizeDouble(tp,S[i].digits),"SCA-L"))
+               S[i].scaTradedL=true;
+         }
+         else
+         {
+            double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
+            if(S[i].scaRevBoost && S[i].scaDrift<0) lot*=S[i].scaBoostMult;
+            double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+            if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
+               S[i].scaTradedL=true;
+         }
       }
    }
    // 下抜けブレイク → 売り
@@ -1314,11 +1572,24 @@ void ProcSCA(int i)
          sl=S[i].scaRangeLow+OafxGJSLRangeFraction*(S[i].scaRangeHigh-S[i].scaRangeLow);
       dist=sl-bid;
       if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(S[i].scaRevBoost && S[i].scaDrift>0) lot*=S[i].scaBoostMult;
-         double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
-         if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
-            S[i].scaTradedS=true;
+         if(S[i].magic==20261001 && Oafx2LabMode!=0)
+         {
+            double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+            Oafx2AdjustEntry(i,false,bid,atrd,sl,tp);
+            dist=sl-bid;
+            double lot=Oafx2EntryLot(i,false,dist);
+            if(trade.Sell(lot,sym,bid,NormalizeDouble(sl,S[i].digits),
+                          NormalizeDouble(tp,S[i].digits),"SCA-S"))
+               S[i].scaTradedS=true;
+         }
+         else
+         {
+            double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
+            if(S[i].scaRevBoost && S[i].scaDrift>0) lot*=S[i].scaBoostMult;
+            double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+            if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
+               S[i].scaTradedS=true;
+         }
       }
    }
 }
