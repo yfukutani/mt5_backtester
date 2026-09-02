@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ctypes
 import json
 import os
 import queue
@@ -68,8 +69,14 @@ BASE_PARAMS = {
     "UseGoldHourGate": True, "GoldPBHoldBars": 64, "Oafx2LabMode": 0,
 }
 
-RUN_TIMEOUT = 1800          # 基準runは約180秒。10倍を上限にする
+RUN_TIMEOUT = 1200          # 実測205〜300秒。これを超えたら異常とみなす
 STALE_GRACE = 60
+
+# 【2026-09-02 の実測】XAUUSD の every_tick は metatester64 1つで 3.7〜4.8GB を使う。
+# 5端末並列だと最大24GBとなり搭載27.9GBを実質的に食い潰し、空き1.3GB(5%)まで落ちて
+# ページングで全体が停止した（17時間の空費の実質的な原因。スリープは引き金にすぎない）。
+# 3端末なら最大約14GBで収まる。増やす場合は必ず空きメモリを実測してから。
+MAX_TERMINALS = 3
 
 FIELDS = [
     "attempt_id", "run_id", "proposal_id", "family", "target", "window", "terminal",
@@ -79,6 +86,56 @@ FIELDS = [
     "parameter_json", "config_file", "deal_file",
     "started_at", "finished_at", "elapsed_seconds", "error",
 ]
+
+# 走行中の run を端末ごとに記録する。実時計のウォッチドッグが参照する。
+#
+# 【2026-09-01 の事故】PCが走行中にスリープし（イベントログ 08-31 12:10:55 sleep /
+# 12:10:59 resume）、5端末の metatester64 が固着して約17時間を空費した。
+# subprocess.run(timeout=) は発火しなかった（elapsed 60,244秒でNO_SUMMARY復帰）。
+# Windows ではサスペンド中に単調時計が進まないことがあり、サブプロセスのタイムアウトだけ
+# では停止を検出できない。前ラウンド oafx_dd2 は keepawake.py で同じ事故を解決していたが
+# 本ドライバへ移植していなかった。対策は二重に置く:
+#   (a) SetThreadExecutionState でドライバ稼働中はスリープさせない（根本原因を断つ）
+#   (b) 実時計（time.time）のウォッチドッグで、期限超過の端末だけを落とす（保険）
+_inflight: dict[str, tuple[str, float]] = {}
+_inflight_lock = threading.Lock()
+
+ES_CONTINUOUS = 0x80000000
+ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def suppress_sleep() -> bool:
+    """ドライバが生きている間だけスリープを抑止する。電源設定自体は変更しない。"""
+    try:
+        prev = ctypes.windll.kernel32.SetThreadExecutionState(
+            ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+    except Exception:  # noqa: BLE001
+        return False
+    return prev != 0
+
+
+def release_sleep() -> None:
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def watchdog(stop: threading.Event) -> None:
+    """実時計で期限を超えた run の端末だけを落とす。他ワーカーには触れない。"""
+    while not stop.wait(60):
+        now = time.time()
+        with _inflight_lock:
+            stale = [(name, exe, now - t0)
+                     for name, (exe, t0) in _inflight.items()
+                     if now - t0 > RUN_TIMEOUT + 120]
+        for name, exe, age in stale:
+            log(f"WATCHDOG_STALL terminal={name} age={age:.0f}s — 端末を落とす")
+            kill_terminal(exe)
+            with _inflight_lock:
+                # 二重に落とさないよう、いったん記録を外す
+                _inflight.pop(name, None)
+
 
 _write_lock = threading.Lock()
 _log_lock = threading.Lock()
@@ -259,6 +316,8 @@ def run_once(name: str, exe: str, proposal: dict, window: str) -> dict:
         "started_at": utc_now(),
     }
     t0 = time.time()
+    with _inflight_lock:
+        _inflight[name] = (exe, t0)
     log(f"RUN_START id={proposal['proposal_id']} window={window} terminal={name} family={proposal['family']}")
     try:
         proc = subprocess.run(
@@ -276,6 +335,10 @@ def run_once(name: str, exe: str, proposal: dict, window: str) -> dict:
         row["finished_at"] = utc_now()
         row["elapsed_seconds"] = round(time.time() - t0, 3)
         return row
+
+    finally:
+        with _inflight_lock:
+            _inflight.pop(name, None)
 
     value = parse_summary(run_id)
     row["finished_at"] = utc_now()
@@ -301,6 +364,12 @@ def run_once(name: str, exe: str, proposal: dict, window: str) -> dict:
             src.replace(DEAL_DIR / f"{run_id}_deals.csv")
         except OSError:
             pass
+
+    # 結果を読み終えたら端末を落としてメモリを返す。
+    # mt5bt は run ごとに端末を起動し直すため、ここで落としても次の run に影響しない。
+    # 落とさないと metatester64 が完了後も 1.4〜4.8GB を保持したまま残り、
+    # 次の run のテスターと重なって同一端末に2プロセスが並ぶ（結果を壊しうる状態）。
+    kill_terminal(exe)
     return row
 
 
@@ -345,6 +414,18 @@ def worker(name: str, exe: str, work: "queue.Queue[dict]", done: set, gate_lock:
             work.task_done()
 
 
+def free_memory_mb() -> float:
+    """空き物理メモリ(MB)。並列度が妥当かを記録に残すために使う。"""
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+             "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory"],
+            capture_output=True, text=True, timeout=60)
+        return float(out.stdout.strip()) / 1024.0
+    except Exception:  # noqa: BLE001
+        return -1.0
+
+
 def load_oos_baseline() -> None:
     """baseline_oos.yaml の実測結果を results ディレクトリから読む。"""
     if BASELINE["OOS"] is not None:
@@ -368,7 +449,8 @@ def load_oos_baseline() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="先頭N件だけ処理する（試走用）")
-    ap.add_argument("--terminals", type=int, default=len(TERMINALS))
+    ap.add_argument("--terminals", type=int, default=MAX_TERMINALS,
+                    help="並列端末数。メモリ実測に基づき既定3。増やす前に空きメモリを確認すること")
     args = ap.parse_args()
 
     for d in (CONFIG_DIR, RUN_DIR, DEAL_DIR):
@@ -379,7 +461,16 @@ def main() -> None:
                          f"先行が本当に停止しているのを確認してから削除すること。")
     LOCK.write_text(f"pid={os.getpid()} started={utc_now()}\n", encoding="utf-8")
 
+    stop_watchdog = threading.Event()
+    if suppress_sleep():
+        log("SLEEP_SUPPRESSED ドライバ稼働中はスリープしない（終了時に自動解除）")
+    else:
+        log("SLEEP_SUPPRESS_FAILED ⚠️スリープで走査が止まる可能性がある")
+
     try:
+        threading.Thread(target=watchdog, args=(stop_watchdog,),
+                         name="watchdog", daemon=True).start()
+        log(f"MEMORY_FREE_MB {free_memory_mb():.0f} terminals={args.terminals}")
         load_oos_baseline()
         log(f"BASELINE_IS {BASELINE['IS']}")
 
@@ -407,6 +498,8 @@ def main() -> None:
             t.join()
         log("DRIVER_END status=OK")
     finally:
+        stop_watchdog.set()
+        release_sleep()
         LOCK.unlink(missing_ok=True)
 
 

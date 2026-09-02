@@ -35,6 +35,7 @@ ml/*/logs3/
 ml/*/deals/
 ml/*/run_deals/
 ml/*/runs/
+ml/*/confirm/
 ml/*/*.lock
 ml/*/cfg/
 ml/*/cfg6/
