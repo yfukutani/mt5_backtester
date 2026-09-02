@@ -1,0 +1,24 @@
+﻿→ 設定ファイルを読み込み中: C:\Users\f\source\repos\mt5_backtester\ml\pprot1\regression_is.yaml
+→ EA: MIX_EA_OANDA_SIMVERIFY | シンボル: XAUUSD | 期間: M15
+→ テスト期間: 2021.06.21 ～ 2026.06.20
+→ バックテストを開始します
+  MT5ターミナルを起動中: C:\Program Files\OANDA MetaTrader 5_BT1\terminal64.exe
+  設定ファイル: C:\Users\f\AppData\Local\Temp\tmp_x4caytm\backtest.ini
+  SETファイル: C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\6142D304BFF2E6AB353977162D6F452C\MQL5\Profiles\Tester\MIX_EA_OANDA_SIMVERIFY.set
+  バックテスト実行中
+
+  結果CSV生成完了: C:\Users\f\AppData\Roaming\MetaQuotes\Tester\6142D304BFF2E6AB353977162D6F452C\Agent-127.0.0.1-3000\MQL5\Files\pprot1_regression_is_result.csv
+✓ バックテスト完了
+→ 結果を解析中: pprot1_regression_is_result.csv
+
+━━━━━━ バックテスト結果サマリー ━━━━━━
+純利益          417,882.00
+プロフィットファクター  2.25
+最大DD%        3.79%
+勝率           56.1%
+総取引数         301
+シャープレシオ      0.00
+リカバリーファクター   0.00
+
+✓ HTMLレポート: results\pprot1_regression_is\report.html
+✓ CSVサマリー: results\pprot1_regression_is\summary.csv
