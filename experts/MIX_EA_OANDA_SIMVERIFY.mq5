@@ -163,6 +163,23 @@ input double Oafx2BoostFloorMult       = 1.0;
 input int    Oafx2OverlapMask          = 1;     // bit 1=SCA UJ, 2=RSI EU, 4=Carry, 8=PB UJ
 input double Oafx2OverlapRiskR         = 0.15;
 
+input group "=== SCA決済ラボ（SXIT・SIMVERIFY専用・既定OFF） ==="
+// SxitMode=0 では以下を一切参照せず、本番と完全に同一の挙動を保つ。
+// pprot1 で「SCA GOLD は守りではなく利確位置の問題」と判明したため、
+// RR・強制決済時刻・エントリー締切・TPの置き方を掃引できるようにする。
+input int    SxitMode             = 0;
+// bit0=SCA GOLD 1=SCA USDJPY 2=SCA GBPJPY
+input int    SxitSleeveMask       = 0;
+input double SxitRR               = 0.0;  // RRを上書き（0=不変）
+input double SxitTPATR            = 0.0;  // TPを ATR×これ の距離に置く（0=RR基準のまま。RR上書きより優先）
+input int    SxitTradeEndHour     = -1;   // エントリー締切時刻を上書き（-1=不変）
+input int    SxitForceCloseHour   = -1;   // 強制決済時刻を上書き（-1=不変）
+input int    SxitProfitCloseHour  = -1;   // 含み益のときだけこの時刻で決済（-1=未使用）
+input int    SxitLossCloseHour    = -1;   // 含み損のときだけこの時刻で決済（-1=未使用）
+input double SxitProfitHoldATR    = 0.0;  // 含み益が ATR×これ 以上なら SxitHoldUntilHour まで保有を延長
+input int    SxitHoldUntilHour    = -1;
+input int    SxitHardCloseHour    = 23;   // ラボ有効時の最終決済（日跨ぎ防止のバックストップ）
+
 input group "=== 利益保護ラボ（PPROT・SIMVERIFY専用・既定OFF） ==="
 // PprotMode=0 では以下を一切参照せず、本番と完全に同一の挙動を保つ。
 // 1..N は ml/pprot1/run_pprot.py の FAMILY_ACTIVATION と一対一。番号自体は
@@ -1731,6 +1748,81 @@ double Oafx2EntryLot(const int i,const bool is_buy,const double sl_distance)
    return Clamp(S[i].symbol,lot);
 }
 
+//============================ SCA決済ラボ（SXIT） ============================
+// pprot1 の実測: SCA GOLD は242取引中 TP到達が15件しかなく、199件が20:00の強制決済で
+// 決済されている。利益の83%が強制決済由来で、TP(1.7R)は事実上機能していない。
+// ここでは RR・TPの置き方・強制決済時刻・エントリー締切を掃引できるようにする。
+bool SxitApplies(const int i)
+{
+   if(SxitMode<=0 || SxitSleeveMask==0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20261002) bit=0;        // SCA GOLD
+   else if(m==20261000) bit=1;   // SCA USDJPY
+   else if(m==20261001) bit=2;   // SCA GBPJPY
+   return bit>=0 && ((SxitSleeveMask>>bit)&1)!=0;
+}
+
+double SxitRRFor(const int i)
+{
+   return (SxitApplies(i) && SxitRR>0.0) ? SxitRR : S[i].rr;
+}
+
+int SxitTradeEndFor(const int i)
+{
+   return (SxitApplies(i) && SxitTradeEndHour>=0) ? SxitTradeEndHour : S[i].scaTradeEnd;
+}
+
+// TPまでの距離。SxitTPATR>0 なら ATR基準、それ以外は従来どおり RR×SL幅。
+double SxitTPDist(const int i,const double dist,const double atrd)
+{
+   if(SxitApplies(i) && SxitTPATR>0.0 && atrd>0.0) return SxitTPATR*atrd;
+   return SxitRRFor(i)*dist;
+}
+
+// ラボ有効時の決済管理。戻り値 true なら当日の処理を打ち切る（新規は建てない）。
+bool SxitManageClose(const int i,const MqlDateTime &dt)
+{
+   int base=(SxitForceCloseHour>=0) ? SxitForceCloseHour : S[i].scaForceClose;
+   bool per_position=(SxitProfitCloseHour>=0 || SxitLossCloseHour>=0 ||
+                      (SxitProfitHoldATR>0.0 && SxitHoldUntilHour>=0));
+
+   if(!per_position)
+   {
+      if(dt.hour>=base){ CloseSleeveAll(i); return true; }
+      return false;
+   }
+
+   double atrd=0.0;
+   double ab[]; ArraySetAsSeries(ab,true);
+   if(CopyBuffer(S[i].hATR,0,1,1,ab)>=1) atrd=ab[0];
+
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k);
+      if(tk==0 || PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      bool is_buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      string sym=PositionGetString(POSITION_SYMBOL);
+      double open=PositionGetDouble(POSITION_PRICE_OPEN);
+      double px=is_buy ? SymbolInfoDouble(sym,SYMBOL_BID) : SymbolInfoDouble(sym,SYMBOL_ASK);
+      double fav=is_buy ? px-open : open-px;
+
+      int close_hour=base;
+      if(fav>0.0 && SxitProfitCloseHour>=0) close_hour=SxitProfitCloseHour;
+      if(fav<=0.0 && SxitLossCloseHour>=0)  close_hour=SxitLossCloseHour;
+      if(fav>0.0 && SxitProfitHoldATR>0.0 && SxitHoldUntilHour>=0 &&
+         atrd>0.0 && fav>=SxitProfitHoldATR*atrd)
+         close_hour=SxitHoldUntilHour;
+
+      // 日跨ぎは設計外なので必ず切る
+      if(dt.hour>=SxitHardCloseHour) close_hour=SxitHardCloseHour;
+
+      if(dt.hour>=close_hour) trade.PositionClose(tk);
+   }
+   // 新規エントリーは従来どおり base 以降は止める
+   return dt.hour>=base;
+}
+
 void ProcSCA(int i)
 {
    string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
@@ -1745,7 +1837,8 @@ void ProcSCA(int i)
    }
    trade.SetExpertMagicNumber(S[i].magic);
 
-   if(dt.hour>=S[i].scaForceClose){ CloseSleeveAll(i); return; }
+   if(SxitApplies(i)){ if(SxitManageClose(i,dt)) return; }
+   else if(dt.hour>=S[i].scaForceClose){ CloseSleeveAll(i); return; }
 
    if(!S[i].scaReady && dt.hour>=S[i].scaRangeEnd){
       if(!SCARange(i, day_start)) return;
@@ -1761,7 +1854,7 @@ void ProcSCA(int i)
                S[i].scaSkip ? 1 : 0, S[i].scaSkip ? "SKIP" : "ACTIVE");
    }
    if(!S[i].scaReady || S[i].scaSkip) return;
-   if(dt.hour<S[i].scaRangeEnd || dt.hour>=S[i].scaTradeEnd) return;
+   if(dt.hour<S[i].scaRangeEnd || dt.hour>=SxitTradeEndFor(i)) return;
    if(S[i].scaSkipFriday && dt.day_of_week==5) return;
 
    double ab2[]; ArraySetAsSeries(ab2,true);
@@ -1784,7 +1877,7 @@ void ProcSCA(int i)
       if(dist>0){
          if(S[i].magic==20261001 && Oafx2LabMode!=0)
          {
-            double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+            double tp=NormalizeDouble(ask+SxitTPDist(i,dist,atrd),S[i].digits);
             Oafx2AdjustEntry(i,true,ask,atrd,sl,tp);
             dist=ask-sl;
             double lot=Oafx2EntryLot(i,true,dist);
@@ -1796,7 +1889,7 @@ void ProcSCA(int i)
          {
             double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
             if(S[i].scaRevBoost && S[i].scaDrift<0) lot*=S[i].scaBoostMult;
-            double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+            double tp=NormalizeDouble(ask+SxitTPDist(i,dist,atrd),S[i].digits);
             if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
                S[i].scaTradedL=true;
          }
@@ -1814,7 +1907,7 @@ void ProcSCA(int i)
       if(dist>0){
          if(S[i].magic==20261001 && Oafx2LabMode!=0)
          {
-            double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+            double tp=NormalizeDouble(bid-SxitTPDist(i,dist,atrd),S[i].digits);
             Oafx2AdjustEntry(i,false,bid,atrd,sl,tp);
             dist=sl-bid;
             double lot=Oafx2EntryLot(i,false,dist);
@@ -1826,7 +1919,7 @@ void ProcSCA(int i)
          {
             double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
             if(S[i].scaRevBoost && S[i].scaDrift>0) lot*=S[i].scaBoostMult;
-            double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+            double tp=NormalizeDouble(bid-SxitTPDist(i,dist,atrd),S[i].digits);
             if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
                S[i].scaTradedS=true;
          }
