@@ -126,6 +126,28 @@ input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca2BoostMult     = 2.0;
 input double Sca2Lot           = 0.01;
 
+input group "=== PB GOLD 第2時間軸（PB2・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2セッション（SCA2）で「時間帯の違う取引を足すと、倍率を上げるより効率よく
+// 利益が増える」ことが実測できた（docs/sca_gold_second_session_20260905.md §3.3）。
+// 同じ理屈で、PB GOLD は H4 一本しか使っていない。H1 を別magicで足せば、同じ戦略でも
+// 押し目の判定タイミングが変わるので、H4版と相関の低い取引源になる。
+// SCA2 が「時間帯を増やす」軸だったのに対し、こちらは「時間軸を増やす」軸。
+//
+// 既存の PullbackTrend 機構をそのまま使い、別magic 20260641 の枠として登録する。
+// H4版（20260640）には一切触れないので、枠別に効果を分離できる。
+//
+// 【注意】保有上限も時間帯ゲートもmagicで引いているため、20260641 は既定では
+// どちらの対象にもならない。Pb2HoldBars / Pb2UseHourGate で明示的に与える。
+input bool   Pb2Enable         = false;
+input int    Pb2TFMinutes      = 60;    // 時間軸（分）: 30/60/120/240 のみ有効
+input double Pb2Lot            = 0.01;
+input double Pb2RR             = 1.8;   // H4版と同じ既定
+input double Pb2ATRSLmult      = 2.0;
+input double Pb2ADXThr         = 22.5;
+input double Pb2SlopeMinATR    = 1.2;
+input int    Pb2HoldBars       = 64;    // 保有上限（自時間軸のバー数・0で無効）
+input bool   Pb2UseHourGate    = false; // H4版と同じ曜日×時刻ブロックを適用するか
+
 input group "=== GOLDサイジングラボ（GSZ・SIMVERIFY専用・既定OFF） ==="
 // OANDA版 MIX_EA_OANDA_SIMVERIFY.mq5 と同一仕様。両ブローカーで同じ risk% を
 // 与えたとき同じ意味になるよう、倍率(lotMult/GlobalLotMult)は掛けない。
@@ -421,9 +443,28 @@ bool GoldHourRuleValid(const int week_mask,const int start_hour,const int end_ho
           end_hour>=1 && end_hour<=24 && start_hour<end_hour;
 }
 
+// PB GOLD 第2時間軸の時間軸。SETファイルでENUMを渡すと綴りの取り違えが起きるので
+// 分で受け、許可した値以外は 0 を返して OnInit で弾く。
+ENUM_TIMEFRAMES Pb2Timeframe()
+{
+   switch(Pb2TFMinutes)
+   {
+      case 30:  return PERIOD_M30;
+      case 60:  return PERIOD_H1;
+      case 120: return PERIOD_H2;
+      case 240: return PERIOD_H4;   // H4版との同条件対照用
+   }
+   return (ENUM_TIMEFRAMES)0;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(Pb2Enable && Pb2Timeframe()==0)
+   {
+      Print("Pb2TFMinutes must be one of 30/60/120/240");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(GoldLabMode<0 || GoldLabMode>28 || GoldLabMode2<0 || GoldLabMode2>28)
    {
       Print("GoldLabMode and GoldLabMode2 must be 0..28");
@@ -506,6 +547,12 @@ int OnInit()
      if(GoldLabModeEnabled(17)) x.trendPeriod=GoldLabPBTrendMA;
      if(GoldLabModeEnabled(26)) x.adxPeriod=GoldLabPBADXPeriod;
      if(GoldLabModeEnabled(23)){ x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=GoldLabPBHigherTFMA; }
+     AddSleeve(x); }
+   // 4b. PB GOLD 第2時間軸（既定OFF・別magicでH4版と分離）
+   { SLEEVE x=pb; x.enabled=Pb2Enable; x.symbol="GOLD"; x.magic=20260641;
+     x.tf=Pb2Timeframe(); x.useRisk=false; x.lot=Pb2Lot; x.rr=Pb2RR;
+     x.lotMult=Mult_PB_GOLD; x.atrSLmult=Pb2ATRSLmult; x.adxThr=Pb2ADXThr;
+     x.slopeMinATR=Pb2SlopeMinATR;
      AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
@@ -1071,11 +1118,15 @@ double SimVerifySleeveEquity(const int i)
 // （銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため）。
 void GoldPBHoldLimit()
 {
-   if(GoldPBHoldBars<=0) return;
    for(int i=0;i<NS;i++)
    {
-      if(!S[i].enabled || S[i].magic!=20260640) continue;   // PB GOLDのみ
-      long limit=(long)GoldPBHoldBars*PeriodSeconds(S[i].tf);
+      if(!S[i].enabled) continue;
+      // 第2時間軸(20260641)は自分のバー数で数える。H4版と違う時間軸を持つので
+      // GoldPBHoldBars をそのまま流用すると意味が変わってしまう。
+      int bars = (S[i].magic==20260640) ? GoldPBHoldBars
+               : (S[i].magic==20260641) ? Pb2HoldBars : 0;
+      if(bars<=0) continue;
+      long limit=(long)bars*PeriodSeconds(S[i].tf);
       for(int k=PositionsTotal()-1;k>=0;k--)
       {
          ulong tk=PositionGetTicket(k);
@@ -1248,7 +1299,7 @@ bool GoldHourEntryOK(const int i)
    // TimeCurrentはブローカーのサーバ時刻。テスターではテスト中のシミュレート時刻。
    TimeToStruct(TimeCurrent(),dt);
    bool blocked=false;
-   if(S[i].magic==20260640) // PB GOLD
+   if(S[i].magic==20260640 || (S[i].magic==20260641 && Pb2UseHourGate)) // PB GOLD
       blocked=GoldHourRuleMatches(dt,GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
               GoldHourRuleMatches(dt,GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2);
    else if(S[i].magic==20261002) // SCA GOLD
