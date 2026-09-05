@@ -1,0 +1,38 @@
+mt5_path: C:\Program Files\OANDA MetaTrader 5_BT4\terminal64.exe
+expert: MIX_EA_OANDA_SIMVERIFY
+symbol: XAUUSD
+period: M15
+from_date: 2021.06.21
+to_date: 2026.06.20
+deposit: 500000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  En_PB_USDJPY: false
+  En_PB_GBPJPY: false
+  En_PB_AUDJPY: false
+  En_PB_GOLD: true
+  En_RSI_USDJPY: false
+  En_RSI_EURUSD: false
+  En_RSI_GBPUSD: false
+  En_PAIR: false
+  En_CARRY: false
+  En_VBO: false
+  En_ETH: false
+  En_SCA_GOLD: true
+  En_SCA_USDJPY: false
+  En_SCA_GBPJPY: false
+  UseGoldHourGate: true
+  GoldPBHoldBars: 64
+  Oafx2LabMode: 0
+  PprotMode: 0
+  SxitMode: 0
+  GszMode: 1
+  GszSleeveMask: 1
+  GszRiskPct: 5.0
+  GszRefCap: 500000
+  ResultFileName: gsz_probe_bt4_result.csv
+  EquityLogFile: gsz_probe_bt4_deals.csv
+report_dir: C:\Users\f\source\repos\mt5_backtester\ml\goldsize1\runs
+report_name: gsz_probe_bt4

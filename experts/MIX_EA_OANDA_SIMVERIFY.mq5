@@ -163,6 +163,27 @@ input double Oafx2BoostFloorMult       = 1.0;
 input int    Oafx2OverlapMask          = 1;     // bit 1=SCA UJ, 2=RSI EU, 4=Carry, 8=PB UJ
 input double Oafx2OverlapRiskR         = 0.15;
 
+input group "=== GOLDサイジングラボ（GSZ・SIMVERIFY専用・既定OFF） ==="
+// GszMode=0 では以下を一切参照せず、本番と完全に同一の挙動を保つ。
+//
+// 【狙い】PB GOLD は PullbackTrend 型でありながら固定0.01のまま。
+// docs/position_sizing.md の実測では PullbackTrend は risk% サイジングに最もよく反応する
+// （利益3.6倍・PF 1.21→1.35・net/DD 単調改善）。GOLDだけ未検証で残っている。
+// これは A-1（GOLDの1取引リスクが設計の5.7倍）への直接の対処でもある。
+//
+// 【通貨の罠】既存の LotRisk() は SYMBOL_TRADE_TICK_VALUE を使うが、この値は
+// GOLD/暗号のようなUSD建て銘柄では**口座通貨に換算されずUSDのまま返る**
+// （docs/profit_trail_20260805.md §2 の実害記録）。そのまま使うとロットが
+// USDJPY倍（約150倍）過大になる。本ラボは OrderCalcProfit() を使う。
+// これは建値通貨・契約サイズ・クロスレートを端末側で解決するため通貨不一致を踏まない。
+input int    GszMode           = 0;
+input int    GszSleeveMask     = 0;     // bit0=PB GOLD, bit1=SCA GOLD
+input double GszRiskPct        = 0.0;   // 1取引のリスク（基準資金に対する%。0=未使用）
+input double GszRefCap         = 0.0;   // 基準資金（0=口座equity＝複利が効く）
+input double GszMinLot         = 0.0;   // 下限ロット（0=銘柄の最小）
+input double GszMaxLot         = 0.0;   // 上限ロット（0=無制限）
+input bool   GszApplyBoost     = true;  // SCAのリバーサルBoostを乗せるか
+
 input group "=== SCA決済ラボ（SXIT・SIMVERIFY専用・既定OFF） ==="
 // SxitMode=0 では以下を一切参照せず、本番と完全に同一の挙動を保つ。
 // pprot1 で「SCA GOLD は守りではなく利確位置の問題」と判明したため、
@@ -864,8 +885,50 @@ double Clamp(string sym, double lot)
    if(st>0) lot=MathFloor(lot/st)*st;
    return MathMax(mn,MathMin(mx,lot));
 }
+//============================ GOLDサイジングラボ（GSZ） ============================
+bool GszApplies(const int i)
+{
+   if(GszMode<=0 || GszSleeveMask==0 || GszRiskPct<=0.0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20260640) bit=0;        // PB GOLD
+   else if(m==20261002) bit=1;   // SCA GOLD
+   return bit>=0 && ((GszSleeveMask>>bit)&1)!=0;
+}
+
+// 口座通貨での「1ロットあたり、SL距離ぶん逆行したときの損失額」。
+// OrderCalcProfit は建値通貨・契約サイズ・クロスレートを端末が解決するため、
+// SYMBOL_TRADE_TICK_VALUE の通貨不一致（GOLDはUSDのまま返る）を踏まない。
+double GszMoneyPerLot(const string sym,const double slDist)
+{
+   if(slDist<=0.0) return 0.0;
+   double px=SymbolInfoDouble(sym,SYMBOL_ASK);
+   if(px<=0.0) return 0.0;
+   double p=0.0;
+   if(!OrderCalcProfit(ORDER_TYPE_BUY,sym,1.0,px,px-slDist,p)) return 0.0;
+   return MathAbs(p);
+}
+
+// リスク%からロットを出す。倍率(lotMult/GlobalLotMult)は掛けない——
+// risk% がそのまま1取引のリスクを定義するため、二重に効かせない。
+double GszLot(const int i,const double slDist)
+{
+   double eq=(GszRefCap>0.0) ? GszRefCap : AccountInfoDouble(ACCOUNT_EQUITY);
+   double mpl=GszMoneyPerLot(S[i].symbol,slDist);
+   if(eq<=0.0 || mpl<=0.0) return 0.0;
+   double lot=(eq*GszRiskPct/100.0)/mpl;
+   if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
+   if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
+   return Clamp(S[i].symbol,lot);
+}
+
 double LotRisk(int i, double slDistPrice)
 {
+   if(GszApplies(i) && slDistPrice>0.0)
+   {
+      double gl=GszLot(i,slDistPrice);
+      if(gl>0.0) return gl;
+   }
    double base;
    if(!S[i].useRisk || slDistPrice<=0) base=S[i].lot;
    else{
@@ -1888,7 +1951,9 @@ void ProcSCA(int i)
          else
          {
             double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-            if(S[i].scaRevBoost && S[i].scaDrift<0) lot*=S[i].scaBoostMult;
+            if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+            if(S[i].scaRevBoost && S[i].scaDrift<0 &&
+               (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
             double tp=NormalizeDouble(ask+SxitTPDist(i,dist,atrd),S[i].digits);
             if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
                S[i].scaTradedL=true;
@@ -1918,7 +1983,9 @@ void ProcSCA(int i)
          else
          {
             double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-            if(S[i].scaRevBoost && S[i].scaDrift>0) lot*=S[i].scaBoostMult;
+            if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+            if(S[i].scaRevBoost && S[i].scaDrift>0 &&
+               (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
             double tp=NormalizeDouble(bid-SxitTPDist(i,dist,atrd),S[i].digits);
             if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
                S[i].scaTradedS=true;
