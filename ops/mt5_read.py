@@ -67,15 +67,17 @@ from pathlib import Path
 APPDATA = os.environ.get("APPDATA", "")
 
 # name -> (terminal exe, terminal data dir, expected EA name in the journal)
+#
+# OANDA_CFD is intentionally absent since 2026-08-31: the account balance was moved
+# to 0 and the user asked to halt this terminal entirely. mt5.initialize(path=...)
+# below launches the terminal at that path if it is not already running, so leaving
+# a stopped terminal in this dict would make every no-argument read (e.g. the watchdog's
+# S-8 AutoTrading check, which calls this script with no --terminal filter every 30
+# minutes) silently relaunch it. Do not re-add without an explicit user request.
 TERMINALS = {
     "OANDA_FX": (
         r"C:\Program Files\OANDA MetaTrader 5_SET1\terminal64.exe",
         Path(APPDATA) / "MetaQuotes" / "Terminal" / "1416E208B6517B13F4031221752BCFBD",
-        "MIX_EA_OANDA",
-    ),
-    "OANDA_CFD": (
-        r"C:\Program Files\OANDA MetaTrader 5_CFD\terminal64.exe",
-        Path(APPDATA) / "MetaQuotes" / "Terminal" / "15B826C2C5BB763725A70B5830833AB0",
         "MIX_EA_OANDA",
     ),
     "XM": (
