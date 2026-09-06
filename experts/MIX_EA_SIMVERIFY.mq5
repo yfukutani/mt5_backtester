@@ -152,6 +152,32 @@ input bool   Sca3RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca3BoostMult     = 2.0;
 input double Sca3Lot           = 0.01;
 
+input group "=== SCA GOLD 第4セッション（SCA4・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2(13-15時)・第3(9-11時)が続けて採用可となり、「時間帯という別の情報を
+// 足す」線は2回成功している（docs/sca_gold_third_session_20260906.md）。
+// 第1(1-9時)と合わせると、まだ使っていないのは 11-13時 と 15-22時 の帯だけ。
+//
+// 既測定では 12-13時 が単独で両窓正（IS +25,044 / OOS +11,485）。15時以降は
+// ISで崩れている窓が多い（15-16時 IS -46,234 / 16-17時 IS -41,487）が、
+// これらは第2・第3が無い状態での単独測定なので、3枠が入った上での増分は別に測る。
+//
+// 【測るべきは増分】第2＋第3を有効にした状態を基準に、そこへ第4を足して意味が
+// あるかを見る。枠が増えるほど既存枠と同じ値動きを取る余地が増えるので、
+// 単独の成績より増分のほうが厳しい条件になる。
+input bool   Sca4Enable        = false;
+input int    Sca4RangeStart    = 12;    // 第4レンジの開始時刻（サーバー時刻）
+input int    Sca4RangeEnd      = 13;    // 第4レンジの確定時刻（ここからエントリー可）
+input int    Sca4TradeEnd      = 20;    // エントリー締切
+input int    Sca4ForceClose    = 23;    // 強制決済
+input double Sca4MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca4MaxRange      = 1.00;  // 同・上限
+input double Sca4Buffer        = 0.0;   // ブレイク判定のバッファ（ATR比）
+input double Sca4RR            = 1.7;
+input bool   Sca4SkipFriday    = true;
+input bool   Sca4RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca4BoostMult     = 2.0;
+input double Sca4Lot           = 0.01;
+
 input group "=== PB GOLD 第2時間軸（PB2・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】第2セッション（SCA2）で「時間帯の違う取引を足すと、倍率を上げるより効率よく
 // 利益が増える」ことが実測できた（docs/sca_gold_second_session_20260905.md §3.3）。
@@ -681,6 +707,15 @@ int OnInit()
      x.scaMinRange=Sca3MinRange; x.scaMaxRange=Sca3MaxRange; x.scaBuf=Sca3Buffer;
      x.scaSkipFriday=Sca3SkipFriday; x.scaRevBoost=Sca3RevBoost;
      x.scaBoostMult=Sca3BoostMult;
+     AddSleeve(x); }
+   // 11d. SCA GOLD 第4セッション（既定OFF・別magicで第1/第2/第3と分離）
+   { SLEEVE x=z; x.enabled=Sca4Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261005; x.lot=Sca4Lot; x.useRisk=false; x.rr=Sca4RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca4RangeStart; x.scaRangeEnd=Sca4RangeEnd;
+     x.scaTradeEnd=Sca4TradeEnd; x.scaForceClose=Sca4ForceClose;
+     x.scaMinRange=Sca4MinRange; x.scaMaxRange=Sca4MaxRange; x.scaBuf=Sca4Buffer;
+     x.scaSkipFriday=Sca4SkipFriday; x.scaRevBoost=Sca4RevBoost;
+     x.scaBoostMult=Sca4BoostMult;
      AddSleeve(x); }
    // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
    //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
