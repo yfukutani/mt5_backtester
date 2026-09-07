@@ -178,6 +178,46 @@ input bool   Sca4RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca4BoostMult     = 2.0;
 input double Sca4Lot           = 0.01;
 
+input group "=== SCA USDJPY/GBPJPY 第2セッション（SCA5/SCA6・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】GOLD で第2セッション（13-15時）が採用できた唯一の施策になった
+// （docs/lot_multiplier_recheck_20260906.md で円建て再判定・採用確定）。
+// SCA USDJPY(20261000) と SCA GBPJPY(20261001) はどちらもレンジ 0-9時・締切12時で、
+// **12-22時が丸ごと未使用**。GOLD の第2セッション導入前とまったく同じ構造なので、
+// 同じ横展開が効くかを測る。
+//
+// 【注意】この2枠は OANDA本番ブックの構成要素であって XM本番ブックには入っていない。
+// OANDA 5端末は LiveUpdate で使用不能なので、XM端末・XM銘柄で OANDA相当の構成を測り、
+// 本番投入前に OANDA で測り直す前提とする（GOLD の各ラウンドと同じ扱い）。
+//
+// 既定値は親枠の設定を引き継ぎ、レンジ窓だけ GOLD の当たり所（13-15時）に置いた。
+input bool   Sca5Enable        = false;  // SCA USDJPY 第2セッション
+input int    Sca5RangeStart    = 13;
+input int    Sca5RangeEnd      = 15;
+input int    Sca5TradeEnd      = 20;
+input int    Sca5ForceClose    = 23;
+input double Sca5MinRange      = 0.30;   // 親枠(20261000)と同じ
+input double Sca5MaxRange      = 1.00;
+input double Sca5Buffer        = 0.10;   // 親枠と同じ
+input double Sca5RR            = 2.0;    // 親枠と同じ
+input bool   Sca5SkipFriday    = false;  // 親枠と同じ
+input bool   Sca5RevBoost      = true;
+input double Sca5BoostMult     = 2.0;    // 親枠と同じ
+input double Sca5Lot           = 0.01;
+
+input bool   Sca6Enable        = false;  // SCA GBPJPY 第2セッション
+input int    Sca6RangeStart    = 13;
+input int    Sca6RangeEnd      = 15;
+input int    Sca6TradeEnd      = 20;
+input int    Sca6ForceClose    = 23;
+input double Sca6MinRange      = 0.30;   // 親枠(20261001)と同じ
+input double Sca6MaxRange      = 1.00;
+input double Sca6Buffer        = 0.0;    // 親枠と同じ
+input double Sca6RR            = 2.0;    // 親枠と同じ
+input bool   Sca6SkipFriday    = false;  // 親枠と同じ
+input bool   Sca6RevBoost      = true;
+input double Sca6BoostMult     = 6.0;    // 親枠と同じ
+input double Sca6Lot           = 0.01;
+
 input group "=== PB GOLD 第2時間軸（PB2・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】第2セッション（SCA2）で「時間帯の違う取引を足すと、倍率を上げるより効率よく
 // 利益が増える」ことが実測できた（docs/sca_gold_second_session_20260905.md §3.3）。
@@ -746,6 +786,23 @@ int OnInit()
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
+
+   // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
+   { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
+     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY;
+     x.scaRangeStart=Sca5RangeStart; x.scaRangeEnd=Sca5RangeEnd;
+     x.scaTradeEnd=Sca5TradeEnd; x.scaForceClose=Sca5ForceClose;
+     x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
+     x.scaSkipFriday=Sca5SkipFriday; x.scaRevBoost=Sca5RevBoost;
+     x.scaBoostMult=Sca5BoostMult; AddSleeve(x); }
+   // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
+   { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
+     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
+     x.scaRangeStart=Sca6RangeStart; x.scaRangeEnd=Sca6RangeEnd;
+     x.scaTradeEnd=Sca6TradeEnd; x.scaForceClose=Sca6ForceClose;
+     x.scaMinRange=Sca6MinRange; x.scaMaxRange=Sca6MaxRange; x.scaBuf=Sca6Buffer;
+     x.scaSkipFriday=Sca6SkipFriday; x.scaRevBoost=Sca6RevBoost;
+     x.scaBoostMult=Sca6BoostMult; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
    for(int i=0;i<NS;i++)
