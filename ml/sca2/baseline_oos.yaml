@@ -1,0 +1,48 @@
+mt5_path: C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe
+expert: MIX_EA_SIMVERIFY
+symbol: USDJPY
+period: M15
+from_date: 2016.11.09
+to_date: 2021.06.20
+deposit: 500000
+currency: JPY
+leverage: 25
+model: every_tick
+parameters:
+  En_PB_USDJPY: false
+  En_PB_GBPJPY: false
+  En_PB_AUDJPY: false
+  En_PB_GOLD: true
+  En_RSI_USDJPY: false
+  En_RSI_EURUSD: false
+  En_RSI_GBPUSD: false
+  En_PAIR: false
+  En_CARRY: false
+  En_VBO: false
+  En_ETH: false
+  En_BTC_FUND: false
+  En_BFXREV: false
+  En_SCA_GOLD: true
+  En_SCA_USDJPY: false
+  En_SCA_GBPJPY: false
+  SimVerifyMode: 0
+  R6GoldMode: 0
+  R6CryptoMode: 0
+  GoldDDMode: 0
+  GoldLabMode: 0
+  GoldLabMode2: 0
+  GoldPBHoldBars: 64
+  GoldHourGateMode: 1
+  GoldHourPBWeekMask1: 2
+  GoldHourPBStart1: 0
+  GoldHourPBEnd1: 7
+  GoldHourPBWeekMask2: 32
+  GoldHourPBStart2: 12
+  GoldHourPBEnd2: 16
+  GszMode: 0
+  GszSleeveMask: 0
+  Sca2Enable: false
+  ResultFileName: sca2_baseline_oos_result.csv
+  EquityLogFile: sca2_baseline_oos_deals.csv
+report_dir: C:\Users\f\source\repos\mt5_backtester\ml\sca2\runs
+report_name: sca2_baseline_oos

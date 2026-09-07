@@ -97,6 +97,165 @@ input int    R6GoldLookbackBars  = 1;
 input double R6GoldShockATR      = 1.5;
 input double R6GoldAdverseATR    = 1.0;
 
+input group "=== PB GOLD 保有上限（本番採用済み・v2.5） ==="
+// 【2026-09-05】本番XM版 MIX_EA.mq5 には v2.5 で入っているのに、検証用の本EAには
+// 移植されていなかった。そのため本EAでの測定は採用済みの本番構成と条件がずれていた
+// （docs/deploy50_recheck_20260905.md §0 の注記）。本番と同じ既定値・同じ判定式にする。
+input int    GoldPBHoldBars    = 64;    // PB GOLD 保有上限（バー数・0で無効）
+
+input group "=== SCA GOLD 第2セッション（SCA2・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】SCA GOLD は IS 242取引で GOLD の取引数の8割を占める主力枠だが、
+// 1日1レンジ（1-9時）しか使っておらず、米国時間帯のレンジは丸ごと未利用のまま。
+// GOLD の弱点は「630取引/10年＝月5.5回」という薄さなので、取引数を増やすこと自体に
+// 価値がある。既存パラメータの最適化ではなく新しい収益源の追加。
+// docs/rejected_strategies.md に第2セッションの検討記録は無い（完全に未検討）。
+//
+// 実装は既存の SCA 機構（ProcSCA）をそのまま使い、別magic 20261003 の枠として登録する。
+// 第1セッション（20261002）には一切触れないので、枠別に効果を分離できる。
+input bool   Sca2Enable        = false;
+input int    Sca2RangeStart    = 13;    // 第2レンジの開始時刻（サーバー時刻）
+input int    Sca2RangeEnd      = 15;    // 第2レンジの確定時刻（ここからエントリー可）
+input int    Sca2TradeEnd      = 20;    // エントリー締切
+input int    Sca2ForceClose    = 23;    // 強制決済
+input double Sca2MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca2MaxRange      = 1.00;  // 同・上限
+input double Sca2Buffer        = 0.05;  // ブレイク判定のバッファ（ATR比）
+input double Sca2RR            = 1.7;
+input bool   Sca2SkipFriday    = true;
+input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca2BoostMult     = 2.0;
+input double Sca2Lot           = 0.01;
+
+input group "=== SCA GOLD 第3セッション（SCA3・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2セッションの1時間刻み精査（docs/sca_gold_second_session_grid_20260906.md）で、
+// 窓を単独で振ったとき 9-11時 が 13-15時 に次ぐ有望窓だった（IS +105,626 / OOS +17,213）。
+// 13時台とは別の時間帯なので、13-15時を採ったうえで更に足せる可能性がある。
+//
+// 【前ラウンドの教訓】PB2（同じ機構をH1で回す）は棄却された。効くのは「取引数を
+// 増やす」ことではなく「別の情報を足す」ことだった（rejected_strategies.md §5）。
+// 第3セッションは時間帯という別の情報なので、この線では筋が通る。
+//
+// 【測るべきは増分】第2セッションを有効にした状態を基準に、そこへ第3セッションを
+// 足して意味があるかを見る。単独で黒字でも第2セッションと同じ値動きを取っている
+// だけなら足す価値はない。
+input bool   Sca3Enable        = false;
+input int    Sca3RangeStart    = 9;     // 第3レンジの開始時刻（サーバー時刻）
+input int    Sca3RangeEnd      = 11;    // 第3レンジの確定時刻（ここからエントリー可）
+input int    Sca3TradeEnd      = 20;    // エントリー締切
+input int    Sca3ForceClose    = 23;    // 強制決済
+input double Sca3MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca3MaxRange      = 1.00;  // 同・上限
+input double Sca3Buffer        = 0.0;   // ブレイク判定のバッファ（ATR比）
+input double Sca3RR            = 1.7;
+input bool   Sca3SkipFriday    = true;
+input bool   Sca3RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca3BoostMult     = 2.0;
+input double Sca3Lot           = 0.01;
+
+input group "=== SCA GOLD 第4セッション（SCA4・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2(13-15時)・第3(9-11時)が続けて採用可となり、「時間帯という別の情報を
+// 足す」線は2回成功している（docs/sca_gold_third_session_20260906.md）。
+// 第1(1-9時)と合わせると、まだ使っていないのは 11-13時 と 15-22時 の帯だけ。
+//
+// 既測定では 12-13時 が単独で両窓正（IS +25,044 / OOS +11,485）。15時以降は
+// ISで崩れている窓が多い（15-16時 IS -46,234 / 16-17時 IS -41,487）が、
+// これらは第2・第3が無い状態での単独測定なので、3枠が入った上での増分は別に測る。
+//
+// 【測るべきは増分】第2＋第3を有効にした状態を基準に、そこへ第4を足して意味が
+// あるかを見る。枠が増えるほど既存枠と同じ値動きを取る余地が増えるので、
+// 単独の成績より増分のほうが厳しい条件になる。
+input bool   Sca4Enable        = false;
+input int    Sca4RangeStart    = 12;    // 第4レンジの開始時刻（サーバー時刻）
+input int    Sca4RangeEnd      = 13;    // 第4レンジの確定時刻（ここからエントリー可）
+input int    Sca4TradeEnd      = 20;    // エントリー締切
+input int    Sca4ForceClose    = 23;    // 強制決済
+input double Sca4MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca4MaxRange      = 1.00;  // 同・上限
+input double Sca4Buffer        = 0.0;   // ブレイク判定のバッファ（ATR比）
+input double Sca4RR            = 1.7;
+input bool   Sca4SkipFriday    = true;
+input bool   Sca4RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca4BoostMult     = 2.0;
+input double Sca4Lot           = 0.01;
+
+input group "=== SCA USDJPY/GBPJPY 第2セッション（SCA5/SCA6・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】GOLD で第2セッション（13-15時）が採用できた唯一の施策になった
+// （docs/lot_multiplier_recheck_20260906.md で円建て再判定・採用確定）。
+// SCA USDJPY(20261000) と SCA GBPJPY(20261001) はどちらもレンジ 0-9時・締切12時で、
+// **12-22時が丸ごと未使用**。GOLD の第2セッション導入前とまったく同じ構造なので、
+// 同じ横展開が効くかを測る。
+//
+// 【注意】この2枠は OANDA本番ブックの構成要素であって XM本番ブックには入っていない。
+// OANDA 5端末は LiveUpdate で使用不能なので、XM端末・XM銘柄で OANDA相当の構成を測り、
+// 本番投入前に OANDA で測り直す前提とする（GOLD の各ラウンドと同じ扱い）。
+//
+// 既定値は親枠の設定を引き継ぎ、レンジ窓だけ GOLD の当たり所（13-15時）に置いた。
+input bool   Sca5Enable        = false;  // SCA USDJPY 第2セッション
+input int    Sca5RangeStart    = 13;
+input int    Sca5RangeEnd      = 15;
+input int    Sca5TradeEnd      = 20;
+input int    Sca5ForceClose    = 23;
+input double Sca5MinRange      = 0.30;   // 親枠(20261000)と同じ
+input double Sca5MaxRange      = 1.00;
+input double Sca5Buffer        = 0.10;   // 親枠と同じ
+input double Sca5RR            = 2.0;    // 親枠と同じ
+input bool   Sca5SkipFriday    = false;  // 親枠と同じ
+input bool   Sca5RevBoost      = true;
+input double Sca5BoostMult     = 2.0;    // 親枠と同じ
+input double Sca5Lot           = 0.01;
+
+input bool   Sca6Enable        = false;  // SCA GBPJPY 第2セッション
+input int    Sca6RangeStart    = 13;
+input int    Sca6RangeEnd      = 15;
+input int    Sca6TradeEnd      = 20;
+input int    Sca6ForceClose    = 23;
+input double Sca6MinRange      = 0.30;   // 親枠(20261001)と同じ
+input double Sca6MaxRange      = 1.00;
+input double Sca6Buffer        = 0.0;    // 親枠と同じ
+input double Sca6RR            = 2.0;    // 親枠と同じ
+input bool   Sca6SkipFriday    = false;  // 親枠と同じ
+input bool   Sca6RevBoost      = true;
+input double Sca6BoostMult     = 6.0;    // 親枠と同じ
+input double Sca6Lot           = 0.01;
+
+input group "=== PB GOLD 第2時間軸（PB2・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2セッション（SCA2）で「時間帯の違う取引を足すと、倍率を上げるより効率よく
+// 利益が増える」ことが実測できた（docs/sca_gold_second_session_20260905.md §3.3）。
+// 同じ理屈で、PB GOLD は H4 一本しか使っていない。H1 を別magicで足せば、同じ戦略でも
+// 押し目の判定タイミングが変わるので、H4版と相関の低い取引源になる。
+// SCA2 が「時間帯を増やす」軸だったのに対し、こちらは「時間軸を増やす」軸。
+//
+// 既存の PullbackTrend 機構をそのまま使い、別magic 20260641 の枠として登録する。
+// H4版（20260640）には一切触れないので、枠別に効果を分離できる。
+//
+// 【注意】保有上限も時間帯ゲートもmagicで引いているため、20260641 は既定では
+// どちらの対象にもならない。Pb2HoldBars / Pb2UseHourGate で明示的に与える。
+input bool   Pb2Enable         = false;
+input int    Pb2TFMinutes      = 60;    // 時間軸（分）: 30/60/120/240 のみ有効
+input double Pb2Lot            = 0.01;
+input double Pb2RR             = 1.8;   // H4版と同じ既定
+input double Pb2ATRSLmult      = 2.0;
+input double Pb2ADXThr         = 22.5;
+input double Pb2SlopeMinATR    = 1.2;
+input int    Pb2HoldBars       = 64;    // 保有上限（自時間軸のバー数・0で無効）
+input bool   Pb2UseHourGate    = false; // H4版と同じ曜日×時刻ブロックを適用するか
+
+input group "=== GOLDサイジングラボ（GSZ・SIMVERIFY専用・既定OFF） ==="
+// OANDA版 MIX_EA_OANDA_SIMVERIFY.mq5 と同一仕様。両ブローカーで同じ risk% を
+// 与えたとき同じ意味になるよう、倍率(lotMult/GlobalLotMult)は掛けない。
+//
+// 【通貨の罠】既存の LotRisk() は SYMBOL_TRADE_TICK_VALUE を使うが、この値は
+// GOLD/暗号のようなUSD建て銘柄では口座通貨に換算されずUSDのまま返る
+// （docs/profit_trail_20260805.md §2 の実害記録）。そのまま使うとロットが
+// USDJPY倍（約150倍）過大になる。本ラボは OrderCalcProfit() を使う。
+input int    GszMode           = 0;
+input int    GszSleeveMask     = 0;     // bit0=PB GOLD, bit1=SCA GOLD
+input double GszRiskPct        = 0.0;   // 1取引のリスク（基準資金に対する%。0=未使用）
+input double GszRefCap         = 0.0;   // 基準資金（0=口座equity＝複利が効く）
+input double GszMinLot         = 0.0;   // 下限ロット（0=銘柄の最小）
+input double GszMaxLot         = 0.0;   // 上限ロット（0=無制限）
+input bool   GszApplyBoost     = true;  // SCAのリバーサルBoostを乗せるか
+
 input group "=== GOLD DD reduction lab（検証専用・既定OFF） ==="
 // bit 1=PB/SCA同時保有禁止、bit 2=GOLDパラメータ上書き、bit 4=曜日ゲート。
 // Mode=0では以下を一切参照せず、従来挙動と完全同一にする。
@@ -376,9 +535,28 @@ bool GoldHourRuleValid(const int week_mask,const int start_hour,const int end_ho
           end_hour>=1 && end_hour<=24 && start_hour<end_hour;
 }
 
+// PB GOLD 第2時間軸の時間軸。SETファイルでENUMを渡すと綴りの取り違えが起きるので
+// 分で受け、許可した値以外は 0 を返して OnInit で弾く。
+ENUM_TIMEFRAMES Pb2Timeframe()
+{
+   switch(Pb2TFMinutes)
+   {
+      case 30:  return PERIOD_M30;
+      case 60:  return PERIOD_H1;
+      case 120: return PERIOD_H2;
+      case 240: return PERIOD_H4;   // H4版との同条件対照用
+   }
+   return (ENUM_TIMEFRAMES)0;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(Pb2Enable && Pb2Timeframe()==0)
+   {
+      Print("Pb2TFMinutes must be one of 30/60/120/240");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(GoldLabMode<0 || GoldLabMode>28 || GoldLabMode2<0 || GoldLabMode2>28)
    {
       Print("GoldLabMode and GoldLabMode2 must be 0..28");
@@ -461,6 +639,12 @@ int OnInit()
      if(GoldLabModeEnabled(17)) x.trendPeriod=GoldLabPBTrendMA;
      if(GoldLabModeEnabled(26)) x.adxPeriod=GoldLabPBADXPeriod;
      if(GoldLabModeEnabled(23)){ x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=GoldLabPBHigherTFMA; }
+     AddSleeve(x); }
+   // 4b. PB GOLD 第2時間軸（既定OFF・別magicでH4版と分離）
+   { SLEEVE x=pb; x.enabled=Pb2Enable; x.symbol="GOLD"; x.magic=20260641;
+     x.tf=Pb2Timeframe(); x.useRisk=false; x.lot=Pb2Lot; x.rr=Pb2RR;
+     x.lotMult=Mult_PB_GOLD; x.atrSLmult=Pb2ATRSLmult; x.adxThr=Pb2ADXThr;
+     x.slopeMinATR=Pb2SlopeMinATR;
      AddSleeve(x); }
 
    //--- RSI_Reversal 共通プリセット ---
@@ -546,6 +730,33 @@ int OnInit()
      if(GoldLabModeEnabled(7)) x.scaRangeStart=GoldLabSCARangeStart;
      if(GoldLabModeEnabled(4)) x.scaRangeEnd=GoldLabSCARangeEnd;
      AddSleeve(x); }
+   // 11b. SCA GOLD 第2セッション（既定OFF・別magicで第1セッションと分離）
+   { SLEEVE x=z; x.enabled=Sca2Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261003; x.lot=Sca2Lot; x.useRisk=false; x.rr=Sca2RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca2RangeStart; x.scaRangeEnd=Sca2RangeEnd;
+     x.scaTradeEnd=Sca2TradeEnd; x.scaForceClose=Sca2ForceClose;
+     x.scaMinRange=Sca2MinRange; x.scaMaxRange=Sca2MaxRange; x.scaBuf=Sca2Buffer;
+     x.scaSkipFriday=Sca2SkipFriday; x.scaRevBoost=Sca2RevBoost;
+     x.scaBoostMult=Sca2BoostMult;
+     AddSleeve(x); }
+   // 11c. SCA GOLD 第3セッション（既定OFF・別magicで第1/第2セッションと分離）
+   { SLEEVE x=z; x.enabled=Sca3Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261004; x.lot=Sca3Lot; x.useRisk=false; x.rr=Sca3RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca3RangeStart; x.scaRangeEnd=Sca3RangeEnd;
+     x.scaTradeEnd=Sca3TradeEnd; x.scaForceClose=Sca3ForceClose;
+     x.scaMinRange=Sca3MinRange; x.scaMaxRange=Sca3MaxRange; x.scaBuf=Sca3Buffer;
+     x.scaSkipFriday=Sca3SkipFriday; x.scaRevBoost=Sca3RevBoost;
+     x.scaBoostMult=Sca3BoostMult;
+     AddSleeve(x); }
+   // 11d. SCA GOLD 第4セッション（既定OFF・別magicで第1/第2/第3と分離）
+   { SLEEVE x=z; x.enabled=Sca4Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261005; x.lot=Sca4Lot; x.useRisk=false; x.rr=Sca4RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca4RangeStart; x.scaRangeEnd=Sca4RangeEnd;
+     x.scaTradeEnd=Sca4TradeEnd; x.scaForceClose=Sca4ForceClose;
+     x.scaMinRange=Sca4MinRange; x.scaMaxRange=Sca4MaxRange; x.scaBuf=Sca4Buffer;
+     x.scaSkipFriday=Sca4SkipFriday; x.scaRevBoost=Sca4RevBoost;
+     x.scaBoostMult=Sca4BoostMult;
+     AddSleeve(x); }
    // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
    //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
    //     **OOS-4,875→+110＝OOS赤字を黒字転換**・DD両期間改善。
@@ -575,6 +786,23 @@ int OnInit()
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
+
+   // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
+   { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
+     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY;
+     x.scaRangeStart=Sca5RangeStart; x.scaRangeEnd=Sca5RangeEnd;
+     x.scaTradeEnd=Sca5TradeEnd; x.scaForceClose=Sca5ForceClose;
+     x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
+     x.scaSkipFriday=Sca5SkipFriday; x.scaRevBoost=Sca5RevBoost;
+     x.scaBoostMult=Sca5BoostMult; AddSleeve(x); }
+   // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
+   { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
+     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
+     x.scaRangeStart=Sca6RangeStart; x.scaRangeEnd=Sca6RangeEnd;
+     x.scaTradeEnd=Sca6TradeEnd; x.scaForceClose=Sca6ForceClose;
+     x.scaMinRange=Sca6MinRange; x.scaMaxRange=Sca6MaxRange; x.scaBuf=Sca6Buffer;
+     x.scaSkipFriday=Sca6SkipFriday; x.scaRevBoost=Sca6RevBoost;
+     x.scaBoostMult=Sca6BoostMult; AddSleeve(x); }
 
    // ハンドル生成・銘柄メタ
    for(int i=0;i<NS;i++)
@@ -819,6 +1047,7 @@ void ProfitTrail()
 void OnTick()
 {
    if(!MasterEnable) return;
+   GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価（本番と同一）
    ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
    if(EnableOpsLog)
@@ -1011,8 +1240,76 @@ double SimVerifySleeveEquity(const int i)
    return eq;
 }
 
+//============================ PB GOLD 保有上限（本番と同一実装）============================
+// PB GOLDのtfはH4なので64バー＝約10.7日。枠の判定はmagicで行う
+// （銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため）。
+void GoldPBHoldLimit()
+{
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      // 第2時間軸(20260641)は自分のバー数で数える。H4版と違う時間軸を持つので
+      // GoldPBHoldBars をそのまま流用すると意味が変わってしまう。
+      int bars = (S[i].magic==20260640) ? GoldPBHoldBars
+               : (S[i].magic==20260641) ? Pb2HoldBars : 0;
+      if(bars<=0) continue;
+      long limit=(long)bars*PeriodSeconds(S[i].tf);
+      for(int k=PositionsTotal()-1;k>=0;k--)
+      {
+         ulong tk=PositionGetTicket(k);
+         if(tk==0) continue;
+         if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+            PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+         if(TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME) >= limit)
+            trade.PositionClose(tk);
+      }
+   }
+}
+
+//============================ GOLDサイジングラボ（GSZ） ============================
+bool GszApplies(const int i)
+{
+   if(GszMode<=0 || GszSleeveMask==0 || GszRiskPct<=0.0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20260640) bit=0;        // PB GOLD
+   else if(m==20261002) bit=1;   // SCA GOLD
+   return bit>=0 && ((GszSleeveMask>>bit)&1)!=0;
+}
+
+// 口座通貨での「1ロットあたり、SL距離ぶん逆行したときの損失額」。
+// OrderCalcProfit は建値通貨・契約サイズ・クロスレートを端末が解決するため、
+// SYMBOL_TRADE_TICK_VALUE の通貨不一致（GOLDはUSDのまま返る）を踏まない。
+double GszMoneyPerLot(const string sym,const double slDist)
+{
+   if(slDist<=0.0) return 0.0;
+   double px=SymbolInfoDouble(sym,SYMBOL_ASK);
+   if(px<=0.0) return 0.0;
+   double p=0.0;
+   if(!OrderCalcProfit(ORDER_TYPE_BUY,sym,1.0,px,px-slDist,p)) return 0.0;
+   return MathAbs(p);
+}
+
+// リスク%からロットを出す。倍率(lotMult/GlobalLotMult)は掛けない——
+// risk% がそのまま1取引のリスクを定義するため、二重に効かせない。
+double GszLot(const int i,const double slDist)
+{
+   double eq=(GszRefCap>0.0) ? GszRefCap : AccountInfoDouble(ACCOUNT_EQUITY);
+   double mpl=GszMoneyPerLot(S[i].symbol,slDist);
+   if(eq<=0.0 || mpl<=0.0) return 0.0;
+   double lot=(eq*GszRiskPct/100.0)/mpl;
+   if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
+   if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
+   return Clamp(S[i].symbol,lot);
+}
+
 double LotRisk(int i, double slDistPrice)
 {
+   if(GszApplies(i) && slDistPrice>0.0)
+   {
+      double gl=GszLot(i,slDistPrice);
+      if(gl>0.0) return gl;
+   }
    double base;
    if(!S[i].useRisk || slDistPrice<=0) base=S[i].lot;
    else{
@@ -1129,7 +1426,7 @@ bool GoldHourEntryOK(const int i)
    // TimeCurrentはブローカーのサーバ時刻。テスターではテスト中のシミュレート時刻。
    TimeToStruct(TimeCurrent(),dt);
    bool blocked=false;
-   if(S[i].magic==20260640) // PB GOLD
+   if(S[i].magic==20260640 || (S[i].magic==20260641 && Pb2UseHourGate)) // PB GOLD
       blocked=GoldHourRuleMatches(dt,GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
               GoldHourRuleMatches(dt,GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2);
    else if(S[i].magic==20261002) // SCA GOLD
@@ -2105,7 +2402,9 @@ void ProcSCA(int i)
       double sl=S[i].scaRangeLow, dist=ask-sl;
       if(dist>0){
          double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(S[i].scaRevBoost && S[i].scaDrift<0) lot*=S[i].scaBoostMult;   // リバーサル型
+         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         if(S[i].scaRevBoost && S[i].scaDrift<0 &&
+            (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
          double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
          if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
             S[i].scaTradedL=true;
@@ -2118,7 +2417,9 @@ void ProcSCA(int i)
       double sl=S[i].scaRangeHigh, dist=sl-bid;
       if(dist>0){
          double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(S[i].scaRevBoost && S[i].scaDrift>0) lot*=S[i].scaBoostMult;
+         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         if(S[i].scaRevBoost && S[i].scaDrift>0 &&
+            (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
          double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
          if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
             S[i].scaTradedS=true;

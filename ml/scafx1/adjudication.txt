@@ -1,0 +1,306 @@
+第一判定: 新枠純益がIS/OOSとも正。順位: 弱い窓の純益降順。
+第二の確認: 決済position数（IS 60以上を参考表示、採用確定ではない）。
+DD・純益倍率・DD倍率は参考のみ。DDはprofit累積のピークからの最大落ち込み。
+倍率の分母は新枠両方OFFの実測BASE。分母非正・BASE欠測時は空欄。
+ファミリー中央値は両窓評価済み案の新枠純益。欠測案を黒字扱いしない。
+両窓正: 0案
+全案詳細（損益・DDは円、倍率は参考値）
+X001 SCA USDJPY 第2セッション: EA既定値の中心点 評価済み 両窓正=False
+IS new_net=-4830.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=210311.0 / dd_jpy=68970.0 / net_ratio= / dd_ratio=
+OOS new_net=-14293.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=46679.0 / dd_jpy=44739.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X002 SCA USDJPY 第2セッション: レンジ 10-11時 評価済み 両窓正=False
+IS new_net=22703.0 / new_n=230 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=238724.0 / dd_jpy=66458.0 / net_ratio= / dd_ratio=
+OOS new_net=-16588.0 / new_n=192 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=44038.0 / dd_jpy=43465.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X003 SCA USDJPY 第2セッション: レンジ 10-12時 評価済み 両窓正=False
+IS new_net=-8026.0 / new_n=440 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=207835.0 / dd_jpy=80234.0 / net_ratio= / dd_ratio=
+OOS new_net=-22664.0 / new_n=396 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=38017.0 / dd_jpy=45776.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X004 SCA USDJPY 第2セッション: レンジ 11-12時 評価済み 両窓正=False
+IS new_net=-8852.0 / new_n=150 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=207120.0 / dd_jpy=68820.0 / net_ratio= / dd_ratio=
+OOS new_net=-11445.0 / new_n=146 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=49024.0 / dd_jpy=44740.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X005 SCA USDJPY 第2セッション: レンジ 11-13時 評価済み 両窓正=False
+IS new_net=-6755.0 / new_n=269 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=208839.0 / dd_jpy=75553.0 / net_ratio= / dd_ratio=
+OOS new_net=-10373.0 / new_n=265 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=50457.0 / dd_jpy=40959.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X006 SCA USDJPY 第2セッション: レンジ 12-13時 評価済み 両窓正=False
+IS new_net=1068.0 / new_n=77 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=216124.0 / dd_jpy=67036.0 / net_ratio= / dd_ratio=
+OOS new_net=-2853.0 / new_n=63 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=57768.0 / dd_jpy=38947.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X007 SCA USDJPY 第2セッション: レンジ 12-14時 評価済み 両窓正=False
+IS new_net=-3212.0 / new_n=196 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=212099.0 / dd_jpy=66971.0 / net_ratio= / dd_ratio=
+OOS new_net=-7189.0 / new_n=195 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=53546.0 / dd_jpy=42756.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X008 SCA USDJPY 第2セッション: レンジ 13-14時 評価済み 両窓正=False
+IS new_net=2271.0 / new_n=65 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=218197.0 / dd_jpy=63764.0 / net_ratio= / dd_ratio=
+OOS new_net=-4704.0 / new_n=60 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=56189.0 / dd_jpy=42431.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X009 SCA USDJPY 第2セッション: レンジ 14-15時 評価済み 両窓正=False
+IS new_net=-3345.0 / new_n=105 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=211706.0 / dd_jpy=68048.0 / net_ratio= / dd_ratio=
+OOS new_net=-6054.0 / new_n=103 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=54963.0 / dd_jpy=41769.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X010 SCA USDJPY 第2セッション: レンジ 14-16時 評価済み 両窓正=False
+IS new_net=-5579.0 / new_n=371 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=210243.0 / dd_jpy=71637.0 / net_ratio= / dd_ratio=
+OOS new_net=-19989.0 / new_n=348 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=40747.0 / dd_jpy=46308.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X011 SCA USDJPY 第2セッション: レンジ 15-16時 評価済み 両窓正=False
+IS new_net=3684.0 / new_n=288 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=218826.0 / dd_jpy=65340.0 / net_ratio= / dd_ratio=
+OOS new_net=-6192.0 / new_n=215 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=54818.0 / dd_jpy=39645.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X012 SCA USDJPY 第2セッション: レンジ 15-17時 評価済み 両窓正=False
+IS new_net=-2324.0 / new_n=313 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=213408.0 / dd_jpy=68132.0 / net_ratio= / dd_ratio=
+OOS new_net=-10346.0 / new_n=315 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=50728.0 / dd_jpy=41969.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X013 SCA USDJPY 第2セッション: レンジ 16-17時 評価済み 両窓正=False
+IS new_net=-3822.0 / new_n=185 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=211430.0 / dd_jpy=73152.0 / net_ratio= / dd_ratio=
+OOS new_net=-7660.0 / new_n=195 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=52796.0 / dd_jpy=40737.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X014 SCA USDJPY 第2セッション: レンジ 16-18時 評価済み 両窓正=False
+IS new_net=-10132.0 / new_n=185 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=204896.0 / dd_jpy=71857.0 / net_ratio= / dd_ratio=
+OOS new_net=-6829.0 / new_n=166 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=54081.0 / dd_jpy=43863.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X015 SCA USDJPY 第2セッション: レンジ 17-18時 評価済み 両窓正=False
+IS new_net=-4347.0 / new_n=129 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=210635.0 / dd_jpy=65895.0 / net_ratio= / dd_ratio=
+OOS new_net=-1500.0 / new_n=136 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=59193.0 / dd_jpy=43388.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X016 SCA USDJPY 第2セッション: レンジ 17-19時 評価済み 両窓正=False
+IS new_net=-1591.0 / new_n=46 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=213547.0 / dd_jpy=64076.0 / net_ratio= / dd_ratio=
+OOS new_net=-2370.0 / new_n=49 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=58332.0 / dd_jpy=41053.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=False
+X017 SCA USDJPY 第2セッション: 締切 17時 評価済み 両窓正=False
+IS new_net=-10968.0 / new_n=131 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=205178.0 / dd_jpy=70799.0 / net_ratio= / dd_ratio=
+OOS new_net=2659.0 / new_n=131 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=63158.0 / dd_jpy=37532.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X018 SCA USDJPY 第2セッション: 締切 18時 評価済み 両窓正=False
+IS new_net=833.0 / new_n=189 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=216025.0 / dd_jpy=64274.0 / net_ratio= / dd_ratio=
+OOS new_net=-5950.0 / new_n=195 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=54920.0 / dd_jpy=42033.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X019 SCA USDJPY 第2セッション: 締切 19時 評価済み 両窓正=False
+IS new_net=-1442.0 / new_n=218 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=213700.0 / dd_jpy=66714.0 / net_ratio= / dd_ratio=
+OOS new_net=-10744.0 / new_n=221 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=50229.0 / dd_jpy=43157.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X020 SCA USDJPY 第2セッション: 締切 21時 評価済み 両窓正=False
+IS new_net=-1575.0 / new_n=244 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=213588.0 / dd_jpy=67246.0 / net_ratio= / dd_ratio=
+OOS new_net=-15373.0 / new_n=242 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=45601.0 / dd_jpy=44968.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X021 SCA USDJPY 第2セッション: 締切 22時 評価済み 両窓正=False
+IS new_net=-1873.0 / new_n=252 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=213292.0 / dd_jpy=67262.0 / net_ratio= / dd_ratio=
+OOS new_net=-15089.0 / new_n=255 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=45882.0 / dd_jpy=44997.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X022 SCA USDJPY 第2セッション: RR 1.3 評価済み 両窓正=False
+IS new_net=-7796.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=207323.0 / dd_jpy=71494.0 / net_ratio= / dd_ratio=
+OOS new_net=-12026.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=48932.0 / dd_jpy=44519.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X023 SCA USDJPY 第2セッション: RR 1.5 評価済み 両窓正=False
+IS new_net=-7450.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=207683.0 / dd_jpy=70465.0 / net_ratio= / dd_ratio=
+OOS new_net=-13511.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=47449.0 / dd_jpy=45330.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X024 SCA USDJPY 第2セッション: RR 1.7 評価済み 両窓正=False
+IS new_net=-6009.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=209127.0 / dd_jpy=69949.0 / net_ratio= / dd_ratio=
+OOS new_net=-12479.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=48483.0 / dd_jpy=45028.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X025 SCA USDJPY 第2セッション: RR 2.4 評価済み 両窓正=False
+IS new_net=-4029.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=211119.0 / dd_jpy=68678.0 / net_ratio= / dd_ratio=
+OOS new_net=-14168.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=46806.0 / dd_jpy=45094.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X026 SCA USDJPY 第2セッション: RR 3.0 評価済み 両窓正=False
+IS new_net=-2292.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=212854.0 / dd_jpy=67557.0 / net_ratio= / dd_ratio=
+OOS new_net=-13639.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=47335.0 / dd_jpy=45094.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X027 SCA USDJPY 第2セッション: レンジ幅 0.2-0.8 評価済み 両窓正=False
+IS new_net=-3901.0 / new_n=564 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=211885.0 / dd_jpy=76373.0 / net_ratio= / dd_ratio=
+OOS new_net=-22938.0 / new_n=567 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=37740.0 / dd_jpy=46408.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X028 SCA USDJPY 第2セッション: レンジ幅 0.2-1.4 評価済み 両窓正=False
+IS new_net=-11315.0 / new_n=572 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=204440.0 / dd_jpy=81187.0 / net_ratio= / dd_ratio=
+OOS new_net=-22434.0 / new_n=570 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=38223.0 / dd_jpy=46408.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X029 SCA USDJPY 第2セッション: レンジ幅 0.4-0.8 評価済み 両窓正=False
+IS new_net=12471.0 / new_n=81 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=227646.0 / dd_jpy=57508.0 / net_ratio= / dd_ratio=
+OOS new_net=-7955.0 / new_n=87 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=52992.0 / dd_jpy=43510.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X030 SCA USDJPY 第2セッション: レンジ幅 0.4-1.4 評価済み 両窓正=False
+IS new_net=5057.0 / new_n=89 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=220159.0 / dd_jpy=62322.0 / net_ratio= / dd_ratio=
+OOS new_net=-7451.0 / new_n=90 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=53474.0 / dd_jpy=43510.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X031 SCA USDJPY 第2セッション: レンジ幅 0.5-1.4 評価済み 両窓正=False
+IS new_net=-3784.0 / new_n=33 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=212102.0 / dd_jpy=68314.0 / net_ratio= / dd_ratio=
+OOS new_net=-4050.0 / new_n=41 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=56787.0 / dd_jpy=40552.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=False
+X032 SCA USDJPY 第2セッション: バッファ 0.0 評価済み 両窓正=False
+IS new_net=-55.0 / new_n=312 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=214897.0 / dd_jpy=70641.0 / net_ratio= / dd_ratio=
+OOS new_net=-14952.0 / new_n=307 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=46024.0 / dd_jpy=43894.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X033 SCA USDJPY 第2セッション: バッファ 0.05 評価済み 両窓正=False
+IS new_net=-2629.0 / new_n=271 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=212480.0 / dd_jpy=69385.0 / net_ratio= / dd_ratio=
+OOS new_net=-15643.0 / new_n=274 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=45329.0 / dd_jpy=43809.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X034 SCA USDJPY 第2セッション: バッファ 0.2 評価済み 両窓正=False
+IS new_net=8133.0 / new_n=158 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=223232.0 / dd_jpy=59951.0 / net_ratio= / dd_ratio=
+OOS new_net=-3433.0 / new_n=163 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=57564.0 / dd_jpy=41943.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X035 SCA USDJPY 第2セッション: Boost 1.0 評価済み 両窓正=False
+IS new_net=-3036.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=212105.0 / dd_jpy=65483.0 / net_ratio= / dd_ratio=
+OOS new_net=-9025.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=51947.0 / dd_jpy=42602.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X036 SCA USDJPY 第2セッション: Boost 3.0 評価済み 両窓正=False
+IS new_net=-6625.0 / new_n=229 / parent_net=18563.0 / parent_n=328 / parent_net_delta= / parent_n_delta= / book_net=208516.0 / dd_jpy=72457.0 / net_ratio= / dd_ratio=
+OOS new_net=-19562.0 / new_n=232 / parent_net=-2224.0 / parent_n=266 / parent_net_delta= / parent_n_delta= / book_net=41410.0 / dd_jpy=46877.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X037 SCA GBPJPY 第2セッション: EA既定値の中心点 評価済み 両窓正=False
+IS new_net=-81835.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=134445.0 / dd_jpy=98368.0 / net_ratio= / dd_ratio=
+OOS new_net=-57202.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=3547.0 / dd_jpy=46862.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X038 SCA GBPJPY 第2セッション: レンジ 10-11時 評価済み 両窓正=False
+IS new_net=-131885.0 / new_n=524 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=84395.0 / dd_jpy=167611.0 / net_ratio= / dd_ratio=
+OOS new_net=-14378.0 / new_n=471 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=46371.0 / dd_jpy=70110.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X039 SCA GBPJPY 第2セッション: レンジ 10-12時 評価済み 両窓正=False
+IS new_net=-111258.0 / new_n=844 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=105022.0 / dd_jpy=125680.0 / net_ratio= / dd_ratio=
+OOS new_net=56772.0 / new_n=813 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=117521.0 / dd_jpy=54222.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X040 SCA GBPJPY 第2セッション: レンジ 11-12時 評価済み 両窓正=False
+IS new_net=-7442.0 / new_n=347 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=208838.0 / dd_jpy=95597.0 / net_ratio= / dd_ratio=
+OOS new_net=30442.0 / new_n=401 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=91191.0 / dd_jpy=31682.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X041 SCA GBPJPY 第2セッション: レンジ 11-13時 評価済み 両窓正=False
+IS new_net=-46328.0 / new_n=610 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=169952.0 / dd_jpy=115401.0 / net_ratio= / dd_ratio=
+OOS new_net=32616.0 / new_n=668 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=93365.0 / dd_jpy=30160.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X042 SCA GBPJPY 第2セッション: レンジ 12-13時 評価済み 両窓正=False
+IS new_net=-9517.0 / new_n=209 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=206763.0 / dd_jpy=51773.0 / net_ratio= / dd_ratio=
+OOS new_net=-38294.0 / new_n=235 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=22455.0 / dd_jpy=58618.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X043 SCA GBPJPY 第2セッション: レンジ 12-14時 評価済み 両窓正=False
+IS new_net=-98874.0 / new_n=501 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=117406.0 / dd_jpy=111858.0 / net_ratio= / dd_ratio=
+OOS new_net=-33882.0 / new_n=542 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=26867.0 / dd_jpy=48424.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X044 SCA GBPJPY 第2セッション: レンジ 13-14時 評価済み 両窓正=False
+IS new_net=-14022.0 / new_n=173 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=202258.0 / dd_jpy=73110.0 / net_ratio= / dd_ratio=
+OOS new_net=18320.0 / new_n=236 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=79069.0 / dd_jpy=23485.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X045 SCA GBPJPY 第2セッション: レンジ 14-15時 評価済み 両窓正=False
+IS new_net=-37202.0 / new_n=206 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=179078.0 / dd_jpy=102354.0 / net_ratio= / dd_ratio=
+OOS new_net=-36681.0 / new_n=225 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=24068.0 / dd_jpy=32456.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X046 SCA GBPJPY 第2セッション: レンジ 14-16時 評価済み 両窓正=False
+IS new_net=24702.0 / new_n=562 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=240982.0 / dd_jpy=80830.0 / net_ratio= / dd_ratio=
+OOS new_net=-31442.0 / new_n=510 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=29307.0 / dd_jpy=51692.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X047 SCA GBPJPY 第2セッション: レンジ 15-16時 評価済み 両窓正=False
+IS new_net=-10971.0 / new_n=355 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=205309.0 / dd_jpy=84398.0 / net_ratio= / dd_ratio=
+OOS new_net=-12249.0 / new_n=311 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=48500.0 / dd_jpy=53907.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X048 SCA GBPJPY 第2セッション: レンジ 15-17時 評価済み 両窓正=False
+IS new_net=-65589.0 / new_n=568 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=150691.0 / dd_jpy=99169.0 / net_ratio= / dd_ratio=
+OOS new_net=-31773.0 / new_n=485 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=28976.0 / dd_jpy=69843.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X049 SCA GBPJPY 第2セッション: レンジ 16-17時 評価済み 両窓正=False
+IS new_net=-28946.0 / new_n=324 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=187334.0 / dd_jpy=74454.0 / net_ratio= / dd_ratio=
+OOS new_net=-56644.0 / new_n=263 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=4105.0 / dd_jpy=63750.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X050 SCA GBPJPY 第2セッション: レンジ 16-18時 評価済み 両窓正=False
+IS new_net=-28961.0 / new_n=405 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=187319.0 / dd_jpy=67828.0 / net_ratio= / dd_ratio=
+OOS new_net=-57579.0 / new_n=363 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=3170.0 / dd_jpy=67544.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X051 SCA GBPJPY 第2セッション: レンジ 17-18時 評価済み 両窓正=False
+IS new_net=-12972.0 / new_n=278 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=203308.0 / dd_jpy=67835.0 / net_ratio= / dd_ratio=
+OOS new_net=-51563.0 / new_n=264 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=9186.0 / dd_jpy=58151.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X052 SCA GBPJPY 第2セッション: レンジ 17-19時 評価済み 両窓正=False
+IS new_net=-16415.0 / new_n=212 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=199865.0 / dd_jpy=68467.0 / net_ratio= / dd_ratio=
+OOS new_net=-30732.0 / new_n=198 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=30017.0 / dd_jpy=50747.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X053 SCA GBPJPY 第2セッション: 締切 17時 評価済み 両窓正=False
+IS new_net=-93923.0 / new_n=296 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=122357.0 / dd_jpy=101425.0 / net_ratio= / dd_ratio=
+OOS new_net=-44317.0 / new_n=343 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=16432.0 / dd_jpy=49593.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X054 SCA GBPJPY 第2セッション: 締切 18時 評価済み 両窓正=False
+IS new_net=-100730.0 / new_n=385 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=115550.0 / dd_jpy=105417.0 / net_ratio= / dd_ratio=
+OOS new_net=-80828.0 / new_n=442 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-20079.0 / dd_jpy=72558.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X055 SCA GBPJPY 第2セッション: 締切 19時 評価済み 両窓正=False
+IS new_net=-98147.0 / new_n=424 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=118133.0 / dd_jpy=111372.0 / net_ratio= / dd_ratio=
+OOS new_net=-58460.0 / new_n=504 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=2289.0 / dd_jpy=48967.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X056 SCA GBPJPY 第2セッション: 締切 21時 評価済み 両窓正=False
+IS new_net=-77892.0 / new_n=465 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=138388.0 / dd_jpy=94888.0 / net_ratio= / dd_ratio=
+OOS new_net=-62056.0 / new_n=553 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-1307.0 / dd_jpy=52750.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X057 SCA GBPJPY 第2セッション: 締切 22時 評価済み 両窓正=False
+IS new_net=-79542.0 / new_n=478 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=136738.0 / dd_jpy=94532.0 / net_ratio= / dd_ratio=
+OOS new_net=-60675.0 / new_n=566 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=74.0 / dd_jpy=53539.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X058 SCA GBPJPY 第2セッション: RR 1.3 評価済み 両窓正=False
+IS new_net=-106302.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=109978.0 / dd_jpy=106276.0 / net_ratio= / dd_ratio=
+OOS new_net=-48734.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=12015.0 / dd_jpy=39880.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X059 SCA GBPJPY 第2セッション: RR 1.5 評価済み 両窓正=False
+IS new_net=-98349.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=117931.0 / dd_jpy=104222.0 / net_ratio= / dd_ratio=
+OOS new_net=-54232.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=6517.0 / dd_jpy=46239.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X060 SCA GBPJPY 第2セッション: RR 1.7 評価済み 両窓正=False
+IS new_net=-89790.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=126490.0 / dd_jpy=100434.0 / net_ratio= / dd_ratio=
+OOS new_net=-59010.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=1739.0 / dd_jpy=45143.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X061 SCA GBPJPY 第2セッション: RR 2.4 評価済み 両窓正=False
+IS new_net=-95314.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=120966.0 / dd_jpy=99429.0 / net_ratio= / dd_ratio=
+OOS new_net=-51259.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=9490.0 / dd_jpy=44204.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X062 SCA GBPJPY 第2セッション: RR 3.0 評価済み 両窓正=False
+IS new_net=-89955.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=126325.0 / dd_jpy=96828.0 / net_ratio= / dd_ratio=
+OOS new_net=-46263.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=14486.0 / dd_jpy=43322.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X063 SCA GBPJPY 第2セッション: レンジ幅 0.2-0.8 評価済み 両窓正=False
+IS new_net=-140925.0 / new_n=1028 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=75355.0 / dd_jpy=92917.0 / net_ratio= / dd_ratio=
+OOS new_net=-117647.0 / new_n=1016 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-56898.0 / dd_jpy=93304.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X064 SCA GBPJPY 第2セッション: レンジ幅 0.2-1.4 評価済み 両窓正=False
+IS new_net=-141188.0 / new_n=1046 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=75092.0 / dd_jpy=96256.0 / net_ratio= / dd_ratio=
+OOS new_net=-121400.0 / new_n=1036 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-60651.0 / dd_jpy=95635.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X065 SCA GBPJPY 第2セッション: レンジ幅 0.4-0.8 評価済み 両窓正=False
+IS new_net=-43973.0 / new_n=170 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=172307.0 / dd_jpy=75493.0 / net_ratio= / dd_ratio=
+OOS new_net=-24623.0 / new_n=229 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=36126.0 / dd_jpy=28391.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X066 SCA GBPJPY 第2セッション: レンジ幅 0.4-1.4 評価済み 両窓正=False
+IS new_net=-44236.0 / new_n=188 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=172044.0 / dd_jpy=78159.0 / net_ratio= / dd_ratio=
+OOS new_net=-28376.0 / new_n=249 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=32373.0 / dd_jpy=29454.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X067 SCA GBPJPY 第2セッション: レンジ幅 0.5-1.4 評価済み 両窓正=False
+IS new_net=-13409.0 / new_n=92 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=202871.0 / dd_jpy=66441.0 / net_ratio= / dd_ratio=
+OOS new_net=-37422.0 / new_n=114 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=23327.0 / dd_jpy=35460.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X068 SCA GBPJPY 第2セッション: バッファ 0.05 評価済み 両窓正=False
+IS new_net=-98637.0 / new_n=379 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=117643.0 / dd_jpy=107437.0 / net_ratio= / dd_ratio=
+OOS new_net=-66844.0 / new_n=469 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-6095.0 / dd_jpy=51735.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X069 SCA GBPJPY 第2セッション: バッファ 0.2 評価済み 両窓正=False
+IS new_net=-56368.0 / new_n=209 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=159912.0 / dd_jpy=78504.0 / net_ratio= / dd_ratio=
+OOS new_net=-62219.0 / new_n=282 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=-1470.0 / dd_jpy=63676.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X070 SCA GBPJPY 第2セッション: Boost 1.0 評価済み 両窓正=False
+IS new_net=-24761.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=191519.0 / dd_jpy=78009.0 / net_ratio= / dd_ratio=
+OOS new_net=-22727.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=38022.0 / dd_jpy=42823.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+X071 SCA GBPJPY 第2セッション: Boost 3.0 評価済み 両窓正=False
+IS new_net=-47592.0 / new_n=444 / parent_net=73773.0 / parent_n=684 / parent_net_delta= / parent_n_delta= / book_net=168688.0 / dd_jpy=86153.0 / net_ratio= / dd_ratio=
+OOS new_net=-36518.0 / new_n=533 / parent_net=42219.0 / parent_n=621 / parent_net_delta= / parent_n_delta= / book_net=24231.0 / dd_jpy=41355.0 / net_ratio= / dd_ratio=
+ISサンプル60以上=True
+ファミリー集計
+family=U0 / proposed=1 / evaluated=1 / both_positive=0 / IS_median_net=-4830.0 / OOS_median_net=-14293.0
+family=U1 / proposed=15 / evaluated=15 / both_positive=0 / IS_median_net=-3345.0 / OOS_median_net=-7189.0
+family=U2 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-1575.0 / OOS_median_net=-10744.0
+family=U3 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-6009.0 / OOS_median_net=-13511.0
+family=U4 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-3784.0 / OOS_median_net=-7955.0
+family=U5 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-2629.0 / OOS_median_net=-14952.0
+family=G0 / proposed=1 / evaluated=1 / both_positive=0 / IS_median_net=-81835.0 / OOS_median_net=-57202.0
+family=G1 / proposed=15 / evaluated=15 / both_positive=0 / IS_median_net=-28946.0 / OOS_median_net=-31442.0
+family=G2 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-93923.0 / OOS_median_net=-60675.0
+family=G3 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-95314.0 / OOS_median_net=-51259.0
+family=G4 / proposed=5 / evaluated=5 / both_positive=0 / IS_median_net=-44236.0 / OOS_median_net=-37422.0
+family=G5 / proposed=4 / evaluated=4 / both_positive=0 / IS_median_net=-51980.0 / OOS_median_net=-49368.5
+BASE IS: 参考倍率・親枠差は評価不能 'IS'
+BASE OOS: 参考倍率・親枠差は評価不能 'OOS'
