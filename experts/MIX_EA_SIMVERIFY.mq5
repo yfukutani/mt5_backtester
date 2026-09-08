@@ -126,6 +126,27 @@ input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca2BoostMult     = 2.0;
 input double Sca2Lot           = 0.01;
 
+input group "=== RSIシグナル記憶ラボ（RSIMEM・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】RSI逆張り枠は wasOB/wasOS（RSI極値の記憶）と aboveBB/belowBB（BB逸脱の記憶）で
+// アームし、閾値を戻ってきたところで入る。このフラグは**注文分岐の中でしか消えない**。
+// つまり
+//   ・時間が経っても失効しない（何十本も前の逸脱で今のバーに入る）
+//   ・MAの反対側に移っても残る（レンジで立った記憶をトレンド移行後に使う）
+//   ・同方向で保有中にシグナルが完成しても消費されない（決済後に古い記憶で再入場）
+//
+// 【なぜ未着手か】Codexの未着手項目調査（2026-09-07）で、RSI枠は周期・閾値・BB期間・
+// 偏差・レンジ判定・固定SL/TP・DPの各軸が param_reopt / codex500 で測定済みだが、
+// **フラグの寿命と消費の仕様は測られていない**と確認した。codex_50proposals の
+// 提案16・17として記録され、codex_verification では「今回スコープ外」のまま。
+//
+// 【規模の見込み】小さい。Codexの見積もりで入金50万に対し月利 +0.002〜0.009ポイント程度。
+// 目標の +1ポイントには遠いが、FX側で実装可能な未着手案がここしか残っていない。
+input int    RsiBBFlagMaxBars    = 0;      // BB逸脱の記憶の寿命（バー数・0で無効）
+input int    RsiRSIFlagMaxBars   = 0;      // RSI極値の記憶の寿命（バー数・0で無効）
+input bool   RsiResetOnMAFlip    = false;  // MAの反対側に移ったら記憶を消す
+input bool   RsiConsumeWhileHeld = false;  // 保有中に完成したシグナルも消費する
+input int    RsiMemSleeveMask    = 0;      // 適用枠 bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全部）
+
 input group "=== SCA GOLD 第3セッション（SCA3・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】第2セッションの1時間刻み精査（docs/sca_gold_second_session_grid_20260906.md）で、
 // 窓を単独で振ったとき 9-11時 が 13-15時 に次ぐ有望窓だった（IS +105,626 / OOS +17,213）。
@@ -413,6 +434,9 @@ struct SLEEVE
    bool            useDP; int swingLB, dpBars; double dpTolATR;
    bool            useRange; double rangeMaxATR; int rangeLB;
    bool            wasOB, wasOS, aboveBB, belowBB;
+   // RSIシグナル記憶ラボ（既定OFF）。フラグが立った時刻と、直前バーのMA上下。
+   datetime        obAt, osAt, bbUpAt, bbLoAt;
+   int             maSide;   // +1=MA上 / -1=MA下 / 0=未初期化
    // PAIR
    string          second; int lookback; double entryZ, exitZ, stopZ;
    // CARRY
@@ -881,6 +905,7 @@ void ZeroSleeve(SLEEVE &x)
    x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
    x.useRange=false; x.rangeMaxATR=0; x.rangeLB=20;
    x.wasOB=false; x.wasOS=false; x.aboveBB=false; x.belowBB=false;
+   x.obAt=0; x.osAt=0; x.bbUpAt=0; x.bbLoAt=0; x.maSide=0;
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
    x.useHyst=false; x.hystMult=0.75;
@@ -1806,10 +1831,51 @@ void ProcRSI(int i)
    if(CopyLow(sym,tf,1,bs,lob)<bs) return;
 
    bool up=(cp>ma), dn=(cp<ma);
+
+   // --- RSIシグナル記憶ラボ（既定OFF）---
+   // フラグが立った時刻を控える。立っていないところから立った瞬間だけ更新するので、
+   // 逸脱が続いている間は最初の時刻のまま＝「いつからの記憶か」を保つ。
+   bool memOn = RsiMemLabOn(i);
+   datetime bt = iTime(sym,tf,1);
+   if(memOn)
+   {
+      if(rsi>=S[i].rsiOBX && !S[i].wasOB) S[i].obAt=bt;
+      if(rsi<=S[i].rsiOSX && !S[i].wasOS) S[i].osAt=bt;
+      if(cp>=bu[0] && !S[i].aboveBB)      S[i].bbUpAt=bt;
+      if(cp<=bl[0] && !S[i].belowBB)      S[i].bbLoAt=bt;
+   }
+
    if(rsi>=S[i].rsiOBX) S[i].wasOB=true;
    if(rsi<=S[i].rsiOSX) S[i].wasOS=true;
    if(cp>=bu[0]) S[i].aboveBB=true;
    if(cp<=bl[0]) S[i].belowBB=true;
+
+   if(memOn)
+   {
+      long bar = (long)PeriodSeconds(tf);
+      // 寿命切れ。古い逸脱を今の平均回帰機会として使わない。
+      if(RsiRSIFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].wasOB && S[i].obAt>0 && bt-S[i].obAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOB=false;
+         if(S[i].wasOS && S[i].osAt>0 && bt-S[i].osAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOS=false;
+      }
+      if(RsiBBFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].aboveBB && S[i].bbUpAt>0 && bt-S[i].bbUpAt >= (long)RsiBBFlagMaxBars*bar) S[i].aboveBB=false;
+         if(S[i].belowBB && S[i].bbLoAt>0 && bt-S[i].bbLoAt >= (long)RsiBBFlagMaxBars*bar) S[i].belowBB=false;
+      }
+      // MAの反対側に移ったら、レンジ内で立った記憶をトレンド移行後まで持ち越さない。
+      if(RsiResetOnMAFlip)
+      {
+         int side = up ? 1 : (dn ? -1 : S[i].maSide);
+         if(S[i].maSide!=0 && side!=0 && side!=S[i].maSide)
+         {
+            S[i].wasOB=false; S[i].wasOS=false;
+            S[i].aboveBB=false; S[i].belowBB=false;
+         }
+         if(side!=0) S[i].maSide=side;
+      }
+   }
 
    bool rbuy=S[i].wasOS&&(rsi>=S[i].rsiOS);
    bool rsell=S[i].wasOB&&(rsi<=S[i].rsiOB);
@@ -1841,6 +1907,27 @@ void ProcRSI(int i)
       if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
       if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
    }
+   // 保有中に完成したシグナルを消費する（既定OFF）。現行は注文分岐に入らないと
+   // 消えないため、同方向で保有している間に完成した反転を、決済後に新しい機会として
+   // 再利用してしまう。
+   if(memOn && RsiConsumeWhileHeld)
+   {
+      if(eb && hb){ if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false; }
+      if(es && hs){ if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false; }
+   }
+}
+
+// RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
+// 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+bool RsiMemLabOn(const int i)
+{
+   if(RsiBBFlagMaxBars<=0 && RsiRSIFlagMaxBars<=0
+      && !RsiResetOnMAFlip && !RsiConsumeWhileHeld) return false;
+   if(RsiMemSleeveMask==0) return true;
+   if(S[i].magic==20260610) return (RsiMemSleeveMask&1)!=0;   // RSI USDJPY
+   if(S[i].magic==20260605) return (RsiMemSleeveMask&2)!=0;   // RSI EURUSD
+   if(S[i].magic==20260774) return (RsiMemSleeveMask&4)!=0;   // RSI GBPUSD
+   return false;
 }
 
 //============================ PairTrade ============================
