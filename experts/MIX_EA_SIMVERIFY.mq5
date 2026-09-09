@@ -126,6 +126,40 @@ input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca2BoostMult     = 2.0;
 input double Sca2Lot           = 0.01;
 
+input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
+// GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
+// 抜ける」構造は他のJPYクロス（EURJPY / AUDJPY / CADJPY / CHFJPY / NZDJPY）にも
+// あるはずで、**新しい収益源**になりうる。
+//
+// 【なぜ未着手と言えるか】rejected_strategies.md には PB(§0,0c,0f) と RSI(§0e) と
+// VBO(§0n) の銘柄横展開の棄却記録があるが、**SCAの横展開は一件も無い**。
+// Codexの未着手項目調査（2026-09-07）の既検証一覧にも含まれていない。
+//
+// 【期待値】枠の追加なので、パラメータ改善（月利+0.01ポイント級）と違い
+// +0.1〜0.5ポイント級になりうる。既存の SCA USDJPY は FULL窓で 16,339円、
+// SCA GBPJPY は 115,992円。同程度が1銘柄でも増えれば意味がある。
+//
+// 【注意】横展開の実績は悪い（PBは SILVER / JP225 / NASDAQ / 原油 / NZDUSD /
+// USDCAD がすべて棄却）。期待は控えめに、両窓とサンプル数で厳しく見る。
+//
+// 銘柄を input で切り替えて1銘柄ずつ測る（同時に複数を有効にすると寄与が分離できない）。
+// 既定値は SCA USDJPY(20261000) の採用形をそのまま引き継いだ。
+input bool   ScaNewEnable      = false;
+input string ScaNewSymbol      = "EURJPY";  // EURJPY/AUDJPY/CADJPY/CHFJPY/NZDJPY等
+input int    ScaNewRangeStart  = 0;
+input int    ScaNewRangeEnd    = 9;
+input int    ScaNewTradeEnd    = 12;
+input int    ScaNewForceClose  = 22;
+input double ScaNewMinRange    = 0.30;
+input double ScaNewMaxRange    = 1.00;
+input double ScaNewBuffer      = 0.10;
+input double ScaNewRR          = 2.0;
+input bool   ScaNewSkipFriday  = false;
+input bool   ScaNewRevBoost    = true;
+input double ScaNewBoostMult   = 2.0;
+input double ScaNewLot         = 0.01;
+
 input group "=== RSIシグナル記憶ラボ（RSIMEM・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】RSI逆張り枠は wasOB/wasOS（RSI極値の記憶）と aboveBB/belowBB（BB逸脱の記憶）で
 // アームし、閾値を戻ってきたところで入る。このフラグは**注文分岐の中でしか消えない**。
@@ -819,6 +853,15 @@ int OnInit()
      x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
      x.scaSkipFriday=Sca5SkipFriday; x.scaRevBoost=Sca5RevBoost;
      x.scaBoostMult=Sca5BoostMult; AddSleeve(x); }
+   // 13c. SCA 新銘柄横展開（既定OFF・銘柄はinputで切り替え）
+   { SLEEVE x=z; x.enabled=ScaNewEnable; x.strat=ST_SCA; x.symbol=ScaNewSymbol;
+     x.tf=PERIOD_M15; x.magic=20261008; x.lot=ScaNewLot; x.useRisk=false;
+     x.rr=ScaNewRR; x.lotMult=1.0;
+     x.scaRangeStart=ScaNewRangeStart; x.scaRangeEnd=ScaNewRangeEnd;
+     x.scaTradeEnd=ScaNewTradeEnd; x.scaForceClose=ScaNewForceClose;
+     x.scaMinRange=ScaNewMinRange; x.scaMaxRange=ScaNewMaxRange; x.scaBuf=ScaNewBuffer;
+     x.scaSkipFriday=ScaNewSkipFriday; x.scaRevBoost=ScaNewRevBoost;
+     x.scaBoostMult=ScaNewBoostMult; AddSleeve(x); }
    // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
    { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
      x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
