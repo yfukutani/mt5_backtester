@@ -126,6 +126,27 @@ input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca2BoostMult     = 2.0;
 input double Sca2Lot           = 0.01;
 
+input group "=== 固定ロット枠のrisk%化（FXRISK・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】複利ラウンド（docs/oanda_fx_compounding_20260909.md）で、
+// **複利が効くのは9枠中3枠だけ**だと判明した。RefCap で口座equity連動になるのは
+// risk%枠（PB USDJPY / PB GBPJPY / Carry）のみで、FULL窓の純益の32%にすぎない。
+// 残り6枠は固定ロット 0.01 のままで、口座が126倍に育っても発注量が変わらない。
+//
+// その6枠のうち RSI 3枠と SCA 2枠（**全体の68%を稼ぐ**）を risk% サイジングに
+// 切り替えられるようにする。これが月利5%に届く可能性のある最後の未着手領域。
+// （Pair枠は2脚のスプレッド取引で SL が Z 基準のため、価格距離ベースの
+//   risk% サイジングが適用できない。対象外。）
+//
+// 【実装】既存の LotRisk() は useRisk / riskPct / refCap をすでに処理できるので、
+// 枠側でそれを立てるだけでよい。EA本体のロジックには手を入れない。
+//
+// 【通貨の注意】LotRisk() は SYMBOL_TRADE_TICK_VALUE を使う。GOLD/暗号では
+// 口座通貨に換算されない罠があるが（§GSZ参照）、対象はFXペアのみで、
+// PB USDJPY / PB GBPJPY が同じ経路で正しく動いている実績がある。
+input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=SCA_UJ bit4=SCA_GJ（0で無効）
+input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
+input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
+
 input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
 // GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
@@ -607,9 +628,29 @@ ENUM_TIMEFRAMES Pb2Timeframe()
    return (ENUM_TIMEFRAMES)0;
 }
 
+// 固定ロット枠に risk% サイジングを適用する（既定OFF）。
+// LotRisk() は useRisk/riskPct/refCap をすでに処理できるので、枠側で立てるだけでよい。
+void FxRiskOn(SLEEVE &x, const int bit)
+{
+   if((FxRiskMask & (1<<bit))==0) return;
+   x.useRisk = true;
+   x.riskPct = FxRiskPct;
+   x.refCap  = FxRiskRefCap;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(FxRiskMask!=0 && FxRiskPct<=0.0)
+   {
+      Print("FxRiskPct must be > 0 when FxRiskMask is set");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(FxRiskMask<0 || FxRiskMask>31)
+   {
+      Print("FxRiskMask must be 0..31");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(Pb2Enable && Pb2Timeframe()==0)
    {
       Print("Pb2TFMinutes must be one of 30/60/120/240");
@@ -716,13 +757,14 @@ int OnInit()
    //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
-     x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
+     x.lotMult=Mult_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
    //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
    //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD;
+     FxRiskOn(x,1); AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
    //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
@@ -730,7 +772,7 @@ int OnInit()
    //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
      x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
-     x.lotMult=Mult_RSI_GBPUSD; AddSleeve(x); }
+     x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
@@ -824,7 +866,8 @@ int OnInit()
      x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     FxRiskOn(x,3); AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
    //     OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
@@ -843,7 +886,8 @@ int OnInit()
      x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
+     FxRiskOn(x,4); AddSleeve(x); }
 
    // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
    { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
