@@ -192,3 +192,7 @@
 2026-09-10T16:16:57+00:00 RUN_START x16 OOS
 2026-09-10T16:19:47+00:00 RUN_END x16 OOS net=1902050.0 dd%=34.6503 trades=470 170.1s
 2026-09-10T16:19:47+00:00 HIGHMULT_END rows=10 ok=10 -> C:\Users\f\source\repos\mt5_backtester\ml\goldcomp1\results_highmult.csv
+2026-09-11T07:53:35+00:00 IS_START EA_SHA 98d735cabbc58164
+2026-09-11T07:53:35+00:00 RUN_START x1 IS
+2026-09-11T07:59:42+00:00 RUN_END x1 IS net=610318.0 dd%=5.4575 trades=463 366.7s
+2026-09-11T07:59:42+00:00 IS_END status=OK net=610318.0 -> C:\Users\f\source\repos\mt5_backtester\ml\goldcomp1\results_is.csv
