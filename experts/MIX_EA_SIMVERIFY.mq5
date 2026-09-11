@@ -126,6 +126,82 @@ input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍�
 input double Sca2BoostMult     = 2.0;
 input double Sca2Lot           = 0.01;
 
+input group "=== 固定ロット枠のrisk%化（FXRISK・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】複利ラウンド（docs/oanda_fx_compounding_20260909.md）で、
+// **複利が効くのは9枠中3枠だけ**だと判明した。RefCap で口座equity連動になるのは
+// risk%枠（PB USDJPY / PB GBPJPY / Carry）のみで、FULL窓の純益の32%にすぎない。
+// 残り6枠は固定ロット 0.01 のままで、口座が126倍に育っても発注量が変わらない。
+//
+// その6枠のうち RSI 3枠と SCA 2枠（**全体の68%を稼ぐ**）を risk% サイジングに
+// 切り替えられるようにする。これが月利5%に届く可能性のある最後の未着手領域。
+// （Pair枠は2脚のスプレッド取引で SL が Z 基準のため、価格距離ベースの
+//   risk% サイジングが適用できない。対象外。）
+//
+// 【実装】既存の LotRisk() は useRisk / riskPct / refCap をすでに処理できるので、
+// 枠側でそれを立てるだけでよい。EA本体のロジックには手を入れない。
+//
+// 【通貨の注意】LotRisk() は SYMBOL_TRADE_TICK_VALUE を使う。GOLD/暗号では
+// 口座通貨に換算されない罠があるが（§GSZ参照）、対象はFXペアのみで、
+// PB USDJPY / PB GBPJPY が同じ経路で正しく動いている実績がある。
+input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=SCA_UJ bit4=SCA_GJ（0で無効）
+input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
+input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
+
+input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
+// GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
+// 抜ける」構造は他のJPYクロス（EURJPY / AUDJPY / CADJPY / CHFJPY / NZDJPY）にも
+// あるはずで、**新しい収益源**になりうる。
+//
+// 【なぜ未着手と言えるか】rejected_strategies.md には PB(§0,0c,0f) と RSI(§0e) と
+// VBO(§0n) の銘柄横展開の棄却記録があるが、**SCAの横展開は一件も無い**。
+// Codexの未着手項目調査（2026-09-07）の既検証一覧にも含まれていない。
+//
+// 【期待値】枠の追加なので、パラメータ改善（月利+0.01ポイント級）と違い
+// +0.1〜0.5ポイント級になりうる。既存の SCA USDJPY は FULL窓で 16,339円、
+// SCA GBPJPY は 115,992円。同程度が1銘柄でも増えれば意味がある。
+//
+// 【注意】横展開の実績は悪い（PBは SILVER / JP225 / NASDAQ / 原油 / NZDUSD /
+// USDCAD がすべて棄却）。期待は控えめに、両窓とサンプル数で厳しく見る。
+//
+// 銘柄を input で切り替えて1銘柄ずつ測る（同時に複数を有効にすると寄与が分離できない）。
+// 既定値は SCA USDJPY(20261000) の採用形をそのまま引き継いだ。
+input bool   ScaNewEnable      = false;
+input string ScaNewSymbol      = "EURJPY";  // EURJPY/AUDJPY/CADJPY/CHFJPY/NZDJPY等
+input int    ScaNewRangeStart  = 0;
+input int    ScaNewRangeEnd    = 9;
+input int    ScaNewTradeEnd    = 12;
+input int    ScaNewForceClose  = 22;
+input double ScaNewMinRange    = 0.30;
+input double ScaNewMaxRange    = 1.00;
+input double ScaNewBuffer      = 0.10;
+input double ScaNewRR          = 2.0;
+input bool   ScaNewSkipFriday  = false;
+input bool   ScaNewRevBoost    = true;
+input double ScaNewBoostMult   = 2.0;
+input double ScaNewLot         = 0.01;
+
+input group "=== RSIシグナル記憶ラボ（RSIMEM・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】RSI逆張り枠は wasOB/wasOS（RSI極値の記憶）と aboveBB/belowBB（BB逸脱の記憶）で
+// アームし、閾値を戻ってきたところで入る。このフラグは**注文分岐の中でしか消えない**。
+// つまり
+//   ・時間が経っても失効しない（何十本も前の逸脱で今のバーに入る）
+//   ・MAの反対側に移っても残る（レンジで立った記憶をトレンド移行後に使う）
+//   ・同方向で保有中にシグナルが完成しても消費されない（決済後に古い記憶で再入場）
+//
+// 【なぜ未着手か】Codexの未着手項目調査（2026-09-07）で、RSI枠は周期・閾値・BB期間・
+// 偏差・レンジ判定・固定SL/TP・DPの各軸が param_reopt / codex500 で測定済みだが、
+// **フラグの寿命と消費の仕様は測られていない**と確認した。codex_50proposals の
+// 提案16・17として記録され、codex_verification では「今回スコープ外」のまま。
+//
+// 【規模の見込み】小さい。Codexの見積もりで入金50万に対し月利 +0.002〜0.009ポイント程度。
+// 目標の +1ポイントには遠いが、FX側で実装可能な未着手案がここしか残っていない。
+input int    RsiBBFlagMaxBars    = 0;      // BB逸脱の記憶の寿命（バー数・0で無効）
+input int    RsiRSIFlagMaxBars   = 0;      // RSI極値の記憶の寿命（バー数・0で無効）
+input bool   RsiResetOnMAFlip    = false;  // MAの反対側に移ったら記憶を消す
+input bool   RsiConsumeWhileHeld = false;  // 保有中に完成したシグナルも消費する
+input int    RsiMemSleeveMask    = 0;      // 適用枠 bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全部）
+
 input group "=== SCA GOLD 第3セッション（SCA3・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】第2セッションの1時間刻み精査（docs/sca_gold_second_session_grid_20260906.md）で、
 // 窓を単独で振ったとき 9-11時 が 13-15時 に次ぐ有望窓だった（IS +105,626 / OOS +17,213）。
@@ -413,6 +489,9 @@ struct SLEEVE
    bool            useDP; int swingLB, dpBars; double dpTolATR;
    bool            useRange; double rangeMaxATR; int rangeLB;
    bool            wasOB, wasOS, aboveBB, belowBB;
+   // RSIシグナル記憶ラボ（既定OFF）。フラグが立った時刻と、直前バーのMA上下。
+   datetime        obAt, osAt, bbUpAt, bbLoAt;
+   int             maSide;   // +1=MA上 / -1=MA下 / 0=未初期化
    // PAIR
    string          second; int lookback; double entryZ, exitZ, stopZ;
    // CARRY
@@ -549,9 +628,29 @@ ENUM_TIMEFRAMES Pb2Timeframe()
    return (ENUM_TIMEFRAMES)0;
 }
 
+// 固定ロット枠に risk% サイジングを適用する（既定OFF）。
+// LotRisk() は useRisk/riskPct/refCap をすでに処理できるので、枠側で立てるだけでよい。
+void FxRiskOn(SLEEVE &x, const int bit)
+{
+   if((FxRiskMask & (1<<bit))==0) return;
+   x.useRisk = true;
+   x.riskPct = FxRiskPct;
+   x.refCap  = FxRiskRefCap;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
+   if(FxRiskMask!=0 && FxRiskPct<=0.0)
+   {
+      Print("FxRiskPct must be > 0 when FxRiskMask is set");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(FxRiskMask<0 || FxRiskMask>31)
+   {
+      Print("FxRiskMask must be 0..31");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(Pb2Enable && Pb2Timeframe()==0)
    {
       Print("Pb2TFMinutes must be one of 30/60/120/240");
@@ -658,13 +757,14 @@ int OnInit()
    //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
-     x.lotMult=Mult_RSI_USDJPY; AddSleeve(x); }
+     x.lotMult=Mult_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
    //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
    //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; AddSleeve(x); }
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD;
+     FxRiskOn(x,1); AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
    //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
@@ -672,7 +772,7 @@ int OnInit()
    //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
      x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
-     x.lotMult=Mult_RSI_GBPUSD; AddSleeve(x); }
+     x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
@@ -766,7 +866,8 @@ int OnInit()
      x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     FxRiskOn(x,3); AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
    //     OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
@@ -785,7 +886,8 @@ int OnInit()
      x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
-     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0; AddSleeve(x); }
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
+     FxRiskOn(x,4); AddSleeve(x); }
 
    // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
    { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
@@ -795,6 +897,15 @@ int OnInit()
      x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
      x.scaSkipFriday=Sca5SkipFriday; x.scaRevBoost=Sca5RevBoost;
      x.scaBoostMult=Sca5BoostMult; AddSleeve(x); }
+   // 13c. SCA 新銘柄横展開（既定OFF・銘柄はinputで切り替え）
+   { SLEEVE x=z; x.enabled=ScaNewEnable; x.strat=ST_SCA; x.symbol=ScaNewSymbol;
+     x.tf=PERIOD_M15; x.magic=20261008; x.lot=ScaNewLot; x.useRisk=false;
+     x.rr=ScaNewRR; x.lotMult=1.0;
+     x.scaRangeStart=ScaNewRangeStart; x.scaRangeEnd=ScaNewRangeEnd;
+     x.scaTradeEnd=ScaNewTradeEnd; x.scaForceClose=ScaNewForceClose;
+     x.scaMinRange=ScaNewMinRange; x.scaMaxRange=ScaNewMaxRange; x.scaBuf=ScaNewBuffer;
+     x.scaSkipFriday=ScaNewSkipFriday; x.scaRevBoost=ScaNewRevBoost;
+     x.scaBoostMult=ScaNewBoostMult; AddSleeve(x); }
    // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
    { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
      x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
@@ -881,6 +992,7 @@ void ZeroSleeve(SLEEVE &x)
    x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
    x.useRange=false; x.rangeMaxATR=0; x.rangeLB=20;
    x.wasOB=false; x.wasOS=false; x.aboveBB=false; x.belowBB=false;
+   x.obAt=0; x.osAt=0; x.bbUpAt=0; x.bbLoAt=0; x.maSide=0;
    x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
    x.trendPeriod=200; x.reqPosSwap=false;
    x.useHyst=false; x.hystMult=0.75;
@@ -1806,10 +1918,51 @@ void ProcRSI(int i)
    if(CopyLow(sym,tf,1,bs,lob)<bs) return;
 
    bool up=(cp>ma), dn=(cp<ma);
+
+   // --- RSIシグナル記憶ラボ（既定OFF）---
+   // フラグが立った時刻を控える。立っていないところから立った瞬間だけ更新するので、
+   // 逸脱が続いている間は最初の時刻のまま＝「いつからの記憶か」を保つ。
+   bool memOn = RsiMemLabOn(i);
+   datetime bt = iTime(sym,tf,1);
+   if(memOn)
+   {
+      if(rsi>=S[i].rsiOBX && !S[i].wasOB) S[i].obAt=bt;
+      if(rsi<=S[i].rsiOSX && !S[i].wasOS) S[i].osAt=bt;
+      if(cp>=bu[0] && !S[i].aboveBB)      S[i].bbUpAt=bt;
+      if(cp<=bl[0] && !S[i].belowBB)      S[i].bbLoAt=bt;
+   }
+
    if(rsi>=S[i].rsiOBX) S[i].wasOB=true;
    if(rsi<=S[i].rsiOSX) S[i].wasOS=true;
    if(cp>=bu[0]) S[i].aboveBB=true;
    if(cp<=bl[0]) S[i].belowBB=true;
+
+   if(memOn)
+   {
+      long bar = (long)PeriodSeconds(tf);
+      // 寿命切れ。古い逸脱を今の平均回帰機会として使わない。
+      if(RsiRSIFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].wasOB && S[i].obAt>0 && bt-S[i].obAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOB=false;
+         if(S[i].wasOS && S[i].osAt>0 && bt-S[i].osAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOS=false;
+      }
+      if(RsiBBFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].aboveBB && S[i].bbUpAt>0 && bt-S[i].bbUpAt >= (long)RsiBBFlagMaxBars*bar) S[i].aboveBB=false;
+         if(S[i].belowBB && S[i].bbLoAt>0 && bt-S[i].bbLoAt >= (long)RsiBBFlagMaxBars*bar) S[i].belowBB=false;
+      }
+      // MAの反対側に移ったら、レンジ内で立った記憶をトレンド移行後まで持ち越さない。
+      if(RsiResetOnMAFlip)
+      {
+         int side = up ? 1 : (dn ? -1 : S[i].maSide);
+         if(S[i].maSide!=0 && side!=0 && side!=S[i].maSide)
+         {
+            S[i].wasOB=false; S[i].wasOS=false;
+            S[i].aboveBB=false; S[i].belowBB=false;
+         }
+         if(side!=0) S[i].maSide=side;
+      }
+   }
 
    bool rbuy=S[i].wasOS&&(rsi>=S[i].rsiOS);
    bool rsell=S[i].wasOB&&(rsi<=S[i].rsiOB);
@@ -1841,6 +1994,27 @@ void ProcRSI(int i)
       if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
       if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
    }
+   // 保有中に完成したシグナルを消費する（既定OFF）。現行は注文分岐に入らないと
+   // 消えないため、同方向で保有している間に完成した反転を、決済後に新しい機会として
+   // 再利用してしまう。
+   if(memOn && RsiConsumeWhileHeld)
+   {
+      if(eb && hb){ if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false; }
+      if(es && hs){ if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false; }
+   }
+}
+
+// RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
+// 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+bool RsiMemLabOn(const int i)
+{
+   if(RsiBBFlagMaxBars<=0 && RsiRSIFlagMaxBars<=0
+      && !RsiResetOnMAFlip && !RsiConsumeWhileHeld) return false;
+   if(RsiMemSleeveMask==0) return true;
+   if(S[i].magic==20260610) return (RsiMemSleeveMask&1)!=0;   // RSI USDJPY
+   if(S[i].magic==20260605) return (RsiMemSleeveMask&2)!=0;   // RSI EURUSD
+   if(S[i].magic==20260774) return (RsiMemSleeveMask&4)!=0;   // RSI GBPUSD
+   return false;
 }
 
 //============================ PairTrade ============================

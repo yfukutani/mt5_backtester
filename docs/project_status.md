@@ -25,6 +25,30 @@ mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細�
 > Carry複利0.15が非線形の壁・GOLD依存の集中リスク等の設計知見も記録。
 > 詳細: [portfolio_ea.md](portfolio_ea.md)の増レバ配分2026.07.03版。
 
+> 📌 **2026.09 OANDA FXの資金効率見直し:** フォワードテスト中のOANDA FX（9枠）が
+> `GlobalLotMult=1`のまま据え置かれ、入金50万に対する円建てDDを9.7%しか使っていなかったと判明
+> （XM側は倍率x4で25.8%）。2件の再設計で**OOS月利+2.56pt**（倍率余力+1.22pt・複利化+1.34pt）。
+> 複利化ラウンドでは「月利5%目標」に対し**到達不能（OOS最良2.71%/月・DD57%）**と結論した一方、
+> `RefCap=250,000`／倍率3という**元本割れなしでOOS 1.73%/月**まで伸ばせる推奨構成を発見。
+> 詳細: [oanda_fx_lot_headroom_20260908.md](oanda_fx_lot_headroom_20260908.md)・
+> [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md)。**未反映**（本番デプロイへの
+> 適用はユーザー判断待ち）。
+
+> 📌 **2026.09 別軸EA「X2_HIGH_RISK」の検証開始:** 本ブックとは別に、DD制約を外し
+> 「破綻するまでに資金が2倍になる確率」を最大化する別目的のEAの検証を開始（既存14枠を流用した
+> 合算ブックで評価）。理論式の誤り（「到達確率の天井47.4%」）をCodexの指摘で発見・訂正し、
+> 制約が「倍率の天井」ではなく「確率と速度のトレードオフ」であると確定。期限2〜5か月への緩和は
+> 不十分（OOS基準で最大63.8%）で、R3(85%)を満たすには12〜24か月への緩和が必要と判明。
+> 詳細: [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md)・
+> [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md)（V001〜V011）。
+
+> 📌 **2026.09.12 ドキュメント管理方針の確定:** 検証・意思決定が積み重なるプロジェクトの
+> ドキュメントを、リポジトリの`docs/`（一次記録・append-only）に加えて
+> **Obsidian Vault（`C:\project\obsidian\AI用\EA\`）で索引・要約管理**する方針を確定。
+> 検証のたびにVaultも更新する運用とし、リポジトリ直下の[CLAUDE.md](../CLAUDE.md)にも明記した。
+> MIX_EAはXM版・OANDA版で運用内容が大きく異なるため、Vault側では概要＋ブローカー別の
+> 3ノート構成に分割している。
+
 ---
 
 ## 1. 本番ブック（確定・11枠）
@@ -160,5 +184,8 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [sca_ml.md](sca_ml.md) | **SCA_ML（M1機械学習確率システム）**: 較正済み確率パイプライン完成・収益化4アプローチ全失敗の記録・本番はMLフィルターOFF |
 | [sca_scalping_backlog.md](sca_scalping_backlog.md) | **SCAスキャルピング改善バックログ**: 非ML手法100案・優先度S/A/B/C/D・検証プロトコル |
 | [MIX_EA_UM.md](MIX_EA_UM.md) | **MIX_EAユーザーマニュアル**: 既存ブック+SCA統合EA（XM/OANDA 2版）の使い方・推奨設定・成績 |
+| [oanda_fx_lot_headroom_20260908.md](oanda_fx_lot_headroom_20260908.md) / [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md) | **OANDA FXの資金効率見直し**（2026.09）: 倍率余力+1.22pt・複利化+1.34pt・月利5%目標は到達不能と確定 |
+| [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V011） |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
+| [../CLAUDE.md](../CLAUDE.md) | **プロジェクト運用ルール**: ドキュメント管理方針（Obsidian Vaultとの二層構造）・開発時の注意 |
