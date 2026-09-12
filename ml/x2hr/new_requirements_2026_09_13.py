@@ -63,7 +63,7 @@ RUIN_LEVELS = (0.10, 0.20, 0.50)
 K_GRID = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0]
 CHECKPOINTS = [1, 2, 3, 6, 12, 24]
 MONTHS = cc.MONTHS
-LONG_MONTHS = 240.0
+LONG_MONTHS = 30.0   # 最大チェックポイント24ヶ月をカバーすれば足りる（240ヶ月は無駄）
 
 
 def run(pp, vv, k, ruin_frac):
