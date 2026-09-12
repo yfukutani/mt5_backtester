@@ -103,8 +103,17 @@ def main():
     print("V036：期限（R4）を決めるための判断材料（Codex優先度3位・V037の査読を反映）")
     print("=" * 120)
     print("条件: エントリー時サイジング(V029) / H=IS頻度で固定(V030案a) / 破綻ライン10%")
-    print(f"      候補{len(cands)}件を全族同一格子で総当たり→シード{len(SEEDS)}本平均で選択→OOSへ適用")
-    print("      ※ 選択はすべてIS側で行う。OOSを見て選び直していない\n")
+    print(f"      候補{len(cands)}件（定数10＋A30＋B10＋C10）を全族同一格子で総当たり→"
+          f"シード{len(SEEDS)}本平均で選択→OOSへ適用")
+    print("      ※ 選択はすべてIS側で行う。OOSを見て選び直していない")
+    print("\n⚠️ Codex判定（V038）：**有望な探索結果だが、独立検証としての合格ではない。**")
+    print("   C族の格子を広げた動機はV035でOOS上のC族の強さを見たことであり、")
+    print("   『OOSでC族が強いと知る→C族の探索範囲を修正する→同じOOSで改善を確認する』")
+    print("   という**OOSから設計へのフィードバック**が入っている。")
+    print("   最終コードでパラメータをISだけから選んでも、候補集合を決めた上位の判断に")
+    print("   OOSが使われている。**将来の到達確率を立証する材料には足りない。**")
+    print("   また『同じ数値格子＝公平』も成立しない——定数k・A/Bのk0・Cのcは")
+    print("   同じ数値でも実際のエクスポージャーが違う（Codex）。\n")
 
     print("【手続き1：IS窓**全体**で選択】")
     print(f"{'期限':>6}{'H':>6}│{'IS選択(定数)':>12}{'OOS到達':>9}{'OOS破綻':>9}{'期限切れ':>9}"
@@ -122,19 +131,27 @@ def main():
               f"{100*ce:>8.1f}%│{f'{bd[0]}{bd[1]}':>16}{100*dh:>8.1f}%{100*dr:>8.1f}%"
               f"{100*de:>8.1f}%│{f'{ba[0]}{ba[1]}':>10}")
 
+    # ⚠️ Codex指摘（V038）：初版はIS前半選択なのに C族の s_IS と OOS評価用Hに
+    # **IS全体**を使っていた。前半の情報だけで固定する手続きの再現になっていなかった。
+    # ここでは s も H も **IS前半だけ** から計算する。
+    s_a = float(pr_a.std(ddof=1)) / cc.CAPITAL
+    rate_a = len(pr_a) / (MONTHS["IS"] / 2)
+    cands_a = candidates(s_a)
+    fnmap_a = {(f, p): fn for f, p, fn in cands_a}
+
     print("\n【手続き2：IS窓**前半のみ**で選択（V024の手続き）】")
-    print(f"{'期限':>6}{'H':>6}│{'IS前半選択(定数)':>16}{'OOS到達':>9}"
+    print("  ※ C族の s も 期限H も IS前半だけから計算する（Codex指摘V038を反映）")
+    print(f"{'期限':>6}{'H(前半頻度)':>12}│{'IS前半選択(定数)':>16}{'OOS到達':>9}"
           f"│{'IS前半選択(動的)':>18}{'OOS到達':>9}")
     rows2 = []
     for lim in DEADLINES:
-        H = int(round(rate_is * lim))
-        H_a = max(5, int(round(len(pr_a) / (MONTHS["IS"] / 2) * lim)))
-        sc, bc, bd, ba = select_on(pr_a, lg_a, H_a, cands, SEEDS,
+        H_a = max(5, int(round(rate_a * lim)))
+        sc, bc, bd, ba = select_on(pr_a, lg_a, H_a, cands_a, SEEDS,
                                    830000 + int(lim * 100))
-        ch, _, _ = eval_oos(fnmap[bc], pr_o, lg_o, H, SEEDS, 820000 + int(lim * 100))
-        dh, _, _ = eval_oos(fnmap[bd], pr_o, lg_o, H, SEEDS, 820000 + int(lim * 100))
+        ch, _, _ = eval_oos(fnmap_a[bc], pr_o, lg_o, H_a, SEEDS, 840000 + int(lim * 100))
+        dh, _, _ = eval_oos(fnmap_a[bd], pr_o, lg_o, H_a, SEEDS, 840000 + int(lim * 100))
         rows2.append((lim, bc, ch, bd, dh))
-        print(f"{lim:>5.0f}月{H:>6}│{f'k={bc[1][0]}':>16}{100*ch:>8.1f}%"
+        print(f"{lim:>5.0f}月{H_a:>12}│{f'k={bc[1][0]}':>16}{100*ch:>8.1f}%"
               f"│{f'{bd[0]}{bd[1]}':>18}{100*dh:>8.1f}%")
 
     print("\n" + "=" * 120)
