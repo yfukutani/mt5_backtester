@@ -76,8 +76,14 @@ H_POLICY = 0.48                      # 弱局面6ヶ月相当。方策の形を�
 CAP_GRID = [2.0, 3.0, 5.0, 1e9]      # 期限接近時の増し玉の上限
 
 
-def build_policy(H=H_POLICY, u_max=U_MAX, ntau=40):
-    """u*(x, τ) の表を作る。HJBを解きながら τ の各点でスナップを取る。"""
+def build_policy(H=None, u_max=U_MAX, ntau=40):
+    """u*(x, τ) の表を作る。HJBを解きながら τ の各点でスナップを取る。
+
+    ※ H の既定値は None。モジュール変数 H_POLICY を実行時に読む
+    （`H=H_POLICY` と書くと定義時に束縛され、後から差し替えられない）。
+    """
+    if H is None:
+        H = H_POLICY
     nx, nt = oc.NX, oc.NT
     xs = np.linspace(oc.LOG_RUIN, oc.LOG_TARGET, nx)
     dx = xs[1] - xs[0]
@@ -125,8 +131,9 @@ def build_policy(H=H_POLICY, u_max=U_MAX, ntau=40):
 
 
 class Policy:
-    def __init__(self):
-        self.xs, self.taus, self.tab = build_policy()
+    def __init__(self, H=None):
+        self.H = H_POLICY if H is None else H
+        self.xs, self.taus, self.tab = build_policy(self.H)
         self.u_ref = float(np.interp(0.0, self.xs,
                                      self.tab[len(self.taus) - 1]))
 
