@@ -604,6 +604,8 @@ input double Mult_PB_GOLD    = 1.0;
 input double Mult_RSI_USDJPY = 1.0;
 input double Mult_RSI_EURUSD = 1.0;
 input double Mult_RSI_GBPUSD = 1.0;
+input bool   En_RSI_X2      = false;  // X2HR: RSI横展開4枠（既定OFF）
+input double Mult_RSI_X2    = 1.0;    // X2HR: RSI横展開4枠の倍率
 input double Mult_PAIR       = 1.0;
 input double Mult_CARRY      = 1.0;
 input double Mult_VBO        = 1.0;
@@ -958,6 +960,40 @@ int OnInit()
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
      x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
      x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
+
+   //=== X2HR: RSI横展開4枠（V099の基準で選定・既定OFF） =================
+   // 【なぜRSI型か】V099より、ブックが**不毛な月**に稼げるのは RSI GBPUSD と
+   // RSI USDJPY の2枠だけだった（弱局面の不毛月 +6,475円 / +6,010円）。
+   // 1取引シャープの高い PB GOLD・SCA GOLD2 は不毛月にはマイナスで役に立たない。
+   //
+   // 【既存の棄却記録を踏まえた銘柄選定】
+   // - RSI14 をクロスペアへ展開 → **全滅**（ドルストレート限定と判明・project_status.md）
+   // - USDCHF RSI → **棄却**（全期間 −20,635 / PF0.66 / 130取引・rejected_strategies.md §0e）
+   // したがってクロスペア（EURJPY/AUDJPY/EURGBP等）とUSDCHFは**候補から外す**。
+   //
+   // 残る未検証は「コモディティ通貨のドルストレート」3つと、**GOLD**。
+   // GOLDは既存3枠（PB GOLD・SCA GOLD1/2）がすべて順張り／ブレイクで、
+   // **逆張りは一度も試していない**。ブックの純益の56%を占める銘柄に
+   // 逆方向の機構を足すので、不毛月の補完として筋が良い。
+   //
+   // 設定は**採用実績のある RSI GBPUSD のテンプレートを共通で流用**する
+   // （Codexの「銘柄別の大量最適化を避ける」に従う）。
+   // GOLDのみ pips が使えないので ATRストップにする（PB GOLDと同じ方式）。
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="GOLD"; x.tf=PERIOD_H4;
+     x.magic=20260790; x.useDP=false; x.dpBars=100;
+     x.useATRstops=true; x.atrSLmult=2.0; x.rr=2.2;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="AUDUSD"; x.tf=PERIOD_H4;
+     x.magic=20260791; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="NZDUSD"; x.tf=PERIOD_H4;
+     x.magic=20260792; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="USDCAD"; x.tf=PERIOD_H4;
+     x.magic=20260793; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   //=== X2HR RSI横展開 ここまで ==========================================
+
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
