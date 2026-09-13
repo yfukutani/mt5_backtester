@@ -92,8 +92,11 @@ input double GlobalLotMult = 1.0;    // 全枠のロットに掛ける倍率（�
 // **追加の 1/sqrt(tau) は掛けない**（Codexの指摘＝二重増幅。V086で確認済み）。
 //
 // [!] 注意：この倍率は「資金比例（ratio）」を自分で掛ける。
-//     RefCap_* を 0 にして口座equity連動にすると**二重に効く**。
-//     X2_HIGH_RISKの検証では RefCap_* を既定（固定値）のまま使うこと。
+//     **RefCap_* の既定は 0 ＝ 口座equity連動**なので、そのままだと枠側でも
+//     資金比例が効き、**二重に効く**。X2_HIGH_RISKの検証では
+//     RefCap_PB_USDJPY / RefCap_PB_GBPJPY / RefCap_CARRY を**必ず固定値にする**
+//     （元の取引ログを作った実行は 78000）。資金連動なのはこの3枠だけで、
+//     他の枠は useRisk=false の固定ロットなので入金額に依存しない。
 input int      DlMode       = 0;            // 0=切/1=比例のみ/2=HJB期限意識
 input datetime DlStart      = D'2016.11.09';// 期限の起点（評価開始）
 input int      DlMonths     = 6;            // 期限（暦月）
@@ -166,6 +169,13 @@ void DlInit()
    g_dlWhy  = "";
    g_dlPeak = DlRefCap;
    g_dlMaxDD = 0.0;
+   // DlStart が .set から正しく読めているかを必ず残す。
+   // （最初の試験実行では D'2016.11.09' という書式が .set で不正になり、
+   //   1970年と解釈されて即座に期限切れ→0取引になった）
+   PrintFormat("X2HR mode=%d start=%s end=%s months=%d k=%.2f cap=%.2f ref=%.0f",
+               DlMode, TimeToString(DlStart, TIME_DATE|TIME_MINUTES),
+               TimeToString(g_dlEnd, TIME_DATE|TIME_MINUTES),
+               DlMonths, DlK, DlCap, DlRefCap);
 }
 
 void DlCloseAllPositions()
@@ -182,7 +192,9 @@ void DlCloseAllPositions()
 void DlWriteResult()
 {
    if(DlResultFile=="") return;
-   int h = FileOpen(DlResultFile, FILE_WRITE|FILE_CSV|FILE_ANSI, ",");
+   // FILE_COMMON が必須。付けないとテスターエージェント配下に書かれ、
+   // 呼び出し側（Common\\Files を見る）が結果を拾えない。
+   int h = FileOpen(DlResultFile, FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON, ",");
    if(h==INVALID_HANDLE) return;
    FileWrite(h, "start", "months", "mode", "k", "cap", "why",
              "end_equity", "pnl", "max_dd_pct");

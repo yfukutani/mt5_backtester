@@ -89,6 +89,15 @@ BOOK = {
     "Sca5Enable": False, "Sca6Enable": False, "Pb2Enable": False,
     "FundUseWebRequest": False, "BfxUseWebRequest": False,
     "GlobalLotMult": 1,
+    # 【必須】EAの既定は 0（＝口座equity連動）。**指定しないと別物を測る。**
+    # 元の取引ログを作った fxmult1 の実行は 78000（固定＝非複利）だった。
+    # 落としたまま最初の試験実行をしたところ、Carry AUDJPY が 0.05→0.19ロットになり、
+    # 2016-11-09（米大統領選の急落）の1取引で −90,003円＝破綻した。
+    # さらに RefCap=0 のままだと枠側でも資金比例が効き、DlMult() の ratio と
+    # **二重に効く**（Codexが事前に指摘していた落とし穴）。
+    # 資金連動なのはこの3枠だけで、他は固定ロット。ここを固定にすれば
+    # 全枠が入金額に依存せず、元のログのロットを再現できる。
+    "RefCap_PB_USDJPY": 78000, "RefCap_PB_GBPJPY": 78000, "RefCap_CARRY": 78000,
 }
 
 _ea_sha = None
@@ -135,7 +144,10 @@ def run_one(months, origin, mode, k, cap):
     run_id = f"dl_{months}m_{tag}_mode{mode}_{stamp}_{uuid.uuid4().hex[:4]}"
     p = dict(BOOK)
     p["DlMode"] = mode
-    p["DlStart"] = f"D'{origin}'"
+    # .set ファイルの datetime は "YYYY.MM.DD HH:MM:SS" 形式。
+    # MQL5ソースの D'...' 記法を書くと 1970 と解釈され、即座に期限切れになる
+    # （最初の試験実行で 0取引になった原因）。
+    p["DlStart"] = f"{origin} 00:00:00"
     p["DlMonths"] = months
     p["DlK"] = k
     p["DlCap"] = cap
