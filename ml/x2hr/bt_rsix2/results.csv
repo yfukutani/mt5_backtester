@@ -1,0 +1,4 @@
+window,net,pf,dd_pct,trades,gold_net,gold_n,audusd_net,audusd_n,nzdusd_net,nzdusd_n,usdcad_net,usdcad_n,status,secs,run_id,deals
+OOS,-33782.0,0.7717,8.6031,278.0,-31737.0,63,-159.0,70,-110.0,76,-1776.0,69,OK,188.5,rsix2_oos_20260913095521_701e,rsix2_oos_20260913095521_701e_deals.csv
+IS,82047.0,1.3928,8.0109,289.0,66118.0,59,3890.0,76,7771.0,78,4268.0,76,OK,229.1,rsix2_is_20260913095830_af2f,rsix2_is_20260913095830_af2f_deals.csv
+FULL,48265.0,1.1352,11.1415,567.0,34381.0,122,3731.0,146,7661.0,154,2492.0,145,OK,539.6,rsix2_full_20260913100219_3d9d,rsix2_full_20260913100219_3d9d_deals.csv

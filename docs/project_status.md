@@ -42,6 +42,24 @@ mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細�
 > 詳細: [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md)・
 > [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md)（V001〜V011）。
 
+> 📌 **2026.09.12 X2_HIGH_RISK：期限2〜6ヶ月の85%達成は「立証できず探索終了」:**
+> 新たな軸を5件（高シャープ新規類型・共分散配分・売買相殺・残存機会数サイジング・枠の取捨選択）
+> 検証したがすべて却下。**OOS窓そのものを見て候補から最良を選んでも、2〜6ヶ月相当で
+> 59.7〜76.0%にとどまった**（V035）。最終結論の文面はCodexの提案に従い——
+> 「検証済み方策と追加の有限候補探索では、元の2ヶ月要件に対する85%達成を立証できなかった
+> ため、探索を終了する。**履歴不確実性を含む検証と方策集合全体の上界証明は未完了であり、
+> 到達不可能とは結論しない**」。
+> **定数方策では失敗の主因が破綻ではなく期限切れ**——6ヶ月以上のOOS破綻確率は0.0〜0.1%
+> （丸め表示）しかない（V034）。
+> **⚠️ V037でCodexの査読により自分の記述に6件の誤りが見つかり訂正した**——
+> ①「そのまま続ければ99.9%が到達する」は誤り（P(到達)+P(期限切れ)は全員救済を仮定した上限）、
+> ②内訳の記述が定数方策に限定されていなかった、③片側95%上限に両側1.96を使っていた、
+> ④V035の「上界」は逆向き（格子探索の最大値は方策族の最大値の**下側**）、
+> ⑤C族の出典と因果説明が誤り、⑥24ヶ月の「±3pt」という書き方。
+> **24ヶ月の推定値は、異なる選択・評価手続きで84.2%（V034）と89.7%（V024）。
+> 将来の到達確率85%以上は確認できていない。両者の平均を取ったり良い方を採用したりしないこと。**
+> 詳細: [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md)（V012〜V037）。
+
 > 📌 **2026.09.12 ドキュメント管理方針の確定:** 検証・意思決定が積み重なるプロジェクトの
 > ドキュメントを、リポジトリの`docs/`（一次記録・append-only）に加えて
 > **Obsidian Vault（`C:\project\obsidian\AI用\EA\`）で索引・要約管理**する方針を確定。
@@ -185,7 +203,7 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [sca_scalping_backlog.md](sca_scalping_backlog.md) | **SCAスキャルピング改善バックログ**: 非ML手法100案・優先度S/A/B/C/D・検証プロトコル |
 | [MIX_EA_UM.md](MIX_EA_UM.md) | **MIX_EAユーザーマニュアル**: 既存ブック+SCA統合EA（XM/OANDA 2版）の使い方・推奨設定・成績 |
 | [oanda_fx_lot_headroom_20260908.md](oanda_fx_lot_headroom_20260908.md) / [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md) | **OANDA FXの資金効率見直し**（2026.09）: 倍率余力+1.22pt・複利化+1.34pt・月利5%目標は到達不能と確定 |
-| [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V011） |
+| [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
 | [../CLAUDE.md](../CLAUDE.md) | **プロジェクト運用ルール**: ドキュメント管理方針（Obsidian Vaultとの二層構造）・開発時の注意 |

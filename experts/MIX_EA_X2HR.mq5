@@ -1,0 +1,2869 @@
+//+------------------------------------------------------------------+
+//|  MIX_EA_X2HR.mq5（X2_HIGH_RISK検証専用・本番利用禁止）           |
+//|  MIX_EA_SIMVERIFY.mq5 の派生。**期限意識サイジング**を追加した。 |
+//|  V080でHJB方程式を解いた最適方策 u*(x,τ) をロット倍率に使う。    |
+//|  DlMode=0 なら既存と完全に同じ挙動（倍率1.0）。                  |
+//|  統合ポートフォリオEA v1.0 = PortfolioEA（既存ブック11枠）+      |
+//|  SCA（セッションORBスキャルパー3枠・第1/第2バックログ最終形）。   |
+//|  1チャートにアタッチするだけで全14枠を稼働。MagicNumberで独立。   |
+//|  SCA枠: GOLD(Range1-9h/TE15/FC20/MinR0.40/金曜スキップ/Revブースト)|
+//|         USDJPY/GBPJPY(Range0-9h/TE12/FC22/MinR0.30/Revブースト)   |
+//|  ※ライブ運用専用。各戦略の検証は個別EA(mt5bt)を使うこと。        |
+//|  ※XMサーバー時刻(GMT+2/+3)前提。使い方: docs/MIX_EA_UM.md        |
+//|  v1.5: 利益トレール（含み益が残高比%刻みでSLを段階的に引き上げ）  |
+//|  v1.4: アーム状態のGlobalVariable永続化（再起動でPB armed/RSI     |
+//|        wasOB等/SCA日次状態/Carry cdを失わない。テスターでは無効） |
+//+------------------------------------------------------------------+
+#property copyright "2026"
+#property version   "1.40"
+#property strict
+
+#include <Trade\Trade.mqh>
+
+//=== 枠ON/OFF（運用時に個別に止められる）===
+input group "=== 枠の有効/無効 ==="
+input bool En_PB_USDJPY  = true;
+input bool En_PB_GBPJPY  = true;
+input bool En_PB_AUDJPY  = false;  // 死に枠（デプロイ除外）。既定OFF
+input bool En_PB_GOLD    = true;
+input bool En_RSI_USDJPY = true;
+input bool En_RSI_EURUSD = true;
+input bool En_RSI_GBPUSD = true;   // レンジ枠強化（横展開で採用）
+input bool En_PAIR       = true;
+input bool En_CARRY      = true;
+input bool En_VBO        = false;  // 2026-08-08: every_tick実費検証でOOS一貫マイナス判明のため除外
+                                    // （docs/codex_verification_20260808.md）
+input bool En_ETH        = true;   // v1.2: A2デュアルMA(200/40+cd5+SL45)に更新（ETH_EA同等）
+input bool En_BTC_FUND   = true;   // v1.2新設: BTC funding逆張り（FundingRev v1.2同等・採用形）
+input bool En_BFXREV     = true;   // v1.3新設: Bitfinexデレバレッジ・リバウンド（BfxRev v1.0採用形）
+input bool En_SCA_GOLD   = true;   // SCAセッションORB（最終形・Revブースト込み）
+input bool En_SCA_USDJPY = true;
+input bool En_SCA_GBPJPY = true;
+
+input group "=== BTC funding枠の設定（FundingRev v1.2の採用形） ==="
+input string FundingFile      = "funding_btc.csv"; // Common\Files内（テスター/フォールバック）
+input bool   FundUseWebRequest = true;             // ライブ: Binance API自動取得（要URL許可）
+input double FundThreshold    = -0.003;            // 日平均funding閾値（%/8h）
+                                                   // v2.2: -0.004→-0.003（トレードオフ8案の
+                                                   // 組合せ検証#2・IS+57,087でポートフォリオ
+                                                   // 最大の増益寄与+21,275。
+                                                   // docs/tradeoff8_combined_20260812.md）
+input int    FundMaxHold      = 20;                // 退出上限日数（med90退出のフェイルセーフ）
+
+input group "=== BfxRev枠の設定（BfxRev v1.0の採用形） ==="
+input string BfxFile          = "bfx_btc_long.csv"; // Common\Files内
+input bool   BfxUseWebRequest = true;   // ライブ: Bitfinex API自動取得（要URL許可 api-pub.bitfinex.com）
+input double BfxDropPct       = 10.0;   // ロング建玉急減閾値（%/観測窓）
+input int    BfxLookbackDays  = 10;     // 建玉変化の観測窓（日）
+                                        // v2.2: 5→10（トレードオフ8案の組合せ検証#8・
+                                        // IS+55,156(PF4.31)/OOS+19,376。従来は5日固定ハードコード
+                                        // だったためinput化した。docs/tradeoff8_combined_20260812.md）
+input int    BfxHoldDays      = 10;     // 保有日数
+
+input group "=== 暗号グループ同時ポジション上限（v1.3） ==="
+// 暗号3枠（ETH/BTC funding/BfxRev）の同時保有は約11%の日のみ。cap=1はDD-26%だが利益-36%＝
+// 効率劣化がテスター実測で判明（MIX_EA_UM§9）。よって既定OFF。ロット増はGlobalLotMult/Mult_*で
+// 行う（2x=DD26.1%/3x=DD31.5%実測）。有効化する場合は口座全体の暗号Magic
+// （20260710/20260720/20260723/20260724）を横断カウント＝単独EA併用時も機能。
+input int MaxCryptoConcurrent = 0;   // 0=無効（推奨・実測根拠） / 1=保有中は他の暗号新規を控える
+
+input group "=== 利益トレール（v1.5・既定OFF） ==="
+// 含み益が口座残高のStep%に達したらSLを「残高のLock%の利益を確保する価格」へ移動し、
+// 以後はStep%増えるごとに同じ幅だけSLを引き上げる（追従幅は Step-Lock で一定）。
+// 例（Step=0.5 / Lock=0.1・残高10万円）:
+//   含み益+500円(0.5%) → SL=+100円(0.1%) を確保する価格
+//   含み益+1,000円(1.0%) → SL=+600円(0.6%)
+//   含み益+1,500円(1.5%) → SL=+1,100円(1.1%)
+// SLは改善方向にのみ動かし、現値やストップレベルを跨ぐ位置には置かない。
+// 対象は本EAが建てた全ポジション（PairTrade/Carryなど本来SLを持たない枠にもSLが付く点に注意）。
+input bool   UseProfitTrail   = false;  // 利益トレールを使用する
+input double ProfitTrail_Step  = 0.5;   // 発動・引き上げの刻み（口座残高に対する%）
+input double ProfitTrail_Lock  = 0.1;   // 初回発動時に確保する利益（口座残高に対する%）
+
+input group "=== 全体設定 ==="
+input bool   MasterEnable  = true;   // 全枠の発注を一括停止できる安全スイッチ
+input double GlobalLotMult = 1.0;    // 全枠のロットに掛ける倍率（資金規模調整用）
+
+//=== X2HR: 期限意識サイジング（検証専用・V080/V086/V089） ==============
+// V080でHJB方程式 dv/dtau = max_u[(u^2/2)v_xx + (u*H - u^2/2)v_x] を解いた
+// 最適方策。倍率 = u*(x, tau) / u*(0, 1)。
+//   x   = log(資金 / 初期資金)
+//   tau = 残り時間 / 期限全体
+// **追加の 1/sqrt(tau) は掛けない**（Codexの指摘＝二重増幅。V086で確認済み）。
+//
+// [!] 注意：この倍率は「資金比例（ratio）」を自分で掛ける。
+//     **RefCap_* の既定は 0 ＝ 口座equity連動**なので、そのままだと枠側でも
+//     資金比例が効き、**二重に効く**。X2_HIGH_RISKの検証では
+//     RefCap_PB_USDJPY / RefCap_PB_GBPJPY / RefCap_CARRY を**必ず固定値にする**
+//     （元の取引ログを作った実行は 78000）。資金連動なのはこの3枠だけで、
+//     他の枠は useRisk=false の固定ロットなので入金額に依存しない。
+input int      DlMode       = 0;            // 0=切/1=比例のみ/2=HJB期限意識
+input datetime DlStart      = D'2016.11.09';// 期限の起点（評価開始）
+input int      DlMonths     = 6;            // 期限（暦月）
+input double   DlK          = 4.0;          // 全体倍率 k
+input double   DlCap        = 3.0;          // HJB倍率の上限
+input double   DlRefCap     = 100000.0;     // 初期資金（x の基準）
+input double   DlTargetX    = 2.0;          // 目標倍率（2倍固定）
+input double   DlRuinPct    = 10.0;         // 破綻ライン（初期資金に対する%）
+input bool     DlCloseOnEnd = true;         // 到達/破綻/期限切れで全決済して停止
+input string   DlResultFile = "";           // 判定結果の書き出し先（空なら書かない）
+
+// V089: HJB方策表（V080で解いた u*(x,tau)/u*(0,1)）
+// H=0.48 / x=25点 log(0.1)..log(2) / tau=21点
+// 追加の 1/sqrt(tau) は掛けない（Codexの指摘＝二重増幅）
+#define DL_NX 25
+#define DL_NT 21
+const double DL_X0 = -2.3025850930;
+const double DL_X1 = 0.6931471806;
+const double DL_T0 = 0.0476190476;
+const double DL_T1 = 1.0000000000;
+const double DL_TAB[DL_NT][DL_NX] = {
+  {0.94984,10.02422,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.30335,10.12013,7.69178,5.28967,2.82554,0.28043},
+  {0.23156,2.18046,3.67941,4.79432,5.63099,6.25036,6.69503,6.99504,7.17392,7.24921,7.23528,7.14295,6.98120,6.75660,6.47446,6.13818,5.75007,5.31058,4.81876,4.27113,3.66139,2.97763,2.19816,1.27401,0.14766},
+  {0.15012,1.40725,2.38815,3.12610,3.68609,4.10577,4.41175,4.62298,4.75446,4.81742,4.82116,4.77265,4.67771,4.54054,4.36451,4.15166,3.90329,3.61933,3.29871,2.93847,2.53352,2.07450,1.54454,0.90406,0.10963},
+  {0.11972,1.11987,1.90791,2.50253,2.95542,3.29605,3.54541,3.71847,3.82718,3.88052,3.88592,3.84899,3.77443,3.66561,3.52527,3.35506,3.15600,2.92807,2.67036,2.38044,2.05413,1.68373,1.25534,0.73623,0.09113},
+  {0.10272,0.95799,1.63662,2.14916,2.54025,2.83491,3.05101,3.20134,3.29613,3.34309,3.34860,3.31752,3.25387,3.16060,3.04006,2.89369,2.72238,2.52611,2.30412,2.05429,1.77303,1.45367,1.08295,0.63641,0.07986},
+  {0.09148,0.85099,1.45616,1.91367,2.26315,2.52673,2.72024,2.85504,2.94021,2.98261,2.98794,2.96053,2.90399,2.82095,2.71350,2.58296,2.43013,2.25499,2.05687,1.83389,1.58284,1.29777,0.96619,0.56855,0.07212},
+  {0.08333,0.77349,1.32490,1.74216,2.06114,2.30189,2.47876,2.60206,2.68006,2.71901,2.72410,2.69929,2.64785,2.57221,2.47428,2.35526,2.21590,2.05617,1.87548,1.67213,1.44317,1.18272,0.88053,0.51863,0.06639},
+  {0.07708,0.71399,1.22373,1.61000,1.90537,2.12841,2.29235,2.40670,2.47910,2.51532,2.52018,2.49731,2.44979,2.37983,2.28923,2.17910,2.05012,1.90229,1.73506,1.54687,1.33500,1.09328,0.81426,0.47994,0.06193},
+  {0.07209,0.66645,1.14209,1.50409,1.78047,1.98925,2.14277,2.24989,2.31775,2.35175,2.35639,2.33507,2.29066,2.22526,2.14053,2.03751,1.91687,1.77860,1.62218,1.44616,1.24801,1.02150,0.76102,0.44883,0.05834},
+  {0.06798,0.62733,1.07493,1.41673,1.67741,1.87438,2.01926,2.12038,2.18447,2.21662,2.22105,2.20100,2.15916,2.09750,2.01761,1.92048,1.80672,1.67634,1.52886,1.36290,1.17554,0.96224,0.71704,0.42312,0.05537},
+  {0.06620,0.61041,1.04589,1.37890,1.63277,1.82462,1.96574,2.06426,2.12672,2.15805,2.16239,2.14288,2.10215,2.04212,1.96433,1.86974,1.75897,1.63201,1.48840,1.32680,1.14411,0.93657,0.69799,0.41197,0.05408},
+  {0.06300,0.57995,0.99362,1.31072,1.55229,1.73488,1.86923,1.96303,2.02252,2.05238,2.05655,2.03802,1.99928,1.94218,1.86817,1.77819,1.67279,1.55201,1.41539,1.26167,1.08743,0.89028,0.66363,0.39185,0.05175},
+  {0.06020,0.55332,0.94794,1.25103,1.48181,1.65629,1.78468,1.87435,1.93122,1.95979,1.96381,1.94612,1.90914,1.85459,1.78390,1.69794,1.59727,1.48190,1.35140,1.20428,1.03783,0.84976,0.63354,0.37424,0.04971},
+  {0.05781,0.53064,0.90902,1.19978,1.42170,1.58924,1.71254,1.79867,1.85330,1.88076,1.88464,1.86768,1.83218,1.77982,1.71196,1.62944,1.53280,1.42205,1.29678,1.15513,0.99553,0.81520,0.60787,0.35920,0.04797},
+  {0.05567,0.51028,0.87411,1.15367,1.36770,1.52900,1.64772,1.73065,1.78327,1.80973,1.81348,1.79717,1.76301,1.71262,1.64730,1.56787,1.47485,1.36825,1.24769,1.11100,0.95755,0.78417,0.58481,0.34570,0.04640},
+  {0.05376,0.49210,0.84294,1.11251,1.31943,1.47514,1.58976,1.66985,1.72066,1.74621,1.74985,1.73412,1.70115,1.65252,1.58947,1.51281,1.42303,1.32015,1.20349,1.07157,0.92361,0.75644,0.56420,0.33362,0.04500},
+  {0.05204,0.47574,0.81489,1.07547,1.27596,1.42663,1.53755,1.61505,1.66424,1.68898,1.69251,1.67729,1.64540,1.59835,1.53736,1.46319,1.37633,1.27681,1.16359,1.03607,0.89306,0.73147,0.54565,0.32275,0.04374},
+  {0.05046,0.46073,0.78915,1.04148,1.23603,1.38207,1.48958,1.56471,1.61240,1.63639,1.63982,1.62508,1.59418,1.54858,1.48947,1.41760,1.33343,1.23697,1.12696,1.00348,0.86500,0.70854,0.52860,0.31276,0.04258},
+  {0.04905,0.44740,0.76630,1.01131,1.20023,1.34247,1.44696,1.51998,1.56632,1.58965,1.59299,1.57868,1.54865,1.50435,1.44692,1.37708,1.29531,1.20127,1.09442,0.97453,0.84009,0.68817,0.51347,0.30389,0.04155},
+  {0.04775,0.43500,0.74506,0.98327,1.16694,1.30564,1.40730,1.47835,1.52346,1.54616,1.54942,1.53550,1.50629,1.46319,1.40732,1.33939,1.25984,1.16805,1.06417,0.94762,0.81692,0.66923,0.49939,0.29564,0.04059},
+  {0.04713,0.42910,0.73495,0.96992,1.15110,1.28811,1.38842,1.45853,1.50304,1.52545,1.52867,1.51493,1.48612,1.44359,1.38847,1.32144,1.24295,1.15224,1.04977,0.93481,0.80589,0.66022,0.49269,0.29172,0.04014}
+};
+
+datetime g_dlEnd  = 0;
+bool     g_dlDone = false;
+string   g_dlWhy  = "";
+double   g_dlEndEq = 0.0;
+double   g_dlPeak = 0.0;
+double   g_dlMaxDD = 0.0;
+
+datetime DlAddMonths(datetime base, int months)
+{
+   MqlDateTime t; TimeToStruct(base, t);
+   int m = t.mon - 1 + months;
+   t.year += (int)MathFloor(m / 12.0);
+   t.mon   = (m % 12 + 12) % 12 + 1;
+   // 月末の繰り上がりを避ける（Pythonの add_months と同じ規則）
+   int dim[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+   int md = dim[t.mon-1];
+   if(t.mon==2 && ((t.year%4==0 && t.year%100!=0) || t.year%400==0)) md=29;
+   if(t.day > md) t.day = md;
+   return StructToTime(t);
+}
+
+void DlInit()
+{
+   g_dlEnd  = DlAddMonths(DlStart, DlMonths);
+   g_dlDone = false;
+   g_dlWhy  = "";
+   g_dlPeak = DlRefCap;
+   g_dlMaxDD = 0.0;
+   // DlStart が .set から正しく読めているかを必ず残す。
+   // （最初の試験実行では D'2016.11.09' という書式が .set で不正になり、
+   //   1970年と解釈されて即座に期限切れ→0取引になった）
+   PrintFormat("X2HR mode=%d start=%s end=%s months=%d k=%.2f cap=%.2f ref=%.0f",
+               DlMode, TimeToString(DlStart, TIME_DATE|TIME_MINUTES),
+               TimeToString(g_dlEnd, TIME_DATE|TIME_MINUTES),
+               DlMonths, DlK, DlCap, DlRefCap);
+}
+
+void DlCloseAllPositions()
+{
+   for(int i=PositionsTotal()-1; i>=0; i--)
+   {
+      ulong tk = PositionGetTicket(i);
+      if(tk==0) continue;
+      if(!PositionSelectByTicket(tk)) continue;
+      trade.PositionClose(tk);
+   }
+}
+
+void DlWriteResult()
+{
+   if(DlResultFile=="") return;
+   // FILE_COMMON が必須。付けないとテスターエージェント配下に書かれ、
+   // 呼び出し側（Common\\Files を見る）が結果を拾えない。
+   int h = FileOpen(DlResultFile, FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON, ",");
+   if(h==INVALID_HANDLE) return;
+   FileWrite(h, "start", "months", "mode", "k", "cap", "why",
+             "end_equity", "pnl", "max_dd_pct");
+   FileWrite(h, TimeToString(DlStart, TIME_DATE), DlMonths, DlMode, DlK, DlCap,
+             g_dlWhy, DoubleToString(g_dlEndEq,2),
+             DoubleToString(g_dlEndEq - DlRefCap,2),
+             DoubleToString(100.0*g_dlMaxDD,3));
+   FileClose(h);
+}
+
+// 到達・破綻・期限切れの判定。**ロット0では表現しない**
+// （Clamp() が 0 を最小ロットへ引き上げてしまうため。Codexの指摘）
+bool DlHalted()
+{
+   if(DlMode==0) return false;
+   if(g_dlDone)  return true;
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);   // **含み損益込み**
+   if(eq > g_dlPeak) g_dlPeak = eq;
+   if(g_dlPeak > 0.0)
+   {
+      double dd = (g_dlPeak - eq)/g_dlPeak;
+      if(dd > g_dlMaxDD) g_dlMaxDD = dd;
+   }
+   if(eq >= DlRefCap*DlTargetX)        { g_dlDone=true; g_dlWhy="REACH"; }
+   else if(eq <= DlRefCap*DlRuinPct/100.0){ g_dlDone=true; g_dlWhy="RUIN"; }
+   else if(TimeCurrent() >= g_dlEnd)   { g_dlDone=true; g_dlWhy="DEADLINE"; }
+   if(g_dlDone)
+   {
+      g_dlEndEq = eq;
+      if(DlCloseOnEnd) DlCloseAllPositions();
+      DlWriteResult();
+      return true;
+   }
+   return false;
+}
+
+double DlLookup(double x, double tau)
+{
+   double fx = (x - DL_X0)/(DL_X1 - DL_X0)*(DL_NX-1);
+   double ft = (tau - DL_T0)/(DL_T1 - DL_T0)*(DL_NT-1);
+   if(fx < 0.0) fx = 0.0; if(fx > DL_NX-1) fx = DL_NX-1;
+   if(ft < 0.0) ft = 0.0; if(ft > DL_NT-1) ft = DL_NT-1;
+   int i0=(int)MathFloor(fx); int i1=(i0+1<DL_NX)?i0+1:DL_NX-1;
+   int j0=(int)MathFloor(ft); int j1=(j0+1<DL_NT)?j0+1:DL_NT-1;
+   double a=fx-i0, b=ft-j0;
+   double v0 = DL_TAB[j0][i0]*(1.0-a) + DL_TAB[j0][i1]*a;
+   double v1 = DL_TAB[j1][i0]*(1.0-a) + DL_TAB[j1][i1]*a;
+   return v0*(1.0-b) + v1*b;
+}
+
+// 全枠のロットに掛ける倍率。DlMode=0 なら 1.0（既存と完全に同じ挙動）
+double DlMult()
+{
+   if(DlMode==0) return 1.0;
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(eq <= 0.0 || DlRefCap <= 0.0) return 1.0;
+   double ratio = eq / DlRefCap;
+   if(DlMode==1) return DlK * ratio;         // 比例のみ（基準）
+   double x = MathLog(ratio < 0.0001 ? 0.0001 : ratio);
+   double total = (double)(g_dlEnd - DlStart);
+   if(total <= 0.0) return DlK * ratio;
+   double tau = (double)(g_dlEnd - TimeCurrent()) / total;
+   if(tau < 0.0001) tau = 0.0001; if(tau > 1.0) tau = 1.0;
+   double h = DlLookup(x, tau);
+   if(h > DlCap) h = DlCap;
+   return DlK * ratio * h;
+}
+//=== X2HR ここまで ====================================================
+
+
+input group "=== SIMVERIFY検証専用（既定OFF） ==="
+// 0=OFF, 1=F15 RSI群, 2=F14 PB群。本番MIX_EAには存在しない検証機構。
+input int    SimVerifyMode       = 0;
+input int    SimVerifyLookback   = 8;
+input double SimVerifyRiskScale  = 0.5;
+// 個別EA（各deposit=100,000）の複利risk sizingを統合EA内で再現する。
+input bool   SimVerifyVirtualSleeveEquity = false;
+
+input group "=== ROUND6 GOLD DD検証専用（既定OFF） ==="
+// 0=OFF（既存挙動と完全同一）、1=直近確定足の価格ショック後は新規を見送る、
+// 2=保有中の逆行がATR閾値を超えたら成行退出。GOLDのPB/SCAだけが対象。
+input int    R6GoldMode          = 0;
+input int    R6GoldLookbackBars  = 1;
+input double R6GoldShockATR      = 1.5;
+input double R6GoldAdverseATR    = 1.0;
+
+input group "=== PB GOLD 保有上限（本番採用済み・v2.5） ==="
+// 【2026-09-05】本番XM版 MIX_EA.mq5 には v2.5 で入っているのに、検証用の本EAには
+// 移植されていなかった。そのため本EAでの測定は採用済みの本番構成と条件がずれていた
+// （docs/deploy50_recheck_20260905.md §0 の注記）。本番と同じ既定値・同じ判定式にする。
+input int    GoldPBHoldBars    = 64;    // PB GOLD 保有上限（バー数・0で無効）
+
+input group "=== SCA GOLD 第2セッション（SCA2・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】SCA GOLD は IS 242取引で GOLD の取引数の8割を占める主力枠だが、
+// 1日1レンジ（1-9時）しか使っておらず、米国時間帯のレンジは丸ごと未利用のまま。
+// GOLD の弱点は「630取引/10年＝月5.5回」という薄さなので、取引数を増やすこと自体に
+// 価値がある。既存パラメータの最適化ではなく新しい収益源の追加。
+// docs/rejected_strategies.md に第2セッションの検討記録は無い（完全に未検討）。
+//
+// 実装は既存の SCA 機構（ProcSCA）をそのまま使い、別magic 20261003 の枠として登録する。
+// 第1セッション（20261002）には一切触れないので、枠別に効果を分離できる。
+input bool   Sca2Enable        = false;
+input int    Sca2RangeStart    = 13;    // 第2レンジの開始時刻（サーバー時刻）
+input int    Sca2RangeEnd      = 15;    // 第2レンジの確定時刻（ここからエントリー可）
+input int    Sca2TradeEnd      = 20;    // エントリー締切
+input int    Sca2ForceClose    = 23;    // 強制決済
+input double Sca2MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca2MaxRange      = 1.00;  // 同・上限
+input double Sca2Buffer        = 0.05;  // ブレイク判定のバッファ（ATR比）
+input double Sca2RR            = 1.7;
+input bool   Sca2SkipFriday    = true;
+input bool   Sca2RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca2BoostMult     = 2.0;
+input double Sca2Lot           = 0.01;
+
+input group "=== 固定ロット枠のrisk%化（FXRISK・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】複利ラウンド（docs/oanda_fx_compounding_20260909.md）で、
+// **複利が効くのは9枠中3枠だけ**だと判明した。RefCap で口座equity連動になるのは
+// risk%枠（PB USDJPY / PB GBPJPY / Carry）のみで、FULL窓の純益の32%にすぎない。
+// 残り6枠は固定ロット 0.01 のままで、口座が126倍に育っても発注量が変わらない。
+//
+// その6枠のうち RSI 3枠と SCA 2枠（**全体の68%を稼ぐ**）を risk% サイジングに
+// 切り替えられるようにする。これが月利5%に届く可能性のある最後の未着手領域。
+// （Pair枠は2脚のスプレッド取引で SL が Z 基準のため、価格距離ベースの
+//   risk% サイジングが適用できない。対象外。）
+//
+// 【実装】既存の LotRisk() は useRisk / riskPct / refCap をすでに処理できるので、
+// 枠側でそれを立てるだけでよい。EA本体のロジックには手を入れない。
+//
+// 【通貨の注意】LotRisk() は SYMBOL_TRADE_TICK_VALUE を使う。GOLD/暗号では
+// 口座通貨に換算されない罠があるが（§GSZ参照）、対象はFXペアのみで、
+// PB USDJPY / PB GBPJPY が同じ経路で正しく動いている実績がある。
+input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=SCA_UJ bit4=SCA_GJ（0で無効）
+input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
+input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
+
+input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
+// GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
+// 抜ける」構造は他のJPYクロス（EURJPY / AUDJPY / CADJPY / CHFJPY / NZDJPY）にも
+// あるはずで、**新しい収益源**になりうる。
+//
+// 【なぜ未着手と言えるか】rejected_strategies.md には PB(§0,0c,0f) と RSI(§0e) と
+// VBO(§0n) の銘柄横展開の棄却記録があるが、**SCAの横展開は一件も無い**。
+// Codexの未着手項目調査（2026-09-07）の既検証一覧にも含まれていない。
+//
+// 【期待値】枠の追加なので、パラメータ改善（月利+0.01ポイント級）と違い
+// +0.1〜0.5ポイント級になりうる。既存の SCA USDJPY は FULL窓で 16,339円、
+// SCA GBPJPY は 115,992円。同程度が1銘柄でも増えれば意味がある。
+//
+// 【注意】横展開の実績は悪い（PBは SILVER / JP225 / NASDAQ / 原油 / NZDUSD /
+// USDCAD がすべて棄却）。期待は控えめに、両窓とサンプル数で厳しく見る。
+//
+// 銘柄を input で切り替えて1銘柄ずつ測る（同時に複数を有効にすると寄与が分離できない）。
+// 既定値は SCA USDJPY(20261000) の採用形をそのまま引き継いだ。
+input bool   ScaNewEnable      = false;
+input string ScaNewSymbol      = "EURJPY";  // EURJPY/AUDJPY/CADJPY/CHFJPY/NZDJPY等
+input int    ScaNewRangeStart  = 0;
+input int    ScaNewRangeEnd    = 9;
+input int    ScaNewTradeEnd    = 12;
+input int    ScaNewForceClose  = 22;
+input double ScaNewMinRange    = 0.30;
+input double ScaNewMaxRange    = 1.00;
+input double ScaNewBuffer      = 0.10;
+input double ScaNewRR          = 2.0;
+input bool   ScaNewSkipFriday  = false;
+input bool   ScaNewRevBoost    = true;
+input double ScaNewBoostMult   = 2.0;
+input double ScaNewLot         = 0.01;
+
+input group "=== RSIシグナル記憶ラボ（RSIMEM・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】RSI逆張り枠は wasOB/wasOS（RSI極値の記憶）と aboveBB/belowBB（BB逸脱の記憶）で
+// アームし、閾値を戻ってきたところで入る。このフラグは**注文分岐の中でしか消えない**。
+// つまり
+//   ・時間が経っても失効しない（何十本も前の逸脱で今のバーに入る）
+//   ・MAの反対側に移っても残る（レンジで立った記憶をトレンド移行後に使う）
+//   ・同方向で保有中にシグナルが完成しても消費されない（決済後に古い記憶で再入場）
+//
+// 【なぜ未着手か】Codexの未着手項目調査（2026-09-07）で、RSI枠は周期・閾値・BB期間・
+// 偏差・レンジ判定・固定SL/TP・DPの各軸が param_reopt / codex500 で測定済みだが、
+// **フラグの寿命と消費の仕様は測られていない**と確認した。codex_50proposals の
+// 提案16・17として記録され、codex_verification では「今回スコープ外」のまま。
+//
+// 【規模の見込み】小さい。Codexの見積もりで入金50万に対し月利 +0.002〜0.009ポイント程度。
+// 目標の +1ポイントには遠いが、FX側で実装可能な未着手案がここしか残っていない。
+input int    RsiBBFlagMaxBars    = 0;      // BB逸脱の記憶の寿命（バー数・0で無効）
+input int    RsiRSIFlagMaxBars   = 0;      // RSI極値の記憶の寿命（バー数・0で無効）
+input bool   RsiResetOnMAFlip    = false;  // MAの反対側に移ったら記憶を消す
+input bool   RsiConsumeWhileHeld = false;  // 保有中に完成したシグナルも消費する
+input int    RsiMemSleeveMask    = 0;      // 適用枠 bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全部）
+
+input group "=== SCA GOLD 第3セッション（SCA3・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2セッションの1時間刻み精査（docs/sca_gold_second_session_grid_20260906.md）で、
+// 窓を単独で振ったとき 9-11時 が 13-15時 に次ぐ有望窓だった（IS +105,626 / OOS +17,213）。
+// 13時台とは別の時間帯なので、13-15時を採ったうえで更に足せる可能性がある。
+//
+// 【前ラウンドの教訓】PB2（同じ機構をH1で回す）は棄却された。効くのは「取引数を
+// 増やす」ことではなく「別の情報を足す」ことだった（rejected_strategies.md §5）。
+// 第3セッションは時間帯という別の情報なので、この線では筋が通る。
+//
+// 【測るべきは増分】第2セッションを有効にした状態を基準に、そこへ第3セッションを
+// 足して意味があるかを見る。単独で黒字でも第2セッションと同じ値動きを取っている
+// だけなら足す価値はない。
+input bool   Sca3Enable        = false;
+input int    Sca3RangeStart    = 9;     // 第3レンジの開始時刻（サーバー時刻）
+input int    Sca3RangeEnd      = 11;    // 第3レンジの確定時刻（ここからエントリー可）
+input int    Sca3TradeEnd      = 20;    // エントリー締切
+input int    Sca3ForceClose    = 23;    // 強制決済
+input double Sca3MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca3MaxRange      = 1.00;  // 同・上限
+input double Sca3Buffer        = 0.0;   // ブレイク判定のバッファ（ATR比）
+input double Sca3RR            = 1.7;
+input bool   Sca3SkipFriday    = true;
+input bool   Sca3RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca3BoostMult     = 2.0;
+input double Sca3Lot           = 0.01;
+
+input group "=== SCA GOLD 第4セッション（SCA4・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2(13-15時)・第3(9-11時)が続けて採用可となり、「時間帯という別の情報を
+// 足す」線は2回成功している（docs/sca_gold_third_session_20260906.md）。
+// 第1(1-9時)と合わせると、まだ使っていないのは 11-13時 と 15-22時 の帯だけ。
+//
+// 既測定では 12-13時 が単独で両窓正（IS +25,044 / OOS +11,485）。15時以降は
+// ISで崩れている窓が多い（15-16時 IS -46,234 / 16-17時 IS -41,487）が、
+// これらは第2・第3が無い状態での単独測定なので、3枠が入った上での増分は別に測る。
+//
+// 【測るべきは増分】第2＋第3を有効にした状態を基準に、そこへ第4を足して意味が
+// あるかを見る。枠が増えるほど既存枠と同じ値動きを取る余地が増えるので、
+// 単独の成績より増分のほうが厳しい条件になる。
+input bool   Sca4Enable        = false;
+input int    Sca4RangeStart    = 12;    // 第4レンジの開始時刻（サーバー時刻）
+input int    Sca4RangeEnd      = 13;    // 第4レンジの確定時刻（ここからエントリー可）
+input int    Sca4TradeEnd      = 20;    // エントリー締切
+input int    Sca4ForceClose    = 23;    // 強制決済
+input double Sca4MinRange      = 0.40;  // レンジ幅の下限（ATR比）
+input double Sca4MaxRange      = 1.00;  // 同・上限
+input double Sca4Buffer        = 0.0;   // ブレイク判定のバッファ（ATR比）
+input double Sca4RR            = 1.7;
+input bool   Sca4SkipFriday    = true;
+input bool   Sca4RevBoost      = true;  // ドリフト逆行時のロット倍増
+input double Sca4BoostMult     = 2.0;
+input double Sca4Lot           = 0.01;
+
+input group "=== SCA USDJPY/GBPJPY 第2セッション（SCA5/SCA6・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】GOLD で第2セッション（13-15時）が採用できた唯一の施策になった
+// （docs/lot_multiplier_recheck_20260906.md で円建て再判定・採用確定）。
+// SCA USDJPY(20261000) と SCA GBPJPY(20261001) はどちらもレンジ 0-9時・締切12時で、
+// **12-22時が丸ごと未使用**。GOLD の第2セッション導入前とまったく同じ構造なので、
+// 同じ横展開が効くかを測る。
+//
+// 【注意】この2枠は OANDA本番ブックの構成要素であって XM本番ブックには入っていない。
+// OANDA 5端末は LiveUpdate で使用不能なので、XM端末・XM銘柄で OANDA相当の構成を測り、
+// 本番投入前に OANDA で測り直す前提とする（GOLD の各ラウンドと同じ扱い）。
+//
+// 既定値は親枠の設定を引き継ぎ、レンジ窓だけ GOLD の当たり所（13-15時）に置いた。
+input bool   Sca5Enable        = false;  // SCA USDJPY 第2セッション
+input int    Sca5RangeStart    = 13;
+input int    Sca5RangeEnd      = 15;
+input int    Sca5TradeEnd      = 20;
+input int    Sca5ForceClose    = 23;
+input double Sca5MinRange      = 0.30;   // 親枠(20261000)と同じ
+input double Sca5MaxRange      = 1.00;
+input double Sca5Buffer        = 0.10;   // 親枠と同じ
+input double Sca5RR            = 2.0;    // 親枠と同じ
+input bool   Sca5SkipFriday    = false;  // 親枠と同じ
+input bool   Sca5RevBoost      = true;
+input double Sca5BoostMult     = 2.0;    // 親枠と同じ
+input double Sca5Lot           = 0.01;
+
+input bool   Sca6Enable        = false;  // SCA GBPJPY 第2セッション
+input int    Sca6RangeStart    = 13;
+input int    Sca6RangeEnd      = 15;
+input int    Sca6TradeEnd      = 20;
+input int    Sca6ForceClose    = 23;
+input double Sca6MinRange      = 0.30;   // 親枠(20261001)と同じ
+input double Sca6MaxRange      = 1.00;
+input double Sca6Buffer        = 0.0;    // 親枠と同じ
+input double Sca6RR            = 2.0;    // 親枠と同じ
+input bool   Sca6SkipFriday    = false;  // 親枠と同じ
+input bool   Sca6RevBoost      = true;
+input double Sca6BoostMult     = 6.0;    // 親枠と同じ
+input double Sca6Lot           = 0.01;
+
+input group "=== PB GOLD 第2時間軸（PB2・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】第2セッション（SCA2）で「時間帯の違う取引を足すと、倍率を上げるより効率よく
+// 利益が増える」ことが実測できた（docs/sca_gold_second_session_20260905.md §3.3）。
+// 同じ理屈で、PB GOLD は H4 一本しか使っていない。H1 を別magicで足せば、同じ戦略でも
+// 押し目の判定タイミングが変わるので、H4版と相関の低い取引源になる。
+// SCA2 が「時間帯を増やす」軸だったのに対し、こちらは「時間軸を増やす」軸。
+//
+// 既存の PullbackTrend 機構をそのまま使い、別magic 20260641 の枠として登録する。
+// H4版（20260640）には一切触れないので、枠別に効果を分離できる。
+//
+// 【注意】保有上限も時間帯ゲートもmagicで引いているため、20260641 は既定では
+// どちらの対象にもならない。Pb2HoldBars / Pb2UseHourGate で明示的に与える。
+input bool   Pb2Enable         = false;
+input int    Pb2TFMinutes      = 60;    // 時間軸（分）: 30/60/120/240 のみ有効
+input double Pb2Lot            = 0.01;
+input double Pb2RR             = 1.8;   // H4版と同じ既定
+input double Pb2ATRSLmult      = 2.0;
+input double Pb2ADXThr         = 22.5;
+input double Pb2SlopeMinATR    = 1.2;
+input int    Pb2HoldBars       = 64;    // 保有上限（自時間軸のバー数・0で無効）
+input bool   Pb2UseHourGate    = false; // H4版と同じ曜日×時刻ブロックを適用するか
+
+input group "=== GOLDサイジングラボ（GSZ・SIMVERIFY専用・既定OFF） ==="
+// OANDA版 MIX_EA_OANDA_SIMVERIFY.mq5 と同一仕様。両ブローカーで同じ risk% を
+// 与えたとき同じ意味になるよう、倍率(lotMult/GlobalLotMult)は掛けない。
+//
+// 【通貨の罠】既存の LotRisk() は SYMBOL_TRADE_TICK_VALUE を使うが、この値は
+// GOLD/暗号のようなUSD建て銘柄では口座通貨に換算されずUSDのまま返る
+// （docs/profit_trail_20260805.md §2 の実害記録）。そのまま使うとロットが
+// USDJPY倍（約150倍）過大になる。本ラボは OrderCalcProfit() を使う。
+input int    GszMode           = 0;
+input int    GszSleeveMask     = 0;     // bit0=PB GOLD, bit1=SCA GOLD
+input double GszRiskPct        = 0.0;   // 1取引のリスク（基準資金に対する%。0=未使用）
+input double GszRefCap         = 0.0;   // 基準資金（0=口座equity＝複利が効く）
+input double GszMinLot         = 0.0;   // 下限ロット（0=銘柄の最小）
+input double GszMaxLot         = 0.0;   // 上限ロット（0=無制限）
+input bool   GszApplyBoost     = true;  // SCAのリバーサルBoostを乗せるか
+
+input group "=== GOLD DD reduction lab（検証専用・既定OFF） ==="
+// bit 1=PB/SCA同時保有禁止、bit 2=GOLDパラメータ上書き、bit 4=曜日ゲート。
+// Mode=0では以下を一切参照せず、従来挙動と完全同一にする。
+input int    GoldDDMode             = 0;
+input int    GoldDDPBWeekMask       = 127; // bit0=日曜 ... bit6=土曜
+input int    GoldDDSCAWeekMask      = 127;
+input double GoldDDPBATRSL          = 2.0;
+input double GoldDDPBRR             = 1.8;
+input double GoldDDPBADX            = 22.5;
+input double GoldDDPBSlopeATR       = 1.2;
+input double GoldDDSCAMinRange      = 0.40;
+input double GoldDDSCAMaxRange      = 1.00;
+input double GoldDDSCABuffer        = 0.05;
+input double GoldDDSCARR            = 1.7;
+input bool   GoldDDSCAUseBoost      = true;
+input double GoldDDSCABoostMult     = 2.0;
+input int    GoldDDSCATradeEnd      = 15;
+input int    GoldDDSCAForceClose    = 20;
+
+input group "=== GOLD weekday x hour entry gate（検証専用・既定OFF） ==="
+// 0=OFF, 1=ON。曜日は bit0=日曜 ... bit6=土曜。
+// 時刻はブローカーのサーバ時刻（Strategy TesterではシミュレートされたTimeCurrent）で、
+// [開始時, 終了時) の半開区間。例: 0～6時台は Start=0 / End=7、終日は0 / 24。
+// 各枠2ルールまで指定できるため、月曜と金曜で異なる時間帯の組合せも実測できる。
+// このゲートは新規エントリー判定だけに適用し、既存建玉の決済・強制決済は止めない。
+input int    GoldHourGateMode       = 0;
+input int    GoldHourPBWeekMask1    = 0;
+input int    GoldHourPBStart1       = 0;
+input int    GoldHourPBEnd1         = 0;
+input int    GoldHourPBWeekMask2    = 0;
+input int    GoldHourPBStart2       = 0;
+input int    GoldHourPBEnd2         = 0;
+input int    GoldHourSCAWeekMask1   = 0;
+input int    GoldHourSCAStart1      = 0;
+input int    GoldHourSCAEnd1        = 0;
+input int    GoldHourSCAWeekMask2   = 0;
+input int    GoldHourSCAStart2      = 0;
+input int    GoldHourSCAEnd2        = 0;
+
+input group "=== GOLD DD lab round 2（検証専用・既定OFF） ==="
+// GoldLabMode: 0=OFF, 1..28 は run_all2.py の FAMILY_ACTIVATION と一対一。
+// GoldLabMode2: 2つ目の機構。0なら従来と完全に同じ単一Mode動作。
+// 値が0の候補もあるため、個々の値ではなく Mode で有効/無効を判定する。
+input int    GoldLabMode                    = 0;
+input int    GoldLabMode2                   = 0;
+input int    GoldLabOverlapPolicy           = 0;
+input int    GoldLabOverlapCooldownHours    = 0;
+input int    GoldLabPBFastEMA               = 20;
+input int    GoldLabPBSlowEMA               = 50;
+input int    GoldLabPBTrendMA               = 200;
+input int    GoldLabPBADXPeriod              = 14;
+input double GoldLabPBCandleBodyMin          = 0.0;
+input double GoldLabPBCloseLocationMin       = 0.0;
+input double GoldLabPBPullbackDepthATR       = 0.0;
+input double GoldLabPBExtensionCapATR        = 0.0;
+input int    GoldLabPBHigherTFMA             = 200;
+input int    GoldLabPBHoldBars               = 0;
+input double GoldLabPBBETriggerATR           = 0.0;
+input double GoldLabPBTrailATR               = 0.0;
+input int    GoldLabSCARangeStart            = 1;
+input int    GoldLabSCARangeEnd              = 9;
+input int    GoldLabSCADirectionPolicy       = 0;
+input double GoldLabSCADriftMinATR           = 0.0;
+input int    GoldLabSCAFailedBreakLockHours  = 0;
+input int    GoldLabPortfolioCooldownHours   = 0;
+input int    GoldLabSleeveCooldownHours      = 0;
+input double GoldLabDailyLossCapJPY          = 0.0;
+input double GoldLabWeeklyLossCapJPY         = 0.0;
+input double GoldLabFloatingLossCapPct       = 0.0;
+input double GoldLabPrevRangeATRMax          = 0.0;
+input double GoldLabGapATRMax                = 0.0;
+input int    GoldLabMaxSpreadPoints          = 0;
+
+input group "=== ROUND6 CRYPTO DD検証専用（既定OFF） ==="
+// 0=OFF / 1=D1急落後の新規抑制 / 2=建値からのティック逆行率で危機退出
+input int    R6CryptoMode         = 0;
+input int    R6CryptoLookbackDays = 1;
+input int    R6CryptoCooldownDays = 1;
+input double R6CryptoShockPct     = 5.0;
+input double R6CryptoAdversePct   = 10.0;
+
+input group "=== per-sleeve ロット倍率（増レバ配分用・既定1.0で不変） ==="
+input double Mult_PB_USDJPY  = 1.0;
+input double Mult_PB_GBPJPY  = 1.0;
+input double Mult_PB_GOLD    = 1.0;
+input double Mult_RSI_USDJPY = 1.0;
+input double Mult_RSI_EURUSD = 1.0;
+input double Mult_RSI_GBPUSD = 1.0;
+input bool   En_RSI_X2      = false;  // X2HR: RSI横展開4枠（既定OFF）
+input double Mult_RSI_X2    = 1.0;    // X2HR: RSI横展開4枠の倍率
+input double Mult_PAIR       = 1.0;
+input double Mult_CARRY      = 1.0;
+input double Mult_VBO        = 1.0;
+input double Mult_ETH        = 1.0;
+input double Mult_BTC_FUND   = 1.0;
+input double Mult_BFXREV     = 1.0;
+input double Mult_SCA_GOLD   = 1.0;   // 例: ミックスB相当なら3.0（0.01→0.03）
+input double Mult_SCA_USDJPY = 1.0;
+input double Mult_SCA_GBPJPY = 1.0;
+
+input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分資金固定） ==="
+input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
+input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
+input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+
+input group "=== 出力（検証用・ライブでは空でOK）==="
+input string ResultFileName = "";
+input string EquityLogFile  = "";
+
+input group "=== 運用ログ（フォワード分析用・ライブで有効化） ==="
+// MQL5\Files\<prefix>_YYYYMM.csv に月次追記。3種のレコードを出力:
+//  DEAL      = 全約定（IN/OUT・枠Magic・ロット・価格・SL/TP・損益）
+//  SCA_RANGE = SCA枠の日次レンジ確定情報（高安・幅・ATRd・ドリフト・スキップ有無）
+//  DAILY     = 日次スナップショット（equity/balance/証拠金/保有数）
+input bool   EnableOpsLog = false;
+input string OpsLogPrefix = "mixlog";
+
+//=== 戦略種別 ===
+enum ESTRAT { ST_PULLBACK, ST_RSI, ST_PAIR, ST_CARRY, ST_VBO, ST_SCA, ST_FUNDING, ST_BFXREV };
+
+//=== 枠定義＋状態 ===
+struct SLEEVE
+{
+   bool            enabled;
+   ESTRAT          strat;
+   string          symbol;
+   ENUM_TIMEFRAMES tf;
+   long            magic;
+   double          lot;          // 固定ロット（useRisk=falseで使用）
+   bool            useRisk;      // PB=risk%、Carry/Pair=資産連動複利
+   double          riskPct;      // PB risk%
+   double          refDeposit;   // Carry/Pair 複利基準
+   // 共通
+   double          pip;
+   int             digits;
+   double          point;
+   datetime        lastBar;
+   // ハンドル
+   int             hTrend, hFast, hSlow, hATR, hADX, hRSI, hBB;
+   // PB/RSI/VBO 共通ストップ
+   bool            useATRstops;
+   double          atrSLmult, rr;
+   double          slPips, tpPips;
+   // PB 環境フィルター・ADX
+   bool            useTrend; double slopeMinATR; int slopeLB;
+   bool            useADX;   double adxThr; int adxPeriod;
+   // PB EMA組（スリーブ別）
+   int             fastEMA, slowEMA;
+   // PB 構造TP（B10: 直近スイング高安をTP上限に使う）
+   bool            useStructTP; int structLB; double structMinRR;
+   // PB マルチタイムフレーム合流フィルター
+   bool            useHigherTF; ENUM_TIMEFRAMES higherTF; int higherTFMA; int hHigherTrend;
+   // PB 状態
+   bool            armedBuy, armedSell;
+   // RSI
+   double          bbDev, rsiOBX, rsiOB, rsiOSX, rsiOS; int bbPeriod;
+   bool            useDP; int swingLB, dpBars; double dpTolATR;
+   bool            useRange; double rangeMaxATR; int rangeLB;
+   bool            wasOB, wasOS, aboveBB, belowBB;
+   // RSIシグナル記憶ラボ（既定OFF）。フラグが立った時刻と、直前バーのMA上下。
+   datetime        obAt, osAt, bbUpAt, bbLoAt;
+   int             maSide;   // +1=MA上 / -1=MA下 / 0=未初期化
+   // PAIR
+   string          second; int lookback; double entryZ, exitZ, stopZ;
+   // CARRY
+   int             trendPeriod; bool reqPosSwap;
+   bool            useHyst; double hystMult;   // MAクロス・ヒステリシス帯（AUDJPYのみ採用）
+   // CARRY v1.2: デュアルMA退出+クールダウン+災害SL（ETH枠=A2形で採用）
+   int             exitPeriod; int hExit; int cdBars; datetime cdExitBar; double disasterSL;
+   // v1.3: 暗号グループ（同時ポジション上限ガードの対象）
+   bool            cryptoGroup;
+   // VBO
+   int             channel; bool useSqueeze; int sqLB; double sqFactor; double trailMult;
+   // 増レバ配分（deploy）
+   double          lotMult;   // per-sleeve ロット倍率
+   double          refCap;    // risk%/複利の基準資金（0=口座equity）
+   // SCA（セッションORB）
+   int             scaRangeStart, scaRangeEnd, scaTradeEnd, scaForceClose;
+   double          scaMinRange, scaMaxRange, scaBuf;
+   bool            scaSkipFriday, scaRevBoost;
+   double          scaBoostMult;
+   datetime        scaDay;
+   double          scaRangeHigh, scaRangeLow, scaDrift;
+   bool            scaReady, scaSkip, scaTradedL, scaTradedS;
+};
+
+SLEEVE S[32];
+int    NS = 0;
+CTrade trade;
+datetime g_opsDay = 0;   // 運用ログの日次スナップショット管理
+datetime g_labPortfolioLoss = 0;
+datetime g_labSleeveLoss[32];
+datetime g_labSCALoss[32];
+
+bool GoldLabModeEnabled(const int mode)
+{
+   return GoldLabMode==mode || GoldLabMode2==mode;
+}
+
+bool GoldLabAnyModeEnabled()
+{
+   return GoldLabMode!=0 || GoldLabMode2!=0;
+}
+
+bool GoldLabModeRangeEnabled(const int first_mode,const int last_mode)
+{
+   return (GoldLabMode>=first_mode && GoldLabMode<=last_mode) ||
+          (GoldLabMode2>=first_mode && GoldLabMode2<=last_mode);
+}
+
+//============================ 運用ログ ============================
+string OpsLogFile()
+{
+   MqlDateTime t;
+   TimeToStruct(TimeCurrent(), t);
+   return StringFormat("%s_%04d%02d.csv", OpsLogPrefix, t.year, t.mon);
+}
+
+void OpsWrite(string type, long magic, string sym,
+              double f1, double f2, double f3, double f4, double f5, double f6,
+              string note)
+{
+   if(!EnableOpsLog) return;
+   int fh = FileOpen(OpsLogFile(), FILE_READ | FILE_WRITE | FILE_CSV | FILE_ANSI, ',');
+   if(fh == INVALID_HANDLE) return;
+   bool empty = (FileSize(fh) == 0);
+   FileSeek(fh, 0, SEEK_END);
+   if(empty)
+      FileWrite(fh, "time", "type", "magic", "symbol", "f1", "f2", "f3", "f4", "f5", "f6", "note");
+   FileWrite(fh, (long)TimeCurrent(), type, magic, sym,
+             DoubleToString(f1, 5), DoubleToString(f2, 5), DoubleToString(f3, 5),
+             DoubleToString(f4, 5), DoubleToString(f5, 5), DoubleToString(f6, 5), note);
+   FileClose(fh);
+}
+
+// 全約定を記録（DEAL: f1=方向 f2=ロット f3=価格 f4=SL f5=TP f6=損益, note=IN/OUT）
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+{
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD) return;
+   if(!HistoryDealSelect(trans.deal)) return;
+   long magic = HistoryDealGetInteger(trans.deal, DEAL_MAGIC);
+   if(magic < 20260000 || magic >= 20270000) return;   // 本EAの枠のみ
+   long dtype = HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+   if(dtype != DEAL_TYPE_BUY && dtype != DEAL_TYPE_SELL) return;
+   long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+   double pnl = HistoryDealGetDouble(trans.deal, DEAL_PROFIT)
+              + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
+              + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+   // Lab state is driven only by deals already confirmed at this point in time.
+   if(GoldLabAnyModeEnabled() && entry!=DEAL_ENTRY_IN && pnl<0.0 &&
+      (magic==20260640 || magic==20261002))
+   {
+      datetime when=(datetime)HistoryDealGetInteger(trans.deal,DEAL_TIME);
+      g_labPortfolioLoss=when;
+      for(int i=0;i<NS;i++) if(S[i].magic==magic)
+      {
+         g_labSleeveLoss[i]=when;
+         if(magic==20261002 && HistoryDealGetInteger(trans.deal,DEAL_REASON)==DEAL_REASON_SL)
+            g_labSCALoss[i]=when;
+      }
+   }
+   if(!EnableOpsLog) return;
+   OpsWrite("DEAL", magic, HistoryDealGetString(trans.deal, DEAL_SYMBOL),
+            (dtype == DEAL_TYPE_BUY ? 1 : -1),
+            HistoryDealGetDouble(trans.deal, DEAL_VOLUME),
+            HistoryDealGetDouble(trans.deal, DEAL_PRICE),
+            HistoryDealGetDouble(trans.deal, DEAL_SL),
+            HistoryDealGetDouble(trans.deal, DEAL_TP),
+            pnl,
+            (entry == DEAL_ENTRY_IN ? "IN" : "OUT"));
+}
+
+//+------------------------------------------------------------------+
+void AddSleeve(SLEEVE &x){ S[NS] = x; NS++; }
+
+bool GoldHourRuleValid(const int week_mask,const int start_hour,const int end_hour)
+{
+   if(week_mask==0) return true; // 未使用ルール
+   return week_mask>=0 && week_mask<=127 && start_hour>=0 && start_hour<=23 &&
+          end_hour>=1 && end_hour<=24 && start_hour<end_hour;
+}
+
+// PB GOLD 第2時間軸の時間軸。SETファイルでENUMを渡すと綴りの取り違えが起きるので
+// 分で受け、許可した値以外は 0 を返して OnInit で弾く。
+ENUM_TIMEFRAMES Pb2Timeframe()
+{
+   switch(Pb2TFMinutes)
+   {
+      case 30:  return PERIOD_M30;
+      case 60:  return PERIOD_H1;
+      case 120: return PERIOD_H2;
+      case 240: return PERIOD_H4;   // H4版との同条件対照用
+   }
+   return (ENUM_TIMEFRAMES)0;
+}
+
+// 固定ロット枠に risk% サイジングを適用する（既定OFF）。
+// LotRisk() は useRisk/riskPct/refCap をすでに処理できるので、枠側で立てるだけでよい。
+void FxRiskOn(SLEEVE &x, const int bit)
+{
+   if((FxRiskMask & (1<<bit))==0) return;
+   x.useRisk = true;
+   x.riskPct = FxRiskPct;
+   x.refCap  = FxRiskRefCap;
+}
+
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   DlInit();   // X2HR: 期限の終端を計算
+   if(FxRiskMask!=0 && FxRiskPct<=0.0)
+   {
+      Print("FxRiskPct must be > 0 when FxRiskMask is set");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(FxRiskMask<0 || FxRiskMask>31)
+   {
+      Print("FxRiskMask must be 0..31");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(Pb2Enable && Pb2Timeframe()==0)
+   {
+      Print("Pb2TFMinutes must be one of 30/60/120/240");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(GoldLabMode<0 || GoldLabMode>28 || GoldLabMode2<0 || GoldLabMode2>28)
+   {
+      Print("GoldLabMode and GoldLabMode2 must be 0..28");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(GoldHourGateMode!=0 && GoldHourGateMode!=1)
+   {
+      Print("GoldHourGateMode must be 0 or 1");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(GoldHourGateMode==1 &&
+      (!GoldHourRuleValid(GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
+       !GoldHourRuleValid(GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2) ||
+       !GoldHourRuleValid(GoldHourSCAWeekMask1,GoldHourSCAStart1,GoldHourSCAEnd1) ||
+       !GoldHourRuleValid(GoldHourSCAWeekMask2,GoldHourSCAStart2,GoldHourSCAEnd2)))
+   {
+      Print("Invalid GOLD hour rule: mask=0 disables a rule; otherwise require mask 1..127 and 0<=Start<End<=24");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   NS = 0;
+   g_labPortfolioLoss=0;
+   ArrayInitialize(g_labSleeveLoss,0);
+   ArrayInitialize(g_labSCALoss,0);
+   SLEEVE z; // ゼロ初期化テンプレ
+   ZeroSleeve(z);
+
+   //--- PullbackTrend 共通プリセット ---
+   SLEEVE pb = z;
+   pb.strat=ST_PULLBACK; pb.tf=PERIOD_H4;
+   pb.useATRstops=true; pb.atrSLmult=2.0; pb.rr=2.0;
+   pb.useTrend=true; pb.slopeMinATR=1.2; pb.slopeLB=20;
+   pb.useADX=true; pb.adxThr=22.5;
+
+   // 1. PB USDJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
+   //    v2.2: ADX_Threshold 22.5→27.5（トレードオフ8案の組合せ検証#3・単独ではIS+41,850/
+   //    OOS+3,332＝現行OOS-3,299から黒字化。ポートフォリオ合算でDD抑制に寄与(-0.0775pt)。
+   //    docs/tradeoff8_combined_20260812.md）
+   { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
+     x.adxThr=27.5; AddSleeve(x); }
+   // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
+   //    v1.6: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
+   //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
+   //    OOS低下は許容。docs/new_strategies_round2_20260805.md）
+   //    v1.7: RR_Ratio 3.5→4.0（Codex提案11の近傍応答曲面・本番同一条件tier2確認:
+   //    IS+18,665→+29,315／OOS+4,641→+10,197。トレードオフなしの純改善。
+   //    docs/codex_verification_20260808.md）
+   //    v1.8: ADX_Period 14→10（Codex 500案応答曲面C・IS+29,315→+31,611／OOS+10,197→+14,670。
+   //    トレードオフなしの純改善。docs/codex500_verification_20260810.md）
+   //    v1.9: EMA組 20/50→25/60（Codex 500案残余F5・IS+31,611→+33,133/OOS+14,670→+20,763・
+   //    DD 18.13→14.68%＝トレードオフなしの純改善。docs/codex500_verification2_20260810.md）
+   //    ⚠️構造TP(B10)はF9でEMA20/50時にOOS改善(+14,670→+18,475)を示したが、EMA25/60採用後に
+   //      ON/OFFで結果が完全一致＝**発火せず無効**と実測判明（MinRR1.5だと構造距離が
+   //      1.5*SL〜4.0*SLの窓に入る取引が皆無）。MinRR0.5まで下げると発火するが
+   //      IS+33,133→+15,833/OOS+20,763→+435と激しく悪化。よって既定OFFのまま温存する。
+   //    v2.1: ADX_Threshold 22.5→30（全パラメータ再最適化・IS+33,133→+34,242/
+   //    OOS+20,763→+22,692、DDも両期間改善(IS5.93→4.94%・OOS14.68→11.32%)＝
+   //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
+   //    v2.2: SlowEMA 60→35（トレードオフ8案の組合せ検証#4・現行ADX30との組合せで
+   //    IS+34,242→+38,136/OOS+22,692→+25,204＝旧単独測定(IS35,946/OOS20,684)より更に良化する
+   //    正の相互作用を確認。docs/tradeoff8_combined_20260812.md）
+   { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
+     x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
+     x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
+     x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }
+   // 3. PB AUDJPY (固定・除外枠)
+   //    v2.2: RR_Ratio 2.0→5.0（トレードオフ8案の組合せ検証#5・ほぼ利益の出ていなかった枠が
+   //    IS+6,157(PF1.74)/OOS+5,619(PF1.40)と両期間で明確に黒字化。
+   //    docs/tradeoff8_combined_20260812.md）
+   { SLEEVE x=pb; x.enabled=En_PB_AUDJPY; x.symbol="AUDJPY"; x.magic=20260628;
+     x.useRisk=false; x.lot=0.01; x.rr=5.0; AddSleeve(x); }
+   // 4. PB GOLD (固定)
+   { SLEEVE x=pb; x.enabled=En_PB_GOLD; x.symbol="GOLD"; x.magic=20260640;
+     x.useRisk=false; x.lot=0.01; x.rr=1.8; x.lotMult=Mult_PB_GOLD;
+     if((GoldDDMode&2)!=0){ x.atrSLmult=GoldDDPBATRSL; x.rr=GoldDDPBRR;
+       x.adxThr=GoldDDPBADX; x.slopeMinATR=GoldDDPBSlopeATR; }
+     if(GoldLabModeEnabled(16)){ x.fastEMA=GoldLabPBFastEMA; x.slowEMA=GoldLabPBSlowEMA; }
+     if(GoldLabModeEnabled(17)) x.trendPeriod=GoldLabPBTrendMA;
+     if(GoldLabModeEnabled(26)) x.adxPeriod=GoldLabPBADXPeriod;
+     if(GoldLabModeEnabled(23)){ x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=GoldLabPBHigherTFMA; }
+     AddSleeve(x); }
+   // 4b. PB GOLD 第2時間軸（既定OFF・別magicでH4版と分離）
+   { SLEEVE x=pb; x.enabled=Pb2Enable; x.symbol="GOLD"; x.magic=20260641;
+     x.tf=Pb2Timeframe(); x.useRisk=false; x.lot=Pb2Lot; x.rr=Pb2RR;
+     x.lotMult=Mult_PB_GOLD; x.atrSLmult=Pb2ATRSLmult; x.adxThr=Pb2ADXThr;
+     x.slopeMinATR=Pb2SlopeMinATR;
+     AddSleeve(x); }
+
+   //--- RSI_Reversal 共通プリセット ---
+   SLEEVE rs = z;
+   rs.strat=ST_RSI; rs.bbDev=2.5; rs.rsiOBX=75.0; rs.rsiOB=72.5; rs.rsiOSX=27.5; rs.rsiOS=30.0;
+   rs.useRange=true; rs.rangeMaxATR=0.2; rs.rangeLB=20; rs.useATRstops=false;
+   rs.swingLB=3; rs.dpTolATR=0.5; rs.useRisk=false; rs.lot=0.01;
+
+   // 5. RSI USDJPY H4 (DP ON, SL50/TP110)
+   //    v2.2: DP_Tolerance_ATR 0.5→1.5（トレードオフ8案の組合せ検証#6・IS+7,915/OOS+7,925と
+   //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
+   { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
+     x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
+     x.lotMult=Mult_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
+   // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
+   //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
+   //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
+   //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
+   { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD;
+     FxRiskOn(x,1); AddSleeve(x); }
+   // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
+   //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
+   //     OOS+11,464→+16,020、docs/new_strategies_round2_20260805.md）
+   //     v1.7: BB_Period 20→30（Codex 500案応答曲面B・IS+12,442→+13,398／OOS+16,045→+18,922。
+   //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
+   { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
+     x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
+     x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
+
+   //=== X2HR: RSI横展開4枠（V099の基準で選定・既定OFF） =================
+   // 【なぜRSI型か】V099より、ブックが**不毛な月**に稼げるのは RSI GBPUSD と
+   // RSI USDJPY の2枠だけだった（弱局面の不毛月 +6,475円 / +6,010円）。
+   // 1取引シャープの高い PB GOLD・SCA GOLD2 は不毛月にはマイナスで役に立たない。
+   //
+   // 【既存の棄却記録を踏まえた銘柄選定】
+   // - RSI14 をクロスペアへ展開 → **全滅**（ドルストレート限定と判明・project_status.md）
+   // - USDCHF RSI → **棄却**（全期間 −20,635 / PF0.66 / 130取引・rejected_strategies.md §0e）
+   // したがってクロスペア（EURJPY/AUDJPY/EURGBP等）とUSDCHFは**候補から外す**。
+   //
+   // 残る未検証は「コモディティ通貨のドルストレート」3つと、**GOLD**。
+   // GOLDは既存3枠（PB GOLD・SCA GOLD1/2）がすべて順張り／ブレイクで、
+   // **逆張りは一度も試していない**。ブックの純益の56%を占める銘柄に
+   // 逆方向の機構を足すので、不毛月の補完として筋が良い。
+   //
+   // 設定は**採用実績のある RSI GBPUSD のテンプレートを共通で流用**する
+   // （Codexの「銘柄別の大量最適化を避ける」に従う）。
+   // GOLDのみ pips が使えないので ATRストップにする（PB GOLDと同じ方式）。
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="GOLD"; x.tf=PERIOD_H4;
+     x.magic=20260790; x.useDP=false; x.dpBars=100;
+     x.useATRstops=true; x.atrSLmult=2.0; x.rr=2.2;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="AUDUSD"; x.tf=PERIOD_H4;
+     x.magic=20260791; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="NZDUSD"; x.tf=PERIOD_H4;
+     x.magic=20260792; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   { SLEEVE x=rs; x.enabled=En_RSI_X2; x.symbol="USDCAD"; x.tf=PERIOD_H4;
+     x.magic=20260793; x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110;
+     x.bbDev=2.0; x.bbPeriod=30; x.lotMult=Mult_RSI_X2; AddSleeve(x); }
+   //=== X2HR RSI横展開 ここまで ==========================================
+
+
+   // 7. PairTrade EURUSD/GBPUSD H1
+   { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
+     x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
+     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
+
+   // 8. Carry AUDJPY D1 (複利0.05, スワップ条件ON, ヒステリシス帯±0.75ATR採用)
+   //    v2.2: ReentryCooldown 0→10（トレードオフ8案の組合せ検証#7・ISは完全不変(105,817)のまま
+   //    OOSのみ+33,912→+37,325。docs/tradeoff8_combined_20260812.md）
+   { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol="AUDJPY"; x.tf=PERIOD_D1;
+     x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
+     x.useHyst=true; x.hystMult=0.75; x.cdBars=10;
+     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
+
+   // 9. VolBreakout USDJPY H4 (固定)
+   { SLEEVE x=z; x.enabled=En_VBO; x.strat=ST_VBO; x.symbol="USDJPY"; x.tf=PERIOD_H4;
+     x.magic=20260680; x.lot=0.01; x.useRisk=false; x.channel=20;
+     x.useSqueeze=true; x.sqLB=50; x.sqFactor=1.0; x.atrSLmult=2.0; x.trailMult=3.0; x.lotMult=Mult_VBO; AddSleeve(x); }
+
+   // 10. 暗号 ETHUSD D1 — v1.2でA2デュアルMAに更新（ETH_EA v1.0同等: 200/40+cd5+災害SL45）
+   //     旧: MA200単独ホールド。検証: full+7,576/PF1.81(0.02lot)→0.05でも線形（ES面で実証）
+   //     v2.1: TrendMA_Period 200→150（全パラメータ再最適化・IS+4,128→+4,419/
+   //     OOS+3,410→+3,664、DD/PFとも両期間改善＝トレードオフなしの純改善。
+   //     docs/param_reopt_20260811.md）
+   { SLEEVE x=z; x.enabled=En_ETH; x.strat=ST_CARRY; x.symbol="ETHUSD"; x.tf=PERIOD_D1;
+     x.magic=20260710; x.trendPeriod=150; x.reqPosSwap=false;
+     x.exitPeriod=40; x.cdBars=5; x.disasterSL=45.0;
+     x.useRisk=false; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_ETH; AddSleeve(x); }
+
+   // 10b. BTC funding逆張り BTCUSD D1 — v1.2新設（FundingRev v1.2採用形と同一・Magic継続）
+   //      閾値-0.004/退出=funding>90日中央値/上限20日/災害SL40。full+39,036/PF2.17/DD9.4%(0.01lot)
+   //      ⚠️ 単独チャートのFundingRev_EAとは排他（同Magic・併走で二重発注になる）
+   { SLEEVE x=z; x.enabled=En_BTC_FUND; x.strat=ST_FUNDING; x.symbol="BTCUSD"; x.tf=PERIOD_D1;
+     x.magic=20260720; x.lot=0.01; x.useRisk=false; x.disasterSL=40.0; x.cryptoGroup=true;
+     x.lotMult=Mult_BTC_FUND; AddSleeve(x); }
+
+   // 10c. BfxRevデレバレッジ・リバウンド BTCUSD D1 — v1.3新設（BfxRev v1.0採用形と同一・Magic継続）
+   //      long建玉5日-10%超→10日保有/災害SL75。full+57,812/PF1.98(0.01lot)
+   //      ⚠️ 単独チャートのBfxRev_EAとは排他（同Magic・併走で二重発注になる）
+   { SLEEVE x=z; x.enabled=En_BFXREV; x.strat=ST_BFXREV; x.symbol="BTCUSD"; x.tf=PERIOD_D1;
+     x.magic=20260724; x.lot=0.01; x.useRisk=false; x.disasterSL=75.0; x.cryptoGroup=true;
+     x.lotMult=Mult_BFXREV; AddSleeve(x); }
+
+   //--- SCA セッションORB（第1/第2バックログ最終形・検証: docs/sca_ea.md）---
+   // 11. SCA GOLD M15（Range1-9h/TE15/FC20/MinR0.40/buf0.05/RR1.5/金曜スキップ/Revブースト）
+   { SLEEVE x=z; x.enabled=En_SCA_GOLD; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261002; x.lot=0.01; x.useRisk=false; x.rr=1.7; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=1; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=20;
+     x.scaMinRange=0.40; x.scaMaxRange=1.00; x.scaBuf=0.05;
+     x.scaSkipFriday=true; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     if((GoldDDMode&2)!=0){ x.rr=GoldDDSCARR; x.scaMinRange=GoldDDSCAMinRange;
+       x.scaMaxRange=GoldDDSCAMaxRange; x.scaBuf=GoldDDSCABuffer;
+       x.scaRevBoost=GoldDDSCAUseBoost; x.scaBoostMult=GoldDDSCABoostMult;
+       x.scaTradeEnd=GoldDDSCATradeEnd; x.scaForceClose=GoldDDSCAForceClose; }
+     if(GoldLabModeEnabled(7)) x.scaRangeStart=GoldLabSCARangeStart;
+     if(GoldLabModeEnabled(4)) x.scaRangeEnd=GoldLabSCARangeEnd;
+     AddSleeve(x); }
+   // 11b. SCA GOLD 第2セッション（既定OFF・別magicで第1セッションと分離）
+   { SLEEVE x=z; x.enabled=Sca2Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261003; x.lot=Sca2Lot; x.useRisk=false; x.rr=Sca2RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca2RangeStart; x.scaRangeEnd=Sca2RangeEnd;
+     x.scaTradeEnd=Sca2TradeEnd; x.scaForceClose=Sca2ForceClose;
+     x.scaMinRange=Sca2MinRange; x.scaMaxRange=Sca2MaxRange; x.scaBuf=Sca2Buffer;
+     x.scaSkipFriday=Sca2SkipFriday; x.scaRevBoost=Sca2RevBoost;
+     x.scaBoostMult=Sca2BoostMult;
+     AddSleeve(x); }
+   // 11c. SCA GOLD 第3セッション（既定OFF・別magicで第1/第2セッションと分離）
+   { SLEEVE x=z; x.enabled=Sca3Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261004; x.lot=Sca3Lot; x.useRisk=false; x.rr=Sca3RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca3RangeStart; x.scaRangeEnd=Sca3RangeEnd;
+     x.scaTradeEnd=Sca3TradeEnd; x.scaForceClose=Sca3ForceClose;
+     x.scaMinRange=Sca3MinRange; x.scaMaxRange=Sca3MaxRange; x.scaBuf=Sca3Buffer;
+     x.scaSkipFriday=Sca3SkipFriday; x.scaRevBoost=Sca3RevBoost;
+     x.scaBoostMult=Sca3BoostMult;
+     AddSleeve(x); }
+   // 11d. SCA GOLD 第4セッション（既定OFF・別magicで第1/第2/第3と分離）
+   { SLEEVE x=z; x.enabled=Sca4Enable; x.strat=ST_SCA; x.symbol="GOLD"; x.tf=PERIOD_M15;
+     x.magic=20261005; x.lot=Sca4Lot; x.useRisk=false; x.rr=Sca4RR; x.lotMult=Mult_SCA_GOLD;
+     x.scaRangeStart=Sca4RangeStart; x.scaRangeEnd=Sca4RangeEnd;
+     x.scaTradeEnd=Sca4TradeEnd; x.scaForceClose=Sca4ForceClose;
+     x.scaMinRange=Sca4MinRange; x.scaMaxRange=Sca4MaxRange; x.scaBuf=Sca4Buffer;
+     x.scaSkipFriday=Sca4SkipFriday; x.scaRevBoost=Sca4RevBoost;
+     x.scaBoostMult=Sca4BoostMult;
+     AddSleeve(x); }
+   // 12. SCA USDJPY M15（Range0-9h/TE12/FC22/MinR0.30/buf0.10/RR2.0/Revブースト）
+   //     v2.1: Break_Buffer_ATRd 0.05→0.10（全パラメータ再最適化・IS+16,913→+18,563/
+   //     **OOS-4,875→+110＝OOS赤字を黒字転換**・DD両期間改善。
+   //     ⚠️ただしOOS純利益+110円/PF1.0024と経済的には極薄で、スプレッド変動で消えうる水準。
+   //     トレードオフなしの純改善ではあるがユーザー承認のうえ採用。docs/param_reopt_20260811.md）
+   { SLEEVE x=z; x.enabled=En_SCA_USDJPY; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
+     x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
+     x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
+     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     FxRiskOn(x,3); AddSleeve(x); }
+   // 13. SCA GBPJPY M15（初版形: buf0）
+   //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
+   //     OOS+11,127→+23,451、docs/new_strategies_round2_20260805.md）
+   //     v1.9: Boost_Mult 3.0→4.0（Codex 500案残余F21・IS+39,027→+50,609/OOS+23,451→+35,775。
+   //     ⚠️利益+30〜53%と引き換えにDDも悪化(IS 24.01→26.45%・OOS 17.37→19.32%)＝
+   //     利益とリスクのトレードオフをユーザー承認のうえ採用。
+   //     docs/codex500_verification2_20260810.md）
+   //     v2.0: Boost_Mult 4.0→6.0（Codex 500案ラウンド3 R3F09・IS+50,609→+73,773/
+   //     OOS+35,775→+60,423＝利益+46〜69%。⚠️DDも悪化(IS 26.45→30.03%・OOS 19.32→22.95%)。
+   //     取引数は全水準で完全同一(IS684/OOS658)＝エントリー集合不変のサイジング変更だが、
+   //     利益/DD比は単調改善(IS1913→2457・OOS1851→2632)＝Boost対象が高エッジの部分集合の
+   //     ためリスク調整後も合理的。⚠️IS-DD30.03%はDD30%制約に接触（枠単独・0.01ロット基準）。
+   //     ⚠️Boost4.5は0.01×4.5=0.045がロットステップで0.04に丸められ4.0と完全同値＝
+   //     0.01ロット基準では整数倍しか意味を持たない。docs/codex500_round3_20260811.md）
+   { SLEEVE x=z; x.enabled=En_SCA_GBPJPY; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
+     x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
+     x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
+     x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
+     x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
+     FxRiskOn(x,4); AddSleeve(x); }
+
+   // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
+   { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
+     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY;
+     x.scaRangeStart=Sca5RangeStart; x.scaRangeEnd=Sca5RangeEnd;
+     x.scaTradeEnd=Sca5TradeEnd; x.scaForceClose=Sca5ForceClose;
+     x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
+     x.scaSkipFriday=Sca5SkipFriday; x.scaRevBoost=Sca5RevBoost;
+     x.scaBoostMult=Sca5BoostMult; AddSleeve(x); }
+   // 13c. SCA 新銘柄横展開（既定OFF・銘柄はinputで切り替え）
+   { SLEEVE x=z; x.enabled=ScaNewEnable; x.strat=ST_SCA; x.symbol=ScaNewSymbol;
+     x.tf=PERIOD_M15; x.magic=20261008; x.lot=ScaNewLot; x.useRisk=false;
+     x.rr=ScaNewRR; x.lotMult=1.0;
+     x.scaRangeStart=ScaNewRangeStart; x.scaRangeEnd=ScaNewRangeEnd;
+     x.scaTradeEnd=ScaNewTradeEnd; x.scaForceClose=ScaNewForceClose;
+     x.scaMinRange=ScaNewMinRange; x.scaMaxRange=ScaNewMaxRange; x.scaBuf=ScaNewBuffer;
+     x.scaSkipFriday=ScaNewSkipFriday; x.scaRevBoost=ScaNewRevBoost;
+     x.scaBoostMult=ScaNewBoostMult; AddSleeve(x); }
+   // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
+   { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
+     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
+     x.scaRangeStart=Sca6RangeStart; x.scaRangeEnd=Sca6RangeEnd;
+     x.scaTradeEnd=Sca6TradeEnd; x.scaForceClose=Sca6ForceClose;
+     x.scaMinRange=Sca6MinRange; x.scaMaxRange=Sca6MaxRange; x.scaBuf=Sca6Buffer;
+     x.scaSkipFriday=Sca6SkipFriday; x.scaRevBoost=Sca6RevBoost;
+     x.scaBoostMult=Sca6BoostMult; AddSleeve(x); }
+
+   // ハンドル生成・銘柄メタ
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      SymbolSelect(S[i].symbol, true);
+      if(S[i].second!="") SymbolSelect(S[i].second, true);
+      S[i].digits = (int)SymbolInfoInteger(S[i].symbol, SYMBOL_DIGITS);
+      S[i].point  = SymbolInfoDouble(S[i].symbol, SYMBOL_POINT);
+      S[i].pip    = (S[i].digits==3 || S[i].digits==5) ? 10*S[i].point : S[i].point;
+      S[i].lastBar = 0;
+      if(S[i].strat==ST_PULLBACK){
+         S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
+         S[i].hFast =iMA(S[i].symbol,S[i].tf,S[i].fastEMA,0,MODE_EMA,PRICE_CLOSE);
+         S[i].hSlow =iMA(S[i].symbol,S[i].tf,S[i].slowEMA,0,MODE_EMA,PRICE_CLOSE);
+         S[i].hATR  =iATR(S[i].symbol,S[i].tf,14);
+         S[i].hADX  =iADX(S[i].symbol,S[i].tf,S[i].adxPeriod);
+         if(S[i].useHigherTF)
+            S[i].hHigherTrend=iMA(S[i].symbol,S[i].higherTF,S[i].higherTFMA,0,MODE_SMA,PRICE_CLOSE);
+      } else if(S[i].strat==ST_RSI){
+         S[i].hRSI =iRSI(S[i].symbol,S[i].tf,14,PRICE_CLOSE);
+         S[i].hTrend=iMA(S[i].symbol,S[i].tf,200,0,MODE_SMA,PRICE_CLOSE);
+         S[i].hBB  =iBands(S[i].symbol,S[i].tf,S[i].bbPeriod,0,S[i].bbDev,PRICE_CLOSE);
+         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      } else if(S[i].strat==ST_CARRY){
+         S[i].hTrend=iMA(S[i].symbol,S[i].tf,S[i].trendPeriod,0,MODE_SMA,PRICE_CLOSE);
+         if(S[i].useHyst) S[i].hATR=iATR(S[i].symbol,S[i].tf,14);
+         if(S[i].exitPeriod>0)
+            S[i].hExit=iMA(S[i].symbol,S[i].tf,S[i].exitPeriod,0,MODE_SMA,PRICE_CLOSE);
+      } else if(S[i].strat==ST_FUNDING){
+         if(!FundingInit())
+         {
+            S[i].enabled=false;
+            Print("BTC funding枠: データ初期化失敗のため無効化（決済のみ有効・他枠は正常）");
+         }
+      } else if(S[i].strat==ST_BFXREV){
+         if(!BfxInit())
+         {
+            S[i].enabled=false;
+            Print("BfxRev枠: データ初期化失敗のため無効化（決済のみ有効・他枠は正常）");
+         }
+      } else if(S[i].strat==ST_VBO){
+         S[i].hATR =iATR(S[i].symbol,S[i].tf,14);
+      } else if(S[i].strat==ST_SCA){
+         S[i].hATR =iATR(S[i].symbol,PERIOD_D1,14);   // レンジ幅正規化用のD1 ATR
+      }
+   }
+   // v1.4: アーム状態の復元（ライブのみ。テスターでは何もしない）
+   int restored = StRestore();
+   if(StLive())
+      Print("状態永続化: ", restored>0 ? IntegerToString(restored)+"枠のアーム状態を復元"
+                                       : "保存済み状態なし（初回起動または期限切れ）");
+   if(UseProfitTrail)
+      PrintFormat("利益トレール: ON | 刻み%.2f%% / 初回確保%.2f%%（追従幅%.2f%%）",
+                  ProfitTrail_Step, ProfitTrail_Lock, ProfitTrail_Step - ProfitTrail_Lock);
+   Print("MIX_EA v1.5 (XM) 起動 | 有効枠数=", CountEnabled(), "/", NS,
+         " | Master=", MasterEnable?"ON":"OFF", " | LotMult=", GlobalLotMult,
+         " | CryptoCap=", MaxCryptoConcurrent>0 ? IntegerToString(MaxCryptoConcurrent) : "OFF");
+   return INIT_SUCCEEDED;
+}
+
+void ZeroSleeve(SLEEVE &x)
+{
+   x.enabled=false; x.strat=ST_PULLBACK; x.symbol=""; x.tf=PERIOD_H4; x.magic=0;
+   x.lot=0.01; x.useRisk=false; x.riskPct=0; x.refDeposit=100000;
+   x.pip=0; x.digits=5; x.point=0; x.lastBar=0;
+   x.hTrend=INVALID_HANDLE; x.hFast=INVALID_HANDLE; x.hSlow=INVALID_HANDLE;
+   x.hATR=INVALID_HANDLE; x.hADX=INVALID_HANDLE; x.hRSI=INVALID_HANDLE; x.hBB=INVALID_HANDLE;
+   x.useATRstops=false; x.atrSLmult=0; x.rr=0; x.slPips=0; x.tpPips=0;
+   x.useTrend=false; x.slopeMinATR=0; x.slopeLB=20; x.useADX=false; x.adxThr=0; x.adxPeriod=14;
+   x.fastEMA=20; x.slowEMA=50;
+   x.useStructTP=false; x.structLB=50; x.structMinRR=0.5;
+   x.useHigherTF=false; x.higherTF=PERIOD_D1; x.higherTFMA=200; x.hHigherTrend=INVALID_HANDLE;
+   x.armedBuy=false; x.armedSell=false;
+   x.bbDev=2.0; x.bbPeriod=20; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
+   x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
+   x.useRange=false; x.rangeMaxATR=0; x.rangeLB=20;
+   x.wasOB=false; x.wasOS=false; x.aboveBB=false; x.belowBB=false;
+   x.obAt=0; x.osAt=0; x.bbUpAt=0; x.bbLoAt=0; x.maSide=0;
+   x.second=""; x.lookback=200; x.entryZ=0; x.exitZ=0; x.stopZ=0;
+   x.trendPeriod=200; x.reqPosSwap=false;
+   x.useHyst=false; x.hystMult=0.75;
+   x.exitPeriod=0; x.hExit=INVALID_HANDLE; x.cdBars=0; x.cdExitBar=0; x.disasterSL=0;
+   x.cryptoGroup=false;
+   x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
+   x.lotMult=1.0; x.refCap=0.0;
+   x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=22;
+   x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
+   x.scaSkipFriday=false; x.scaRevBoost=false; x.scaBoostMult=2.0;
+   x.scaDay=0; x.scaRangeHigh=0; x.scaRangeLow=0; x.scaDrift=0;
+   x.scaReady=false; x.scaSkip=false; x.scaTradedL=false; x.scaTradedS=false;
+}
+
+int CountEnabled(){ int c=0; for(int i=0;i<NS;i++) if(S[i].enabled) c++; return c; }
+
+//============================ アーム状態の永続化（v1.4） ============================
+// PB armed / RSI wasOB・wasOS・aboveBB・belowBB / Carryクールダウン / SCA日次状態は
+// メモリのみに存在し、EA再起動で消えるとアーム済みシグナルをライブだけ取り損ねる
+// （2026-08-02 フォワードvsBT照合で実証: docs/forward_vs_backtest_20260802.md 原因B）。
+// ライブのみGlobalVariableへ保存しOnInitで復元する。テスター/最適化では完全無効＝挙動不変。
+// lastBarは意図的に対象外（再起動直後の1回即時再評価は決済取り逃しの回収に働くため維持）。
+// GlobalVariableは4週間無アクセスで自動削除されるため、日次で全枠を再保存してタッチする。
+bool StLive(){ return !MQLInfoInteger(MQL_TESTER) && !MQLInfoInteger(MQL_OPTIMIZATION); }
+string StKey(const int i, const string f){ return "MIXST_"+(string)S[i].magic+"_"+f; }
+
+// 保存対象フィールドのスナップショット（変更検知用）
+string StSnap(const int i)
+{
+   return StringFormat("%d%d%d%d%d%d|%I64d|%I64d|%.8f|%.8f|%.8f|%d%d%d%d",
+      (int)S[i].armedBuy,(int)S[i].armedSell,(int)S[i].wasOB,(int)S[i].wasOS,
+      (int)S[i].aboveBB,(int)S[i].belowBB,
+      (long)S[i].cdExitBar,(long)S[i].scaDay,
+      S[i].scaRangeHigh,S[i].scaRangeLow,S[i].scaDrift,
+      (int)S[i].scaReady,(int)S[i].scaSkip,(int)S[i].scaTradedL,(int)S[i].scaTradedS);
+}
+
+void StSave(const int i)
+{
+   if(!StLive()) return;
+   GlobalVariableSet(StKey(i,"aB"), S[i].armedBuy  ? 1 : 0);
+   GlobalVariableSet(StKey(i,"aS"), S[i].armedSell ? 1 : 0);
+   GlobalVariableSet(StKey(i,"oB"), S[i].wasOB     ? 1 : 0);
+   GlobalVariableSet(StKey(i,"oS"), S[i].wasOS     ? 1 : 0);
+   GlobalVariableSet(StKey(i,"bU"), S[i].aboveBB   ? 1 : 0);
+   GlobalVariableSet(StKey(i,"bL"), S[i].belowBB   ? 1 : 0);
+   GlobalVariableSet(StKey(i,"cd"), (double)(long)S[i].cdExitBar);
+   GlobalVariableSet(StKey(i,"sD"), (double)(long)S[i].scaDay);
+   GlobalVariableSet(StKey(i,"sH"), S[i].scaRangeHigh);
+   GlobalVariableSet(StKey(i,"sL"), S[i].scaRangeLow);
+   GlobalVariableSet(StKey(i,"sF"), S[i].scaDrift);
+   GlobalVariableSet(StKey(i,"s1"),
+      (S[i].scaReady?1:0)+(S[i].scaSkip?2:0)+(S[i].scaTradedL?4:0)+(S[i].scaTradedS?8:0));
+}
+
+int StRestore()   // OnInit末尾から呼ぶ。復元できた枠数を返す
+{
+   if(!StLive()) return 0;
+   int n=0;
+   for(int i=0;i<NS;i++){
+      if(!S[i].enabled) continue;
+      if(!GlobalVariableCheck(StKey(i,"s1")) && !GlobalVariableCheck(StKey(i,"aB"))) continue;
+      S[i].armedBuy  = (GlobalVariableGet(StKey(i,"aB"))!=0);
+      S[i].armedSell = (GlobalVariableGet(StKey(i,"aS"))!=0);
+      S[i].wasOB     = (GlobalVariableGet(StKey(i,"oB"))!=0);
+      S[i].wasOS     = (GlobalVariableGet(StKey(i,"oS"))!=0);
+      S[i].aboveBB   = (GlobalVariableGet(StKey(i,"bU"))!=0);
+      S[i].belowBB   = (GlobalVariableGet(StKey(i,"bL"))!=0);
+      S[i].cdExitBar = (datetime)(long)GlobalVariableGet(StKey(i,"cd"));
+      S[i].scaDay    = (datetime)(long)GlobalVariableGet(StKey(i,"sD"));
+      S[i].scaRangeHigh = GlobalVariableGet(StKey(i,"sH"));
+      S[i].scaRangeLow  = GlobalVariableGet(StKey(i,"sL"));
+      S[i].scaDrift     = GlobalVariableGet(StKey(i,"sF"));
+      int f=(int)GlobalVariableGet(StKey(i,"s1"));
+      S[i].scaReady=((f&1)!=0); S[i].scaSkip=((f&2)!=0);
+      S[i].scaTradedL=((f&4)!=0); S[i].scaTradedS=((f&8)!=0);
+      n++;
+   }
+   return n;
+}
+
+//============================ 利益トレール（v1.5） ============================
+// 仕様: 含み益が「口座残高 × ProfitTrail_Step%」に達するごとに段階を1つ上げ、
+//       第n段では「口座残高 × (Lock% + (n-1)×Step%)」の利益を確保する価格へSLを移動する。
+//       Step=0.5 / Lock=0.1 なら 0.5%→+0.1% / 1.0%→+0.6% / 1.5%→+1.1%（追従幅0.4%固定）。
+// 既定OFF。ONでも「改善方向のみ・現値/ストップレベルを跨がない」ため約定拒否は起きない。
+int SleeveByMagic(const long m)
+{
+   for(int i=0;i<NS;i++) if(S[i].magic==m) return i;
+   return -1;
+}
+
+// 利益トレールの対象枠: **FXのみ**（GOLD・暗号は対象外）かつ PairTrade / Carry を除外。
+// 除外理由（2026-08-05 実測・docs/profit_trail_20260805.md）:
+//  - GOLD（PB 20260640 / SCA 20261002）と暗号は利益が35〜45%失われた（トレンド追随の大勝ちを刈る）
+//  - PairTrade は2レグ同時決済のサヤ取りで、片脚だけSLに掛かるとヘッジが崩れる
+//  - Carry は「SLを置かない」ことが設計思想（docs/carry.md・DDは決済では削れないと検証済み）
+//  ※ETH枠は ST_CARRY で実装されているため Carry 除外に含まれる
+bool PtrailEligible(const int i)
+{
+   if(i < 0) return false;
+   if(S[i].strat==ST_PAIR || S[i].strat==ST_CARRY)     return false;  // PairTrade / Carry / ETH
+   if(S[i].strat==ST_FUNDING || S[i].strat==ST_BFXREV) return false;  // BTC funding / BfxRev
+   if(S[i].magic==20260640 || S[i].magic==20261002)    return false;  // PB GOLD / SCA GOLD
+   return true;
+}
+
+void ProfitTrail()
+{
+   if(!UseProfitTrail) return;
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   double step_money = bal * ProfitTrail_Step / 100.0;
+   if(bal <= 0.0 || step_money <= 0.0) return;
+
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk = PositionGetTicket(k);
+      if(tk==0) continue;
+      long mg = PositionGetInteger(POSITION_MAGIC);
+      if(!PtrailEligible(SleeveByMagic(mg))) continue;   // FX枠のみ（Pair/Carry/GOLD/暗号は除外）
+
+      string sym = PositionGetString(POSITION_SYMBOL);
+      // 判定は実含み益（スワップ込み）
+      double profit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      int n = (int)MathFloor(profit / step_money);
+      if(n < 1) continue;                                  // 最初の刻みに未達
+
+      double lock_money = bal * ProfitTrail_Lock / 100.0 + (n - 1) * step_money;
+      bool   is_buy = (PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+      double cur_sl = PositionGetDouble(POSITION_SL);
+      double tp     = PositionGetDouble(POSITION_TP);
+      int    dg     = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      double px     = is_buy ? SymbolInfoDouble(sym, SYMBOL_BID) : SymbolInfoDouble(sym, SYMBOL_ASK);
+
+      // 値幅→金額の換算はポジション自身の損益から求める。
+      // SYMBOL_TRADE_TICK_VALUE は建値通貨で返るブローカーがあり（XMのGOLD/ETH/BTCで実測）、
+      // 口座通貨(JPY)前提で計算するとUSD建て銘柄でSL距離が約164倍になり一度も発動しない。
+      double moved   = is_buy ? (px - open_p) : (open_p - px);   // 建値からの順行値幅
+      double pprofit = PositionGetDouble(POSITION_PROFIT);        // 価格由来の損益のみ
+      if(moved <= 0.0 || pprofit <= 0.0) continue;
+      double money_per_price = pprofit / moved;                   // 口座通貨/価格1単位（数量込み）
+      if(money_per_price <= 0.0) continue;
+      double dist = lock_money / money_per_price;                 // 確保したい利益に相当する値幅
+      if(dist <= 0.0) continue;
+
+      double newsl  = NormalizeDouble(is_buy ? open_p + dist : open_p - dist, dg);
+
+      if(is_buy  && !(newsl > cur_sl)) continue;                       // 改善方向のみ
+      if(!is_buy && !(cur_sl==0.0 || newsl < cur_sl)) continue;
+      if((is_buy && newsl >= px) || (!is_buy && newsl <= px)) continue; // 現値を跨がない
+
+      long   stops = SymbolInfoInteger(sym, SYMBOL_TRADE_STOPS_LEVEL);
+      double pt    = SymbolInfoDouble(sym, SYMBOL_POINT);
+      if(stops > 0 && MathAbs(px - newsl) < stops * pt) continue;      // ストップレベル制約
+
+      if(trade.PositionModify(tk, newsl, tp))
+         OpsWrite("PTRAIL", mg, sym, n, profit, lock_money, newsl, px,
+                  PositionGetDouble(POSITION_VOLUME), "STEP");
+   }
+}
+
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   if(!MasterEnable) return;
+   if(DlHalted()) return;   // X2HR: 到達/破綻/期限切れで停止
+   GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価（本番と同一）
+   ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
+   // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
+   if(EnableOpsLog)
+   {
+      datetime d = TimeCurrent() - (TimeCurrent() % 86400);
+      if(d != g_opsDay)
+      {
+         g_opsDay = d;
+         OpsWrite("DAILY", 0, "",
+                  AccountInfoDouble(ACCOUNT_EQUITY), AccountInfoDouble(ACCOUNT_BALANCE),
+                  AccountInfoDouble(ACCOUNT_MARGIN), PositionsTotal(), 0, 0, "");
+      }
+   }
+   // v1.4: 状態GVの日次タッチ（4週間無アクセス失効の回避・ライブのみ・EnableOpsLog非依存）
+   if(StLive())
+   {
+      static datetime st_day = 0;
+      datetime d2 = TimeCurrent() - (TimeCurrent() % 86400);
+      if(d2 != st_day){ st_day = d2; for(int i=0;i<NS;i++) if(S[i].enabled) StSave(i); }
+   }
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      R6CryptoManageExit(i); // mode=0なら即return。危機退出は毎ティック評価
+      GoldLabManagePB(i);    // mode=0なら即return。BE/trailingはtick単位で管理
+      if(S[i].strat==ST_FUNDING){ ProcFunding(i); continue; }   // 自前でバー/リトライ管理
+      if(S[i].strat==ST_BFXREV){ ProcBfx(i); continue; }        // 同上
+      datetime bt = iTime(S[i].symbol, S[i].tf, 0);
+      if(bt==0 || bt==S[i].lastBar) continue;   // 新バーのみ
+      // VBOはバー内トレーリングのため毎バー評価。他もバー確定で処理。
+      S[i].lastBar = bt;
+      R6GoldManageExit(i); // mode=0なら即returnし既存挙動に影響しない
+      // v1.4: アーム状態が変化したバーだけ保存（ライブのみ。テスターではsnap生成もしない）
+      string snap = StLive() ? StSnap(i) : "";
+      switch(S[i].strat){
+         case ST_PULLBACK: ProcPullback(i); break;
+         case ST_RSI:      ProcRSI(i);      break;
+         case ST_PAIR:     ProcPair(i);     break;
+         case ST_CARRY:    ProcCarry(i);    break;
+         case ST_VBO:      ProcVBO(i);      break;
+         case ST_SCA:      ProcSCA(i);      break;
+      }
+      if(StLive() && StSnap(i)!=snap) StSave(i);
+   }
+}
+
+//============================ 共通ヘルパ ============================
+bool HasPos(int i, ENUM_POSITION_TYPE type)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--)
+      if(PositionGetSymbol(k)==S[i].symbol &&
+         PositionGetInteger(POSITION_MAGIC)==S[i].magic &&
+         PositionGetInteger(POSITION_TYPE)==type) return true;
+   return false;
+}
+bool HasAny(int i)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--)
+      if(PositionGetSymbol(k)==S[i].symbol &&
+         PositionGetInteger(POSITION_MAGIC)==S[i].magic) return true;
+   return false;
+}
+void CloseType(int i, ENUM_POSITION_TYPE type)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      ulong tk=PositionGetTicket(k);
+      if(PositionGetSymbol(k)==S[i].symbol &&
+         PositionGetInteger(POSITION_MAGIC)==S[i].magic &&
+         PositionGetInteger(POSITION_TYPE)==type) trade.PositionClose(tk);
+   }
+}
+void CloseSleeveAll(int i)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      ulong tk=PositionGetTicket(k);
+      if(PositionGetInteger(POSITION_MAGIC)==S[i].magic){
+         string sym=PositionGetString(POSITION_SYMBOL);
+         if(sym==S[i].symbol || sym==S[i].second) trade.PositionClose(tk);
+      }
+   }
+}
+//=== v1.3: 暗号グループ同時ポジション上限ガード ===
+// 口座全体の暗号Magic（MIXスリーブ+単独EA）を横断カウント。上限到達なら新規を見送る。
+bool CryptoGuardOK(int i)
+{
+   if(R6CryptoMode==1 && (S[i].magic==20260710 || S[i].magic==20260720 || S[i].magic==20260724))
+   {
+      int lb=MathMax(1,R6CryptoLookbackDays), cd=MathMax(1,R6CryptoCooldownDays);
+      for(int s=1;s<=cd;s++)
+      {
+         double now=iClose(S[i].symbol,PERIOD_D1,s);
+         double before=iClose(S[i].symbol,PERIOD_D1,s+lb);
+         if(now>0.0 && before>0.0 && (now/before-1.0)*100.0<=-R6CryptoShockPct)
+         {
+            OpsWrite("R6C_SKIP",S[i].magic,S[i].symbol,(now/before-1.0)*100.0,
+                     R6CryptoShockPct,lb,cd,0,0,"crypto-shock");
+            return false;
+         }
+      }
+   }
+   if(MaxCryptoConcurrent<=0 || !S[i].cryptoGroup) return true;
+   int cnt=0;
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      long m=PositionGetInteger(POSITION_MAGIC);
+      if(PositionGetSymbol(k)=="" ) continue;
+      if(m==20260710 || m==20260720 || m==20260723 || m==20260724) cnt++;
+   }
+   if(cnt>=MaxCryptoConcurrent){
+      Print("[CRYPTO-CAP] 枠", S[i].magic, " のエントリー見送り（暗号同時", cnt, "/上限", MaxCryptoConcurrent, "）");
+      OpsWrite("SKIP", S[i].magic, S[i].symbol, cnt, MaxCryptoConcurrent, 0, 0, 0, 0, "crypto-cap");
+      return false;
+   }
+   return true;
+}
+
+double Clamp(string sym, double lot)
+{
+   double mn=SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN);
+   double mx=SymbolInfoDouble(sym,SYMBOL_VOLUME_MAX);
+   double st=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
+   if(st>0) lot=MathFloor(lot/st)*st;
+   return MathMax(mn,MathMin(mx,lot));
+}
+
+// Round 4の後処理と同じく「各スリーブの直近N完了deal」を群内で連結して平均する。
+// 呼出時点より前にHistoryへ確定済みのOUT/OUT_BYだけを使うため未来情報は入らない。
+bool SimVerifyMember(const int i)
+{
+   if(SimVerifyMode==1)
+      return (S[i].magic==20260610 || S[i].magic==20260605 || S[i].magic==20260774);
+   if(SimVerifyMode==2)
+      return (S[i].magic==20260622 || S[i].magic==20260627 ||
+              S[i].magic==20260628 || S[i].magic==20260640);
+   return false;
+}
+
+bool SimVerifyMagic(const long magic)
+{
+   if(SimVerifyMode==1)
+      return (magic==20260610 || magic==20260605 || magic==20260774);
+   if(SimVerifyMode==2)
+      return (magic==20260622 || magic==20260627 || magic==20260628 || magic==20260640);
+   return false;
+}
+
+double SimVerifyFactor(const int i)
+{
+   if(SimVerifyMode==0 || !SimVerifyMember(i) || SimVerifyLookback<=0) return 1.0;
+   if(!HistorySelect(0,TimeCurrent())) return 1.0;
+   long magics[4]; int nm=0;
+   if(SimVerifyMode==1){ magics[0]=20260610; magics[1]=20260605; magics[2]=20260774; nm=3; }
+   else { magics[0]=20260622; magics[1]=20260627; magics[2]=20260628; magics[3]=20260640; nm=4; }
+   double sum=0.0; int count=0;
+   int total=HistoryDealsTotal();
+   for(int m=0;m<nm;m++)
+   {
+      int taken=0;
+      for(int k=total-1;k>=0 && taken<SimVerifyLookback;k--)
+      {
+         ulong ticket=HistoryDealGetTicket(k);
+         if(ticket==0 || HistoryDealGetInteger(ticket,DEAL_MAGIC)!=magics[m]) continue;
+         long entry=HistoryDealGetInteger(ticket,DEAL_ENTRY);
+         if(entry!=DEAL_ENTRY_OUT && entry!=DEAL_ENTRY_OUT_BY) continue;
+         long type=HistoryDealGetInteger(ticket,DEAL_TYPE);
+         if(type!=DEAL_TYPE_BUY && type!=DEAL_TYPE_SELL) continue;
+         sum += HistoryDealGetDouble(ticket,DEAL_PROFIT)
+              + HistoryDealGetDouble(ticket,DEAL_SWAP)
+              + HistoryDealGetDouble(ticket,DEAL_COMMISSION);
+         taken++; count++;
+      }
+   }
+   int min_count=MathMax(4,SimVerifyLookback/4);
+   if(count<min_count) return 1.0;
+   return ((sum/count)<0.0 ? MathMax(0.0,SimVerifyRiskScale) : 1.0);
+}
+
+double SimVerifySleeveEquity(const int i)
+{
+   double eq=100000.0;
+   if(!HistorySelect(0,TimeCurrent())) return eq;
+   int total=HistoryDealsTotal();
+   for(int k=0;k<total;k++)
+   {
+      ulong ticket=HistoryDealGetTicket(k);
+      if(ticket==0 || HistoryDealGetInteger(ticket,DEAL_MAGIC)!=S[i].magic) continue;
+      eq += HistoryDealGetDouble(ticket,DEAL_PROFIT)
+          + HistoryDealGetDouble(ticket,DEAL_SWAP)
+          + HistoryDealGetDouble(ticket,DEAL_COMMISSION);
+   }
+   return eq;
+}
+
+//============================ PB GOLD 保有上限（本番と同一実装）============================
+// PB GOLDのtfはH4なので64バー＝約10.7日。枠の判定はmagicで行う
+// （銘柄名はXMが"GOLD"、OANDAが"XAUUSD"で異なるため）。
+void GoldPBHoldLimit()
+{
+   for(int i=0;i<NS;i++)
+   {
+      if(!S[i].enabled) continue;
+      // 第2時間軸(20260641)は自分のバー数で数える。H4版と違う時間軸を持つので
+      // GoldPBHoldBars をそのまま流用すると意味が変わってしまう。
+      int bars = (S[i].magic==20260640) ? GoldPBHoldBars
+               : (S[i].magic==20260641) ? Pb2HoldBars : 0;
+      if(bars<=0) continue;
+      long limit=(long)bars*PeriodSeconds(S[i].tf);
+      for(int k=PositionsTotal()-1;k>=0;k--)
+      {
+         ulong tk=PositionGetTicket(k);
+         if(tk==0) continue;
+         if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+            PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+         if(TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME) >= limit)
+            trade.PositionClose(tk);
+      }
+   }
+}
+
+//============================ GOLDサイジングラボ（GSZ） ============================
+bool GszApplies(const int i)
+{
+   if(GszMode<=0 || GszSleeveMask==0 || GszRiskPct<=0.0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20260640) bit=0;        // PB GOLD
+   else if(m==20261002) bit=1;   // SCA GOLD
+   return bit>=0 && ((GszSleeveMask>>bit)&1)!=0;
+}
+
+// 口座通貨での「1ロットあたり、SL距離ぶん逆行したときの損失額」。
+// OrderCalcProfit は建値通貨・契約サイズ・クロスレートを端末が解決するため、
+// SYMBOL_TRADE_TICK_VALUE の通貨不一致（GOLDはUSDのまま返る）を踏まない。
+double GszMoneyPerLot(const string sym,const double slDist)
+{
+   if(slDist<=0.0) return 0.0;
+   double px=SymbolInfoDouble(sym,SYMBOL_ASK);
+   if(px<=0.0) return 0.0;
+   double p=0.0;
+   if(!OrderCalcProfit(ORDER_TYPE_BUY,sym,1.0,px,px-slDist,p)) return 0.0;
+   return MathAbs(p);
+}
+
+// リスク%からロットを出す。倍率(lotMult/GlobalLotMult)は掛けない——
+// risk% がそのまま1取引のリスクを定義するため、二重に効かせない。
+double GszLot(const int i,const double slDist)
+{
+   double eq=(GszRefCap>0.0) ? GszRefCap : AccountInfoDouble(ACCOUNT_EQUITY);
+   double mpl=GszMoneyPerLot(S[i].symbol,slDist);
+   if(eq<=0.0 || mpl<=0.0) return 0.0;
+   double lot=(eq*GszRiskPct/100.0)/mpl;
+   if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
+   if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
+   return Clamp(S[i].symbol,lot);
+}
+
+double LotRisk(int i, double slDistPrice)
+{
+   if(GszApplies(i) && slDistPrice>0.0)
+   {
+      double gl=GszLot(i,slDistPrice);
+      if(gl>0.0) return gl;
+   }
+   double base;
+   if(!S[i].useRisk || slDistPrice<=0) base=S[i].lot;
+   else{
+      // refCap>0なら配分資金固定でサイズ（口座共有時の過大化を防ぐ）、0なら口座equity
+      double eq=SimVerifyVirtualSleeveEquity ? SimVerifySleeveEquity(i) :
+                ((S[i].refCap>0.0) ? S[i].refCap : AccountInfoDouble(ACCOUNT_EQUITY));
+      double rm=eq*S[i].riskPct/100.0;
+      double tv=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_VALUE);
+      double ts=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_SIZE);
+      if(tv<=0||ts<=0){ base=S[i].lot; }
+      else{ double mpl=(slDistPrice/ts)*tv; base=(mpl>0)?rm/mpl:S[i].lot; }
+   }
+   double factor=SimVerifyFactor(i);
+   if(factor<=0.0) return 0.0;
+   return Clamp(S[i].symbol, base*GlobalLotMult*DlMult()*S[i].lotMult*factor);
+}
+double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
+{
+   double base=S[i].lot;
+   if(S[i].useRisk){
+      double eq=(S[i].refCap>0.0) ? S[i].refCap : AccountInfoDouble(ACCOUNT_EQUITY);
+      double rd=(S[i].refDeposit>0)?S[i].refDeposit:100000.0;
+      base=S[i].lot*(eq/rd);
+   }
+   return Clamp(sym, base*GlobalLotMult*DlMult()*S[i].lotMult);
+}
+double GetBuf(int h,int idx)
+{
+   double b[]; ArraySetAsSeries(b,true);
+   if(CopyBuffer(h,0,1,idx+1,b)<idx+1) return EMPTY_VALUE;
+   return b[idx];
+}
+
+void R6CryptoManageExit(const int i)
+{
+   if(R6CryptoMode!=2 || R6CryptoAdversePct<=0.0 ||
+      (S[i].magic!=20260710 && S[i].magic!=20260720 && S[i].magic!=20260724)) return;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k); if(tk==0) continue;
+      if(PositionGetInteger(POSITION_MAGIC)!=S[i].magic || PositionGetString(POSITION_SYMBOL)!=S[i].symbol) continue;
+      double op=PositionGetDouble(POSITION_PRICE_OPEN);
+      long ty=PositionGetInteger(POSITION_TYPE);
+      double px=(ty==POSITION_TYPE_BUY ? SymbolInfoDouble(S[i].symbol,SYMBOL_BID)
+                                       : SymbolInfoDouble(S[i].symbol,SYMBOL_ASK));
+      double adverse=(ty==POSITION_TYPE_BUY ? (op-px)/op : (px-op)/op)*100.0;
+      if(adverse>=R6CryptoAdversePct)
+      {
+         OpsWrite("R6C_EXIT",S[i].magic,S[i].symbol,adverse,R6CryptoAdversePct,op,px,
+                  PositionGetDouble(POSITION_VOLUME),0,"crypto-tail");
+         trade.PositionClose(tk);
+      }
+   }
+}
+
+//============================ Round 6 GOLD DD制御 ============================
+bool R6GoldEntryOK(const int i)
+{
+   if(R6GoldMode!=1 || S[i].symbol!="GOLD") return true;
+   int n=MathMax(1,R6GoldLookbackBars);
+   double atr=GetBuf(S[i].hATR,0);
+   if(atr==EMPTY_VALUE || atr<=0.0) return true;
+   for(int k=1;k<=n;k++)
+   {
+      double hi=iHigh(S[i].symbol,S[i].tf,k), lo=iLow(S[i].symbol,S[i].tf,k);
+      if(hi>0.0 && lo>0.0 && (hi-lo)/atr>=R6GoldShockATR)
+      {
+         OpsWrite("R6_SKIP",S[i].magic,S[i].symbol,(hi-lo)/atr,R6GoldShockATR,n,0,0,0,"gold-shock");
+         return false;
+      }
+   }
+   return true;
+}
+
+bool GoldDDEntryOK(const int i)
+{
+   if(GoldDDMode==0 || S[i].symbol!="GOLD") return true;
+   if((GoldDDMode&4)!=0)
+   {
+      MqlDateTime dt; TimeToStruct(TimeCurrent(),dt);
+      int mask=(S[i].magic==20260640 ? GoldDDPBWeekMask : GoldDDSCAWeekMask);
+      if((mask&(1<<dt.day_of_week))==0)
+      {
+         OpsWrite("GDD_SKIP",S[i].magic,S[i].symbol,dt.day_of_week,mask,0,0,0,0,"weekday");
+         return false;
+      }
+   }
+   if((GoldDDMode&1)!=0)
+   {
+      long other=(S[i].magic==20260640 ? 20261002 : 20260640);
+      for(int k=PositionsTotal()-1;k>=0;k--)
+      {
+         if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==other)
+         {
+            OpsWrite("GDD_SKIP",S[i].magic,S[i].symbol,other,0,0,0,0,0,"gold-overlap");
+            return false;
+         }
+      }
+   }
+   return true;
+}
+
+bool GoldHourRuleMatches(const MqlDateTime &dt,const int week_mask,
+                         const int start_hour,const int end_hour)
+{
+   if(week_mask==0 || (week_mask&(1<<dt.day_of_week))==0) return false;
+   return dt.hour>=start_hour && dt.hour<end_hour;
+}
+
+bool GoldHourEntryOK(const int i)
+{
+   if(GoldHourGateMode==0 || S[i].symbol!="GOLD") return true;
+   MqlDateTime dt;
+   // TimeCurrentはブローカーのサーバ時刻。テスターではテスト中のシミュレート時刻。
+   TimeToStruct(TimeCurrent(),dt);
+   bool blocked=false;
+   if(S[i].magic==20260640 || (S[i].magic==20260641 && Pb2UseHourGate)) // PB GOLD
+      blocked=GoldHourRuleMatches(dt,GoldHourPBWeekMask1,GoldHourPBStart1,GoldHourPBEnd1) ||
+              GoldHourRuleMatches(dt,GoldHourPBWeekMask2,GoldHourPBStart2,GoldHourPBEnd2);
+   else if(S[i].magic==20261002) // SCA GOLD
+      blocked=GoldHourRuleMatches(dt,GoldHourSCAWeekMask1,GoldHourSCAStart1,GoldHourSCAEnd1) ||
+              GoldHourRuleMatches(dt,GoldHourSCAWeekMask2,GoldHourSCAStart2,GoldHourSCAEnd2);
+   if(blocked)
+   {
+      OpsWrite("GH_SKIP",S[i].magic,S[i].symbol,dt.day_of_week,dt.hour,0,0,0,0,"weekday-hour-entry");
+      return false;
+   }
+   return true;
+}
+
+bool GoldLabIsGold(const int i)
+{
+   return S[i].magic==20260640 || S[i].magic==20261002;
+}
+
+long GoldLabOtherMagic(const int i)
+{
+   return S[i].magic==20260640 ? 20261002 : 20260640;
+}
+
+double GoldLabDailyATR(const string sym)
+{
+   double sum=0.0;
+   for(int s=1;s<=14;s++)
+   {
+      double hi=iHigh(sym,PERIOD_D1,s),lo=iLow(sym,PERIOD_D1,s),pc=iClose(sym,PERIOD_D1,s+1);
+      if(hi<=0.0 || lo<=0.0 || pc<=0.0) return 0.0;
+      sum+=MathMax(hi-lo,MathMax(MathAbs(hi-pc),MathAbs(lo-pc)));
+   }
+   return sum/14.0;
+}
+
+bool GoldLabOtherRecent(const int i,const int hours)
+{
+   if(hours<=0 || !HistorySelect(0,TimeCurrent())) return false;
+   long other=GoldLabOtherMagic(i);
+   datetime cutoff=TimeCurrent()-hours*3600;
+   for(int k=HistoryDealsTotal()-1;k>=0;k--)
+   {
+      ulong tk=HistoryDealGetTicket(k);
+      datetime when=(datetime)HistoryDealGetInteger(tk,DEAL_TIME);
+      if(when<cutoff) break;
+      if(HistoryDealGetInteger(tk,DEAL_MAGIC)==other) return true;
+   }
+   return false;
+}
+
+bool GoldLabOverlapOK(const int i,const ENUM_POSITION_TYPE wanted)
+{
+   int policy=GoldLabOverlapPolicy;
+   if(policy<1 || policy>5) return true;
+   long other=GoldLabOtherMagic(i);
+   bool other_any=false,other_same=false,other_opposite=false;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      if(PositionGetSymbol(k)!=S[i].symbol || PositionGetInteger(POSITION_MAGIC)!=other) continue;
+      other_any=true;
+      ENUM_POSITION_TYPE ty=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      if(ty==wanted) other_same=true; else other_opposite=true;
+   }
+   bool blocked=false;
+   if(policy==1) blocked=other_any;
+   if(policy==2 && S[i].magic==20261002) blocked=other_any; // PB priority: skip SCA only
+   if(policy==3 && S[i].magic==20260640) blocked=other_any; // SCA priority: skip PB only
+   if(policy==4) blocked=other_same;
+   if(policy==5) blocked=other_opposite;
+   if(!blocked && GoldLabOtherRecent(i,GoldLabOverlapCooldownHours))
+   {
+      if(policy==1 || policy==4 || policy==5 ||
+         (policy==2 && S[i].magic==20261002) || (policy==3 && S[i].magic==20260640)) blocked=true;
+   }
+   return !blocked;
+}
+
+double GoldLabRealizedJPY(const datetime from_time)
+{
+   if(!HistorySelect(from_time,TimeCurrent())) return 0.0;
+   double total=0.0;
+   for(int k=0;k<HistoryDealsTotal();k++)
+   {
+      ulong tk=HistoryDealGetTicket(k);
+      long magic=HistoryDealGetInteger(tk,DEAL_MAGIC);
+      if(magic!=20260640 && magic!=20261002) continue;
+      long entry=HistoryDealGetInteger(tk,DEAL_ENTRY);
+      if(entry==DEAL_ENTRY_IN) continue;
+      datetime when=(datetime)HistoryDealGetInteger(tk,DEAL_TIME);
+      int shift=iBarShift("USDJPY",PERIOD_D1,when,false);
+      double uj=shift>=0 ? iClose("USDJPY",PERIOD_D1,shift) : 0.0;
+      if(uj<=0.0) continue;
+      total+=(HistoryDealGetDouble(tk,DEAL_PROFIT)+HistoryDealGetDouble(tk,DEAL_SWAP)+
+              HistoryDealGetDouble(tk,DEAL_COMMISSION))*uj;
+   }
+   return total;
+}
+
+bool GoldLabLossCapOK(const bool weekly,const double cap_jpy)
+{
+   if(cap_jpy<=0.0) return true;
+   MqlDateTime dt; TimeToStruct(TimeCurrent(),dt);
+   datetime day=TimeCurrent()-(dt.hour*3600+dt.min*60+dt.sec);
+   datetime from=day;
+   if(weekly) from=day-((dt.day_of_week+6)%7)*86400; // Monday 00:00 server time
+   return GoldLabRealizedJPY(from)>-cap_jpy;
+}
+
+bool GoldLabFloatingOK(const int i)
+{
+   if(GoldLabFloatingLossCapPct<=0.0) return true;
+   long other=GoldLabOtherMagic(i);
+   double floating=0.0;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+      if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==other)
+         floating+=PositionGetDouble(POSITION_PROFIT)+PositionGetDouble(POSITION_SWAP);
+   if(floating>=0.0) return true;
+   double balance=AccountInfoDouble(ACCOUNT_BALANCE);
+   return balance>0.0 && (-floating/balance*100.0)<GoldLabFloatingLossCapPct;
+}
+
+bool GoldLabRegimeOK(const int i)
+{
+   bool use_range=GoldLabModeEnabled(8);
+   bool use_gap=GoldLabModeEnabled(9);
+   if(!use_range && !use_gap) return true;
+   double atr=GoldLabDailyATR(S[i].symbol);
+   if(atr<=0.0) return false;
+   if(use_range &&
+      (iHigh(S[i].symbol,PERIOD_D1,1)-iLow(S[i].symbol,PERIOD_D1,1))/atr>GoldLabPrevRangeATRMax)
+      return false;
+   if(use_gap)
+   {
+      double gap=MathAbs(iOpen(S[i].symbol,PERIOD_D1,0)-iClose(S[i].symbol,PERIOD_D1,1));
+      if(gap/atr>GoldLabGapATRMax) return false;
+   }
+   return true;
+}
+
+bool GoldLabEntryOK(const int i,const ENUM_POSITION_TYPE wanted)
+{
+   if(!GoldLabAnyModeEnabled() || !GoldLabIsGold(i)) return true;
+   if(GoldLabModeEnabled(2) && g_labSCALoss[i]>0 &&
+      TimeCurrent()-g_labSCALoss[i]<GoldLabSCAFailedBreakLockHours*3600) return false;
+   if(GoldLabModeEnabled(3) && g_labPortfolioLoss>0 &&
+      TimeCurrent()-g_labPortfolioLoss<GoldLabPortfolioCooldownHours*3600) return false;
+   if(GoldLabModeEnabled(12) && g_labSleeveLoss[i]>0 &&
+      TimeCurrent()-g_labSleeveLoss[i]<GoldLabSleeveCooldownHours*3600) return false;
+   if(GoldLabModeEnabled(10))
+   {
+      double spread=(SymbolInfoDouble(S[i].symbol,SYMBOL_ASK)-SymbolInfoDouble(S[i].symbol,SYMBOL_BID))/S[i].point;
+      if(spread>GoldLabMaxSpreadPoints) return false;
+   }
+   if(GoldLabModeEnabled(11) && !GoldLabFloatingOK(i)) return false;
+   if(GoldLabModeEnabled(13) && !GoldLabLossCapOK(false,GoldLabDailyLossCapJPY)) return false;
+   if(GoldLabModeEnabled(14) && !GoldLabLossCapOK(true,GoldLabWeeklyLossCapJPY)) return false;
+   if((GoldLabModeEnabled(8) || GoldLabModeEnabled(9)) && !GoldLabRegimeOK(i)) return false;
+   if(GoldLabModeRangeEnabled(15,21) && !GoldLabOverlapOK(i,wanted)) return false;
+   return true;
+}
+
+bool GoldLabPBSignalOK(const int i,const bool buy,const double cp,const double op,
+                       const double hp,const double lp,const double fastema,
+                       const double trendma,const double atr)
+{
+   if(GoldLabModeEnabled(22) && MathAbs(cp-trendma)/atr>GoldLabPBExtensionCapATR) return false;
+   if(GoldLabModeEnabled(25))
+   {
+      double depth=buy ? (fastema-lp)/atr : (hp-fastema)/atr;
+      if(depth>GoldLabPBPullbackDepthATR) return false;
+   }
+   double range=hp-lp;
+   if(GoldLabModeEnabled(27) && (range<=0.0 || MathAbs(cp-op)/range<GoldLabPBCandleBodyMin)) return false;
+   if(GoldLabModeEnabled(28))
+   {
+      double location=range>0.0 ? (buy ? (cp-lp)/range : (hp-cp)/range) : 0.0;
+      if(location<GoldLabPBCloseLocationMin) return false;
+   }
+   return true;
+}
+
+bool GoldLabSCADirectionOK(const int i,const bool buy,const double atr)
+{
+   if(!GoldLabModeEnabled(1)) return true;
+   if(S[i].scaTradedL || S[i].scaTradedS)
+      return buy ? S[i].scaTradedL : S[i].scaTradedS;
+   double drift=S[i].scaDrift/atr;
+   if(GoldLabSCADirectionPolicy==1) // follow the session drift
+      return buy ? drift>=GoldLabSCADriftMinATR : drift<=-GoldLabSCADriftMinATR;
+   if(GoldLabSCADirectionPolicy==2) // fade the session drift
+      return buy ? drift<=-GoldLabSCADriftMinATR : drift>=GoldLabSCADriftMinATR;
+   return true;
+}
+
+void GoldLabManagePB(const int i)
+{
+   if(!GoldLabIsGold(i) || S[i].magic!=20260640 ||
+      (!GoldLabModeEnabled(5) && !GoldLabModeEnabled(6) && !GoldLabModeEnabled(24))) return;
+   double atr=GetBuf(S[i].hATR,0);
+   if(atr==EMPTY_VALUE || atr<=0.0) return;
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k);
+      if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol || PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      bool buy=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY;
+      double op=PositionGetDouble(POSITION_PRICE_OPEN),sl=PositionGetDouble(POSITION_SL);
+      double tp=PositionGetDouble(POSITION_TP),px=buy ? SymbolInfoDouble(S[i].symbol,SYMBOL_BID)
+                                                     : SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
+      if(GoldLabModeEnabled(24) && GoldLabPBHoldBars>0 &&
+         TimeCurrent()-(datetime)PositionGetInteger(POSITION_TIME)>=GoldLabPBHoldBars*PeriodSeconds(S[i].tf))
+      { trade.PositionClose(tk); continue; }
+      double nsl=sl;
+      if(GoldLabModeEnabled(5) && GoldLabPBBETriggerATR>0.0 &&
+         (buy ? px-op : op-px)>=GoldLabPBBETriggerATR*atr) nsl=op;
+      if(GoldLabModeEnabled(6) && GoldLabPBTrailATR>0.0)
+         nsl=buy ? px-GoldLabPBTrailATR*atr : px+GoldLabPBTrailATR*atr;
+      bool improve=buy ? nsl>sl : (sl==0.0 || nsl<sl);
+      if(improve && (buy ? nsl<px : nsl>px)) trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),tp);
+   }
+}
+
+void R6GoldManageExit(const int i)
+{
+   if(R6GoldMode!=2 || S[i].symbol!="GOLD" || R6GoldAdverseATR<=0.0) return;
+   double atr=GetBuf(S[i].hATR,0);
+   if(atr==EMPTY_VALUE || atr<=0.0) return;
+   double close1=iClose(S[i].symbol,S[i].tf,1);
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k);
+      if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+         PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      bool buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double op=PositionGetDouble(POSITION_PRICE_OPEN);
+      double adverse=(buy ? op-close1 : close1-op)/atr;
+      if(adverse>=R6GoldAdverseATR)
+      {
+         OpsWrite("R6_EXIT",S[i].magic,S[i].symbol,adverse,R6GoldAdverseATR,op,close1,
+                  PositionGetDouble(POSITION_VOLUME),0,"gold-adverse");
+         trade.PositionClose(tk);
+      }
+   }
+}
+
+//============================ PullbackTrend ============================
+// B10構造TP: 直近スイング高安とRR由来TPの「近い方」の距離を返す。
+// 構造が無い/近すぎる場合は従来RR距離のまま（＝エントリーは削らない）。
+// 単体EA PullbackTrend.mq5 の StructureTP() と同一ロジック。
+double StructTPDist(int i,const bool is_buy,const double entry,const double sl_dist,const double rr_tp)
+{
+   if(!S[i].useStructTP) return rr_tp;
+   double h[],l[];
+   ArraySetAsSeries(h,true); ArraySetAsSeries(l,true);
+   if(CopyHigh(S[i].symbol,S[i].tf,1,S[i].structLB,h)<S[i].structLB) return rr_tp;
+   if(CopyLow (S[i].symbol,S[i].tf,1,S[i].structLB,l)<S[i].structLB) return rr_tp;
+   double lvl  = is_buy ? h[ArrayMaximum(h,0,S[i].structLB)]
+                        : l[ArrayMinimum(l,0,S[i].structLB)];
+   double dist = is_buy ? (lvl-entry) : (entry-lvl);
+   if(dist<=0.0 || dist < S[i].structMinRR*sl_dist) return rr_tp;
+   return MathMin(dist,rr_tp);
+}
+
+void ProcPullback(int i)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   int need = S[i].useTrend ? (S[i].slopeLB+2) : 1;
+   double tb[],fb[],sb[],ab[];
+   ArraySetAsSeries(tb,true);ArraySetAsSeries(fb,true);ArraySetAsSeries(sb,true);ArraySetAsSeries(ab,true);
+   if(CopyBuffer(S[i].hTrend,0,1,need,tb)<need) return;
+   if(CopyBuffer(S[i].hFast,0,1,1,fb)<1) return;
+   if(CopyBuffer(S[i].hSlow,0,1,1,sb)<1) return;
+   if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
+   double trendma=tb[0],fastema=fb[0],slowema=sb[0],atr=ab[0];
+
+   bool env_up=true, env_down=true;
+   if(S[i].useTrend){
+      double slope=trendma-tb[S[i].slopeLB]; double th=S[i].slopeMinATR*atr;
+      env_up=(slope>=th); env_down=(slope<=-th);
+   }
+   double cp=iClose(sym,tf,1), op=iOpen(sym,tf,1);
+   double h2=iHigh(sym,tf,2), l2=iLow(sym,tf,2);
+   double lp=iLow(sym,tf,1), hp=iHigh(sym,tf,1);
+
+   bool up=(cp>trendma)&&(fastema>slowema);
+   bool dn=(cp<trendma)&&(fastema<slowema);
+   if(!up) S[i].armedBuy=false;
+   if(!dn) S[i].armedSell=false;
+   bool qb=(lp>=slowema), qs=(hp<=slowema);
+   if(up && lp<=fastema && qb) S[i].armedBuy=true;
+   if(dn && hp>=fastema && qs) S[i].armedSell=true;
+
+   bool bull=(cp>op), bear=(cp<op);
+   bool mb=(cp>h2), ms=(cp<l2);
+   bool adx_ok=true;
+   if(S[i].useADX){ double a=GetBuf(S[i].hADX,0); if(a==EMPTY_VALUE) return; adx_ok=(a>=S[i].adxThr); }
+
+   // マルチタイムフレーム合流: 上位足のトレンド方向がH4の方向と一致する場合のみ許可
+   bool higher_ok_buy=true, higher_ok_sell=true;
+   if(S[i].useHigherTF){
+      double hb2=GetBuf(S[i].hHigherTrend,0); if(hb2==EMPTY_VALUE) return;
+      double higher_close=iClose(sym,S[i].higherTF,1);
+      higher_ok_buy  = (higher_close > hb2);
+      higher_ok_sell = (higher_close < hb2);
+   }
+
+   bool r6entry=R6GoldEntryOK(i) && GoldDDEntryOK(i) && GoldHourEntryOK(i);
+   bool eb=S[i].armedBuy&&up&&(cp>fastema)&&bull&&mb&&adx_ok&&env_up&&higher_ok_buy&&r6entry&&
+           GoldLabPBSignalOK(i,true,cp,op,hp,lp,fastema,trendma,atr)&&
+           GoldLabEntryOK(i,POSITION_TYPE_BUY);
+   bool es=S[i].armedSell&&dn&&(cp<fastema)&&bear&&ms&&adx_ok&&env_down&&higher_ok_sell&&r6entry&&
+           GoldLabPBSignalOK(i,false,cp,op,hp,lp,fastema,trendma,atr)&&
+           GoldLabEntryOK(i,POSITION_TYPE_SELL);
+   bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
+
+   double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
+   double tpd = S[i].useATRstops ? sld*S[i].rr        : S[i].tpPips*S[i].pip;
+   trade.SetExpertMagicNumber(S[i].magic);
+   if(eb && !hb){
+      if(hs) CloseType(i,POSITION_TYPE_SELL);
+      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double tpb=StructTPDist(i,true,ask,sld,tpd);   // B10
+      double lot=LotRisk(i,sld);
+      if(lot>0.0) trade.Buy(lot,sym,ask,
+                            NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpb,S[i].digits),"PB");
+      S[i].armedBuy=false;
+   }
+   if(es && !hs){
+      if(hb) CloseType(i,POSITION_TYPE_BUY);
+      double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+      double tps=StructTPDist(i,false,bid,sld,tpd);  // B10
+      double lot=LotRisk(i,sld);
+      if(lot>0.0) trade.Sell(lot,sym,bid,
+                             NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tps,S[i].digits),"PB");
+      S[i].armedSell=false;
+   }
+}
+
+//============================ RSI_Reversal ============================
+bool SwingHi(const double &a[],int idx,int lb,int sz){ if(idx<lb||idx+lb>=sz) return false;
+   double v=a[idx]; for(int k=1;k<=lb;k++) if(a[idx-k]>=v||a[idx+k]>=v) return false; return true; }
+bool SwingLo(const double &a[],int idx,int lb,int sz){ if(idx<lb||idx+lb>=sz) return false;
+   double v=a[idx]; for(int k=1;k<=lb;k++) if(a[idx-k]<=v||a[idx+k]<=v) return false; return true; }
+bool DblBottom(const double &hi[],const double &lo[],int pb,int lb,double atr,double tol,double &neck){
+   int sz=ArraySize(lo); int l1=-1;
+   for(int i=lb;i<pb-lb;i++) if(SwingLo(lo,i,lb,sz)){l1=i;break;} if(l1<0) return false;
+   int l2=-1; for(int i=l1+lb+1;i<pb;i++) if(SwingLo(lo,i,lb,sz)){l2=i;break;} if(l2<0) return false;
+   if(MathAbs(lo[l1]-lo[l2])>atr*tol) return false;
+   double nk=0; for(int i=l1+1;i<l2;i++) if(SwingHi(hi,i,lb,sz)&&hi[i]>nk) nk=hi[i];
+   if(nk<=0) return false; neck=nk; return true; }
+bool DblTop(const double &hi[],const double &lo[],int pb,int lb,double atr,double tol,double &neck){
+   int sz=ArraySize(hi); int h1=-1;
+   for(int i=lb;i<pb-lb;i++) if(SwingHi(hi,i,lb,sz)){h1=i;break;} if(h1<0) return false;
+   int h2=-1; for(int i=h1+lb+1;i<pb;i++) if(SwingHi(hi,i,lb,sz)){h2=i;break;} if(h2<0) return false;
+   if(MathAbs(hi[h1]-hi[h2])>atr*tol) return false;
+   double nk=DBL_MAX; for(int i=h1+1;i<h2;i++) if(SwingLo(lo,i,lb,sz)&&lo[i]<nk) nk=lo[i];
+   if(nk==DBL_MAX) return false; neck=nk; return true; }
+
+void ProcRSI(int i)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   int maneed=S[i].useRange?(S[i].rangeLB+2):1;
+   double rb[],mb[],bu[],bl[],ab[];
+   ArraySetAsSeries(rb,true);ArraySetAsSeries(mb,true);ArraySetAsSeries(bu,true);ArraySetAsSeries(bl,true);ArraySetAsSeries(ab,true);
+   if(CopyBuffer(S[i].hRSI,0,1,1,rb)<1) return;
+   if(CopyBuffer(S[i].hTrend,0,1,maneed,mb)<maneed) return;
+   if(CopyBuffer(S[i].hBB,1,1,1,bu)<1) return;
+   if(CopyBuffer(S[i].hBB,2,1,1,bl)<1) return;
+   if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
+   double rsi=rb[0],ma=mb[0],atr=ab[0],cp=iClose(sym,tf,1);
+
+   bool range_ok=true;
+   if(S[i].useRange){ double sl=MathAbs(ma-mb[S[i].rangeLB]); range_ok=(sl<=S[i].rangeMaxATR*atr); }
+
+   int bs=S[i].dpBars+S[i].swingLB+5;
+   double hib[],lob[]; ArraySetAsSeries(hib,true); ArraySetAsSeries(lob,true);
+   if(CopyHigh(sym,tf,1,bs,hib)<bs) return;
+   if(CopyLow(sym,tf,1,bs,lob)<bs) return;
+
+   bool up=(cp>ma), dn=(cp<ma);
+
+   // --- RSIシグナル記憶ラボ（既定OFF）---
+   // フラグが立った時刻を控える。立っていないところから立った瞬間だけ更新するので、
+   // 逸脱が続いている間は最初の時刻のまま＝「いつからの記憶か」を保つ。
+   bool memOn = RsiMemLabOn(i);
+   datetime bt = iTime(sym,tf,1);
+   if(memOn)
+   {
+      if(rsi>=S[i].rsiOBX && !S[i].wasOB) S[i].obAt=bt;
+      if(rsi<=S[i].rsiOSX && !S[i].wasOS) S[i].osAt=bt;
+      if(cp>=bu[0] && !S[i].aboveBB)      S[i].bbUpAt=bt;
+      if(cp<=bl[0] && !S[i].belowBB)      S[i].bbLoAt=bt;
+   }
+
+   if(rsi>=S[i].rsiOBX) S[i].wasOB=true;
+   if(rsi<=S[i].rsiOSX) S[i].wasOS=true;
+   if(cp>=bu[0]) S[i].aboveBB=true;
+   if(cp<=bl[0]) S[i].belowBB=true;
+
+   if(memOn)
+   {
+      long bar = (long)PeriodSeconds(tf);
+      // 寿命切れ。古い逸脱を今の平均回帰機会として使わない。
+      if(RsiRSIFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].wasOB && S[i].obAt>0 && bt-S[i].obAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOB=false;
+         if(S[i].wasOS && S[i].osAt>0 && bt-S[i].osAt >= (long)RsiRSIFlagMaxBars*bar) S[i].wasOS=false;
+      }
+      if(RsiBBFlagMaxBars>0 && bar>0)
+      {
+         if(S[i].aboveBB && S[i].bbUpAt>0 && bt-S[i].bbUpAt >= (long)RsiBBFlagMaxBars*bar) S[i].aboveBB=false;
+         if(S[i].belowBB && S[i].bbLoAt>0 && bt-S[i].bbLoAt >= (long)RsiBBFlagMaxBars*bar) S[i].belowBB=false;
+      }
+      // MAの反対側に移ったら、レンジ内で立った記憶をトレンド移行後まで持ち越さない。
+      if(RsiResetOnMAFlip)
+      {
+         int side = up ? 1 : (dn ? -1 : S[i].maSide);
+         if(S[i].maSide!=0 && side!=0 && side!=S[i].maSide)
+         {
+            S[i].wasOB=false; S[i].wasOS=false;
+            S[i].aboveBB=false; S[i].belowBB=false;
+         }
+         if(side!=0) S[i].maSide=side;
+      }
+   }
+
+   bool rbuy=S[i].wasOS&&(rsi>=S[i].rsiOS);
+   bool rsell=S[i].wasOB&&(rsi<=S[i].rsiOB);
+   bool bbuy=S[i].belowBB&&(cp>bl[0]);
+   bool bsell=S[i].aboveBB&&(cp<bu[0]);
+   bool dpb=false,dps=false; double nb=0,nsk=0;
+   if(S[i].useDP){
+      if(DblBottom(hib,lob,S[i].dpBars,S[i].swingLB,atr,S[i].dpTolATR,nb)) dpb=(cp>=nb);
+      if(DblTop(hib,lob,S[i].dpBars,S[i].swingLB,atr,S[i].dpTolATR,nsk)) dps=(cp<=nsk);
+   }
+   bool eb=range_ok&&up&&(rbuy||bbuy||dpb);
+   bool es=range_ok&&dn&&(rsell||bsell||dps);
+   bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
+
+   double sld=S[i].useATRstops?atr*S[i].atrSLmult:S[i].slPips*S[i].pip;
+   double tpd=S[i].useATRstops?sld*S[i].rr:S[i].tpPips*S[i].pip;
+   trade.SetExpertMagicNumber(S[i].magic);
+   if(eb && !hb){
+      if(hs) CloseType(i,POSITION_TYPE_SELL);
+      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double lot=LotRisk(i,sld);
+      if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
+      if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
+   }
+   if(es && !hs){
+      if(hb) CloseType(i,POSITION_TYPE_BUY);
+      double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+      double lot=LotRisk(i,sld);
+      if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
+      if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
+   }
+   // 保有中に完成したシグナルを消費する（既定OFF）。現行は注文分岐に入らないと
+   // 消えないため、同方向で保有している間に完成した反転を、決済後に新しい機会として
+   // 再利用してしまう。
+   if(memOn && RsiConsumeWhileHeld)
+   {
+      if(eb && hb){ if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false; }
+      if(es && hs){ if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false; }
+   }
+}
+
+// RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
+// 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+bool RsiMemLabOn(const int i)
+{
+   if(RsiBBFlagMaxBars<=0 && RsiRSIFlagMaxBars<=0
+      && !RsiResetOnMAFlip && !RsiConsumeWhileHeld) return false;
+   if(RsiMemSleeveMask==0) return true;
+   if(S[i].magic==20260610) return (RsiMemSleeveMask&1)!=0;   // RSI USDJPY
+   if(S[i].magic==20260605) return (RsiMemSleeveMask&2)!=0;   // RSI EURUSD
+   if(S[i].magic==20260774) return (RsiMemSleeveMask&4)!=0;   // RSI GBPUSD
+   return false;
+}
+
+//============================ PairTrade ============================
+void ProcPair(int i)
+{
+   string sym=S[i].symbol, sec=S[i].second; ENUM_TIMEFRAMES tf=S[i].tf; int LB=S[i].lookback;
+   double mc[],sc[]; ArraySetAsSeries(mc,true); ArraySetAsSeries(sc,true);
+   if(CopyClose(sym,tf,1,LB,mc)<LB) return;
+   if(CopyClose(sec,tf,1,LB,sc)<LB) return;
+   double sp0=mc[0]-sc[0], mean=0;
+   for(int k=0;k<LB;k++) mean+=(mc[k]-sc[k]); mean/=LB;
+   double var=0; for(int k=0;k<LB;k++){ double s=mc[k]-sc[k]; var+=(s-mean)*(s-mean);} var/=LB;
+   double sd=MathSqrt(var); if(sd<=0) return;
+   double z=(sp0-mean)/sd;
+   bool ml=HasPos(i,POSITION_TYPE_BUY), msh=HasPos(i,POSITION_TYPE_SELL);
+   int st=ml?1:(msh?-1:0);
+   trade.SetExpertMagicNumber(S[i].magic);
+   double lot=LotComplex(i,sym);
+   if(st==0){
+      if(z>=S[i].entryZ){ // 主売り・従買い
+         trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,"PairMain");
+         trade.Buy(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
+      } else if(z<=-S[i].entryZ){ // 主買い・従売り
+         trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"PairMain");
+         trade.Sell(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
+      }
+   } else if(st==1){
+      if(z>=-S[i].exitZ || z<=-S[i].stopZ) CloseSleeveAll(i);
+   } else if(st==-1){
+      if(z<=S[i].exitZ || z>=S[i].stopZ) CloseSleeveAll(i);
+   }
+}
+
+//============================ Carry / 暗号トレンド ============================
+void ProcCarry(int i)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   double mb[]; ArraySetAsSeries(mb,true);
+   if(CopyBuffer(S[i].hTrend,0,1,1,mb)<1) return;
+   double ma=mb[0], cp=iClose(sym,tf,1);
+   bool swap_ok = !S[i].reqPosSwap || (SymbolInfoDouble(sym,SYMBOL_SWAP_LONG)>0.0);
+   bool has=HasAny(i);
+   // ヒステリシス帯: entry=MA+b×ATR / exit=MA−b×ATR（AUDJPYのみ採用、ETHはOFF）
+   double entry_th=ma, exit_th=ma;
+   if(S[i].useHyst){
+      double ab[]; ArraySetAsSeries(ab,true);
+      if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
+      entry_th=ma+S[i].hystMult*ab[0]; exit_th=ma-S[i].hystMult*ab[0];
+   }
+   // v1.2 A2デュアルMA: entry=TrendMA上かつExitMA上 / exit=ExitMA割れ（ETH枠で採用・ヒステリシスと排他）
+   if(S[i].exitPeriod>0){
+      double eb[]; ArraySetAsSeries(eb,true);
+      if(CopyBuffer(S[i].hExit,0,1,1,eb)<1) return;
+      entry_th=MathMax(ma,eb[0]); exit_th=eb[0];
+   }
+   // v1.2 クールダウン（S9）: 退出後cdBarsは再entry禁止
+   bool cd_ok=true;
+   if(S[i].cdBars>0 && S[i].cdExitBar>0)
+      cd_ok=(iBarShift(sym,tf,S[i].cdExitBar,false)>=S[i].cdBars);
+   trade.SetExpertMagicNumber(S[i].magic);
+   if(cp>entry_th && swap_ok && !has && cd_ok && CryptoGuardOK(i)){
+      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
+      trade.Buy(LotComplex(i,sym),sym,ask,sl,0,"Carry");
+   } else if(cp<exit_th && has){
+      CloseSleeveAll(i);
+      S[i].cdExitBar=iTime(sym,tf,0);
+   }
+}
+
+//============================ BTC funding逆張り（FundingRev v1.2移植） ============================
+long     f_time[];  double f_rate[];  int f_n=0;
+long     g_fday[];  double g_fdayavg[]; int g_fdn=0;
+datetime g_fundEvalBar=0, g_fundFetchAt=0;
+
+int FundLoadCsvInto(const string fname, long &t[], double &r[])
+{
+   int fh=FileOpen(fname, FILE_READ|FILE_CSV|FILE_ANSI|FILE_COMMON, ',');
+   if(fh==INVALID_HANDLE) return 0;
+   int n=0; ArrayResize(t,8000); ArrayResize(r,8000);
+   FileReadString(fh); FileReadString(fh);   // ヘッダ
+   while(!FileIsEnding(fh)){
+      string ts=FileReadString(fh), rs=FileReadString(fh);
+      if(ts=="") break;
+      if(n>=ArraySize(t)){ ArrayResize(t,n+4000); ArrayResize(r,n+4000); }
+      t[n]=StringToInteger(ts); r[n]=StringToDouble(rs); n++;
+   }
+   FileClose(fh);
+   return n;
+}
+
+void FundRebuildDaily()
+{
+   ArrayResize(g_fday,f_n); ArrayResize(g_fdayavg,f_n);
+   g_fdn=0; long cur=-1; double sum=0; int cnt=0;
+   for(int i=0;i<f_n;i++){
+      long dy=f_time[i]/86400;
+      if(dy!=cur){ if(cnt>0){ g_fday[g_fdn]=cur; g_fdayavg[g_fdn]=sum/cnt*100.0; g_fdn++; } cur=dy; sum=0; cnt=0; }
+      sum+=f_rate[i]; cnt++;
+   }
+   if(cnt>0){ g_fday[g_fdn]=cur; g_fdayavg[g_fdn]=sum/cnt*100.0; g_fdn++; }
+}
+
+// merge=false: 全置換。merge=true: 既存の末尾より新しい分だけ追記（同時刻は上書き）。
+// t[] の並びは昇順・降順どちらでも可（BfxCommitはsort=-1前提だがBinanceは昇順で返るため）。
+void FundCommit(long &t[], double &r[], const int n, const bool merge)
+{
+   if(!merge || f_n==0){
+      ArrayResize(f_time,n); ArrayResize(f_rate,n);
+      if(n>1 && t[0]>t[n-1]) for(int i=0;i<n;i++){ f_time[i]=t[n-1-i]; f_rate[i]=r[n-1-i]; }
+      else                   for(int i=0;i<n;i++){ f_time[i]=t[i];     f_rate[i]=r[i]; }
+      f_n=n;
+   } else {
+      bool desc=(n>1 && t[0]>t[n-1]);
+      ArrayResize(f_time,f_n,n); ArrayResize(f_rate,f_n,n);
+      for(int k=0;k<n;k++){
+         int i=(desc ? n-1-k : k);          // 常に昇順で走査
+         long ts=t[i];
+         if(f_n>0 && ts==f_time[f_n-1]){ f_rate[f_n-1]=r[i]; continue; }
+         if(f_n==0 || ts>f_time[f_n-1]){
+            ArrayResize(f_time,f_n+1,n); ArrayResize(f_rate,f_n+1,n);
+            f_time[f_n]=ts; f_rate[f_n]=r[i]; f_n++;
+         }
+      }
+   }
+   FundRebuildDaily();
+}
+
+int FundParse(const string body, long &t[], double &r[])
+{
+   int n=0; ArrayResize(t,1100); ArrayResize(r,1100);
+   int pos=0;
+   while(true){
+      int it=StringFind(body,"\"fundingTime\":",pos); if(it<0) break; it+=14;
+      int ir=StringFind(body,"\"fundingRate\":\"",it); if(ir<0) break; ir+=15;
+      int ire=StringFind(body,"\"",ir); if(ire<0) break;
+      long tms=StringToInteger(StringSubstr(body,it,20));
+      double rate=StringToDouble(StringSubstr(body,ir,ire-ir));
+      if(tms>0){
+         if(n>=ArraySize(t)){ ArrayResize(t,n+500); ArrayResize(r,n+500); }
+         t[n]=tms/1000; r[n]=rate; n++;
+      }
+      pos=ire;
+   }
+   return n;
+}
+
+bool FundFetch()
+{
+   char req[],res[]; string rh;
+   ResetLastError();
+   int code=WebRequest("GET","https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000","",5000,req,res,rh);
+   if(code!=200){
+      int err=GetLastError();
+      Print("funding API失敗 http=",code," err=",err,
+            err==4014?" →オプション→EA→WebRequest許可URLに https://fapi.binance.com を追加":"");
+      return false;
+   }
+   string body=CharArrayToString(res,0,WHOLE_ARRAY,CP_UTF8);
+   long tt[]; double tr[];
+   int n=FundParse(body,tt,tr);
+   if(n<3){ Print("funding APIパース失敗 n=",n); return false; }
+   FundCommit(tt,tr,n,true);
+   Print("funding API取得: ",n,"件マージ（総",f_n,"件）");
+   return true;
+}
+
+bool FundingInit()
+{
+   long tt[]; double tr[];
+   if(MQLInfoInteger(MQL_TESTER) || !FundUseWebRequest){
+      int n=FundLoadCsvInto(FundingFile,tt,tr);
+      if(n<100 && MQLInfoInteger(MQL_TESTER)){ Print("funding CSV不足: ",n,"件"); return false; }
+      if(n>0) FundCommit(tt,tr,n,false);
+   } else {
+      int n=FundLoadCsvInto(FundingFile,tt,tr);   // 先にCSVで土台を作る（BfxInitと同じ順序）
+      if(n>0) FundCommit(tt,tr,n,false);
+      g_fundFetchAt=TimeCurrent();
+      if(!FundFetch())
+         Print("起動時API失敗→CSV代替 ",f_n,"件（以後リトライ）");
+   }
+   Print("BTC funding枠: ",f_n,"件ロード | 閾値",DoubleToString(FundThreshold,4),
+         "%/8h | 退出=med90(上限",FundMaxHold,"日)");
+   return true;   // ライブは0件でも枠は維持（決済独立・fetch再試行）
+}
+
+double FundAvg(datetime t0, datetime t1)
+{
+   double sum=0; int cnt=0;
+   for(int i=0;i<f_n;i++){
+      if(f_time[i]>=(long)t0 && f_time[i]<(long)t1){ sum+=f_rate[i]*100.0; cnt++; }
+      else if(f_time[i]>=(long)t1) break;
+   }
+   return (cnt>0 ? sum/cnt : EMPTY_VALUE);
+}
+
+double FundMed90(datetime bt)
+{
+   long d1=(long)bt/86400, d0=d1-91;
+   double win[]; ArrayResize(win,100); int m=0;
+   for(int i=0;i<g_fdn;i++){
+      if(g_fday[i]>=d0 && g_fday[i]<d1) win[m++]=g_fdayavg[i];
+      else if(g_fday[i]>=d1) break;
+   }
+   if(m<30) return EMPTY_VALUE;
+   ArrayResize(win,m); ArraySort(win);
+   return (m%2==1 ? win[m/2] : (win[m/2-1]+win[m/2])/2);
+}
+
+bool FundEnsure(datetime bt)
+{
+   if(MQLInfoInteger(MQL_TESTER)) return (f_n>0);
+   long newest=(f_n>0 ? f_time[f_n-1] : 0);
+   if(newest>=(long)bt-12*3600) return true;
+   if(!FundUseWebRequest){
+      long tt[]; double tr[];
+      int n=FundLoadCsvInto(FundingFile,tt,tr);
+      if(n>0) FundCommit(tt,tr,n,false);
+      return (f_n>0 && f_time[f_n-1]>=(long)bt-12*3600);
+   }
+   if(TimeCurrent()-g_fundFetchAt<3600) return false;   // 1時間リトライ間隔
+   g_fundFetchAt=TimeCurrent();
+   if(FundFetch()) return true;
+   return (f_n>0 && f_time[f_n-1]>=(long)bt-12*3600);
+}
+
+int FundBarsHeld(int i)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==S[i].magic){
+         datetime opened=(datetime)PositionGetInteger(POSITION_TIME);
+         return iBarShift(S[i].symbol,PERIOD_D1,opened,false);
+      }
+   }
+   return 0;
+}
+
+void ProcFunding(int i)
+{
+   datetime bt=iTime(S[i].symbol,PERIOD_D1,0);
+   if(bt==0) return;
+   trade.SetExpertMagicNumber(S[i].magic);
+
+   // 決済（データ依存はmed90のみ・上限FundMaxHoldは無条件で必ず執行）
+   if(HasAny(i)){
+      int held=FundBarsHeld(i);
+      bool timeup=(held>=FundMaxHold);
+      bool normalized=false;
+      if(held>=1){
+         double avg=FundAvg(bt-86400,bt);
+         if(avg!=EMPTY_VALUE){
+            double med=FundMed90(bt);
+            normalized=(med!=EMPTY_VALUE && avg>med);
+         }
+      }
+      if((timeup||normalized) && bt!=g_fundEvalBar){   // 新バーで判定（標準形と同一）
+         CloseSleeveAll(i);
+      }
+      g_fundEvalBar=bt;
+      return;
+   }
+   if(g_fundEvalBar==bt) return;   // 本日評価済み
+   if(!FundEnsure(bt)) return;     // データ未達→tickで再試行（1時間間隔）
+   double avg=FundAvg(bt-86400,bt);
+   g_fundEvalBar=bt;
+   if(avg==EMPTY_VALUE) return;
+   if(avg<FundThreshold && CryptoGuardOK(i)){
+      double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
+      double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
+      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult*DlMult()),S[i].symbol,ask,sl,0,"FundRev"))
+         Print("[FUNDREV BUY] avg=",DoubleToString(avg,4),"%/8h");
+   }
+}
+
+//============================ BfxRevデレバレッジ・リバウンド（BfxRev v1.0移植） ============================
+long     bx_day[];  double bx_val[];  int bx_n=0;
+datetime g_bfxEvalBar=0, g_bfxFetchAt=0;
+
+int BfxLoadCsv(const string fname, long &t[], double &v[])
+{
+   int fh=FileOpen(fname, FILE_READ|FILE_CSV|FILE_ANSI|FILE_COMMON, ',');
+   if(fh==INVALID_HANDLE) return 0;
+   int n=0; ArrayResize(t,5000); ArrayResize(v,5000);
+   FileReadString(fh); FileReadString(fh);
+   while(!FileIsEnding(fh)){
+      string ts=FileReadString(fh), vs=FileReadString(fh);
+      if(ts=="") break;
+      if(n>=ArraySize(t)){ ArrayResize(t,n+2000); ArrayResize(v,n+2000); }
+      t[n]=StringToInteger(ts)/86400; v[n]=StringToDouble(vs); n++;
+   }
+   FileClose(fh);
+   return n;
+}
+
+void BfxCommit(long &t[], double &v[], const int n, const bool merge)
+{
+   if(!merge || bx_n==0){
+      ArrayResize(bx_day,n); ArrayResize(bx_val,n);
+      if(n>1 && t[0]>t[n-1]) for(int i=0;i<n;i++){ bx_day[i]=t[n-1-i]; bx_val[i]=v[n-1-i]; }
+      else                   for(int i=0;i<n;i++){ bx_day[i]=t[i];     bx_val[i]=v[i]; }
+      bx_n=n;
+      return;
+   }
+   for(int i=n-1;i>=0;i--){
+      long dy=t[i];
+      if(bx_n>0 && dy==bx_day[bx_n-1]){ bx_val[bx_n-1]=v[i]; continue; }
+      if(bx_n==0 || dy>bx_day[bx_n-1]){
+         ArrayResize(bx_day,bx_n+1); ArrayResize(bx_val,bx_n+1);
+         bx_day[bx_n]=dy; bx_val[bx_n]=v[i]; bx_n++;
+      }
+   }
+}
+
+int BfxParse(const string body, long &t[], double &v[])
+{
+   int n=0; ArrayResize(t,5000); ArrayResize(v,5000);
+   int pos=0; long lastday=-1;
+   while(true){
+      int i0=StringFind(body,"[",pos); if(i0<0) break;
+      int ic=StringFind(body,",",i0);
+      int i1=StringFind(body,"]",i0);
+      if(ic<0 || i1<0 || ic>i1){ pos=i0+1; continue; }
+      long tms=StringToInteger(StringSubstr(body,i0+1,ic-i0-1));
+      double val=StringToDouble(StringSubstr(body,ic+1,i1-ic-1));
+      if(tms>1000000000000){
+         long dy=tms/86400000;
+         if(dy!=lastday){
+            if(n>=ArraySize(t)){ ArrayResize(t,n+2000); ArrayResize(v,n+2000); }
+            t[n]=dy; v[n]=val; n++; lastday=dy;
+         }
+      }
+      pos=i1+1;
+   }
+   return n;
+}
+
+bool BfxFetch()
+{
+   char req[],res[]; string rh;
+   ResetLastError();
+   int code=WebRequest("GET","https://api-pub.bitfinex.com/v2/stats1/pos.size:1m:tBTCUSD:long/hist?limit=10000&sort=-1","",5000,req,res,rh);
+   if(code!=200){
+      int err=GetLastError();
+      Print("Bitfinex API失敗 http=",code," err=",err,
+            err==4014?" →WebRequest許可URLに https://api-pub.bitfinex.com を追加":"");
+      return false;
+   }
+   string body=CharArrayToString(res,0,WHOLE_ARRAY,CP_UTF8);
+   long tt[]; double tv[];
+   int n=BfxParse(body,tt,tv);
+   if(n<3){ Print("Bitfinexパース失敗 n=",n); return false; }
+   BfxCommit(tt,tv,n,true);
+   Print("Bitfinex API取得: ",n,"日分マージ（総",bx_n,"日）");
+   return true;
+}
+
+bool BfxInit()
+{
+   long tt[]; double tv[];
+   if(MQLInfoInteger(MQL_TESTER) || !BfxUseWebRequest){
+      int n=BfxLoadCsv(BfxFile,tt,tv);
+      if(n<100 && MQLInfoInteger(MQL_TESTER)){ Print("bfx CSV不足: ",n,"件"); return false; }
+      if(n>0) BfxCommit(tt,tv,n,false);
+   } else {
+      int n=BfxLoadCsv(BfxFile,tt,tv);
+      if(n>0) BfxCommit(tt,tv,n,false);
+      g_bfxFetchAt=TimeCurrent();
+      if(!BfxFetch())
+         Print("起動時Bitfinex API失敗→CSV代替 ",bx_n,"日（以後リトライ）");
+   }
+   Print("BfxRev枠: ",bx_n,"日ロード | 急減-",DoubleToString(BfxDropPct,0),"%/",BfxLookbackDays,"日 | 保有",BfxHoldDays,"日");
+   return true;   // ライブは0件でも枠維持（決済独立・fetch再試行）
+}
+
+double BfxValAt(long day)
+{
+   for(int i=bx_n-1;i>=0;i--){
+      if(bx_day[i]<=day){
+         if(day-bx_day[i]<=3) return bx_val[i];
+         return -1;
+      }
+   }
+   return -1;
+}
+
+bool BfxEnsure(datetime bt)
+{
+   if(MQLInfoInteger(MQL_TESTER)) return (bx_n>0);
+   long yday=(long)bt/86400-1;
+   if(bx_n>0 && bx_day[bx_n-1]>=yday) return true;
+   if(!BfxUseWebRequest){
+      long tt[]; double tv[];
+      int n=BfxLoadCsv(BfxFile,tt,tv);
+      if(n>0) BfxCommit(tt,tv,n,false);
+      return (bx_n>0 && bx_day[bx_n-1]>=yday);
+   }
+   if(TimeCurrent()-g_bfxFetchAt<3600) return false;
+   g_bfxFetchAt=TimeCurrent();
+   if(BfxFetch()) return (bx_day[bx_n-1]>=yday);
+   return (bx_n>0 && bx_day[bx_n-1]>=yday);
+}
+
+int BfxBarsHeld(int i)
+{
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      if(PositionGetSymbol(k)==S[i].symbol && PositionGetInteger(POSITION_MAGIC)==S[i].magic){
+         datetime opened=(datetime)PositionGetInteger(POSITION_TIME);
+         return iBarShift(S[i].symbol,PERIOD_D1,opened,false);
+      }
+   }
+   return 0;
+}
+
+void ProcBfx(int i)
+{
+   datetime bt=iTime(S[i].symbol,PERIOD_D1,0);
+   if(bt==0) return;
+   trade.SetExpertMagicNumber(S[i].magic);
+
+   // 決済はデータ非依存（保有日数のみ）
+   if(HasAny(i)){
+      if(BfxBarsHeld(i)>=BfxHoldDays) CloseSleeveAll(i);
+      g_bfxEvalBar=bt;
+      return;
+   }
+   if(g_bfxEvalBar==bt) return;
+   if(!BfxEnsure(bt)) return;
+   long yday=(long)bt/86400-1;
+   double v1=BfxValAt(yday), v0=BfxValAt(yday-BfxLookbackDays);
+   g_bfxEvalBar=bt;
+   if(v1<=0 || v0<=0) return;
+   double chg=(v1/v0-1)*100;
+   if(chg<-BfxDropPct && CryptoGuardOK(i)){
+      double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
+      double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
+      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult*DlMult()),S[i].symbol,ask,sl,0,"BfxRev"))
+         Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/",BfxLookbackDays,"日");
+   }
+}
+
+//============================ VolBreakout ============================
+void ProcVBO(int i)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   int need=S[i].sqLB+2;
+   double ab[]; ArraySetAsSeries(ab,true);
+   if(CopyBuffer(S[i].hATR,0,1,need,ab)<need) return;
+   double atr1=ab[0]; if(atr1<=0) return;
+   double avg=0; for(int k=0;k<S[i].sqLB;k++) avg+=ab[k]; avg/=S[i].sqLB;
+   bool sq = !S[i].useSqueeze || (atr1<S[i].sqFactor*avg);
+   double cp=iClose(sym,tf,1);
+   trade.SetExpertMagicNumber(S[i].magic);
+   if(!HasAny(i)){
+      double hh=-DBL_MAX, ll=DBL_MAX;
+      for(int sft=2; sft<=S[i].channel+1; sft++){
+         double h=iHigh(sym,tf,sft), l=iLow(sym,tf,sft);
+         if(h>hh) hh=h; if(l<ll) ll=l;
+      }
+      if(sq && cp>hh){
+         double ask=SymbolInfoDouble(sym,SYMBOL_ASK); double sl=ask-S[i].atrSLmult*atr1;
+         trade.Buy(LotRisk(i,ask-sl),sym,ask,NormalizeDouble(sl,S[i].digits),0,"VBO-L");
+      } else if(sq && cp<ll){
+         double bid=SymbolInfoDouble(sym,SYMBOL_BID); double sl=bid+S[i].atrSLmult*atr1;
+         trade.Sell(LotRisk(i,sl-bid),sym,bid,NormalizeDouble(sl,S[i].digits),0,"VBO-S");
+      }
+   } else {
+      // チャンデリア・トレーリング
+      for(int k=PositionsTotal()-1;k>=0;k--){
+         ulong tk=PositionGetTicket(k);
+         if(PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+         if(PositionGetString(POSITION_SYMBOL)!=sym) continue;
+         long ty=PositionGetInteger(POSITION_TYPE);
+         double cur=PositionGetDouble(POSITION_SL);
+         if(ty==POSITION_TYPE_BUY){
+            double nsl=cp-S[i].trailMult*atr1;
+            if(nsl>cur && nsl<cp) trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),0);
+         } else if(ty==POSITION_TYPE_SELL){
+            double nsl=cp+S[i].trailMult*atr1;
+            if((cur==0.0||nsl<cur) && nsl>cp) trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),0);
+         }
+      }
+   }
+}
+
+//============================ SCA（セッションORB）============================
+// SCA_EA v1.5の本番採用機能のみ移植: セッション時刻/MinRangeフィルタ/金曜スキップ/
+// リバーサル型増しロット。検証用オプション（Partial/Retest/StopOrders/ML等）は非搭載。
+bool SCARange(int i, datetime day_start)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   datetime t_from=day_start+S[i].scaRangeStart*3600;
+   datetime t_to  =day_start+S[i].scaRangeEnd*3600;
+   double hi=-DBL_MAX, lo=DBL_MAX, openF=0, closeL=0;
+   bool haveL=false;
+   int bars=Bars(sym,tf);
+   for(int sft=1; sft<200; sft++){
+      if(sft>=bars) break;
+      datetime bt2=iTime(sym,tf,sft);
+      if(bt2<t_from) break;
+      if(bt2>=t_to) continue;
+      double h=iHigh(sym,tf,sft), l=iLow(sym,tf,sft);
+      if(h>hi) hi=h;
+      if(l<lo) lo=l;
+      if(!haveL){ closeL=iClose(sym,tf,sft); haveL=true; }
+      openF=iOpen(sym,tf,sft);
+   }
+   if(hi<=-DBL_MAX || lo>=DBL_MAX) return false;
+   S[i].scaRangeHigh=hi;
+   S[i].scaRangeLow=lo;
+   S[i].scaDrift=closeL-openF;   // リバーサル判定用（窓内ドリフト）
+   return true;
+}
+
+void ProcSCA(int i)
+{
+   string sym=S[i].symbol; ENUM_TIMEFRAMES tf=S[i].tf;
+   datetime bt=iTime(sym,tf,0);
+   MqlDateTime dt; TimeToStruct(bt,dt);
+   datetime day_start=bt-(dt.hour*3600+dt.min*60+dt.sec);
+
+   if(day_start!=S[i].scaDay){
+      S[i].scaDay=day_start;
+      S[i].scaReady=false; S[i].scaSkip=false;
+      S[i].scaTradedL=false; S[i].scaTradedS=false;
+   }
+   trade.SetExpertMagicNumber(S[i].magic);
+
+   if(dt.hour>=S[i].scaForceClose){ CloseSleeveAll(i); return; }
+
+   if(!S[i].scaReady && dt.hour>=S[i].scaRangeEnd){
+      if(!SCARange(i, day_start)) return;
+      S[i].scaReady=true;
+      double ab[]; ArraySetAsSeries(ab,true);
+      if(CopyBuffer(S[i].hATR,0,1,1,ab)<1) return;
+      double atrd=ab[0], w=S[i].scaRangeHigh-S[i].scaRangeLow;
+      if(atrd<=0 || w<S[i].scaMinRange*atrd || w>S[i].scaMaxRange*atrd)
+         S[i].scaSkip=true;
+      // レンジ確定の意思決定コンテキストを記録（バックテストとの乖離分析用）
+      OpsWrite("SCA_RANGE", S[i].magic, sym,
+               S[i].scaRangeHigh, S[i].scaRangeLow, w, atrd, S[i].scaDrift,
+               S[i].scaSkip ? 1 : 0, S[i].scaSkip ? "SKIP" : "ACTIVE");
+   }
+   if(!S[i].scaReady || S[i].scaSkip) return;
+   if(!R6GoldEntryOK(i) || !GoldDDEntryOK(i) || !GoldHourEntryOK(i)) return;
+   if(dt.hour<S[i].scaRangeEnd || dt.hour>=S[i].scaTradeEnd) return;
+   if(S[i].scaSkipFriday && dt.day_of_week==5) return;
+
+   double ab2[]; ArraySetAsSeries(ab2,true);
+   if(CopyBuffer(S[i].hATR,0,1,1,ab2)<1) return;
+   double atrd=ab2[0]; if(atrd<=0) return;
+   double buffer=S[i].scaBuf*atrd;
+   double close1=iClose(sym,tf,1);
+   bool hasB=HasPos(i,POSITION_TYPE_BUY), hasS=HasPos(i,POSITION_TYPE_SELL);
+
+   // 上抜けブレイク → 買い
+   if(close1>S[i].scaRangeHigh+buffer && !hasB && !S[i].scaTradedL &&
+      GoldLabSCADirectionOK(i,true,atrd) && GoldLabEntryOK(i,POSITION_TYPE_BUY)){
+      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double sl=S[i].scaRangeLow, dist=ask-sl;
+      if(dist>0){
+         double lot=S[i].lot*GlobalLotMult*DlMult()*S[i].lotMult;
+         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         if(S[i].scaRevBoost && S[i].scaDrift<0 &&
+            (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
+         double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+         if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
+            S[i].scaTradedL=true;
+      }
+   }
+   // 下抜けブレイク → 売り
+   if(close1<S[i].scaRangeLow-buffer && !hasS && !S[i].scaTradedS &&
+      GoldLabSCADirectionOK(i,false,atrd) && GoldLabEntryOK(i,POSITION_TYPE_SELL)){
+      double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+      double sl=S[i].scaRangeHigh, dist=sl-bid;
+      if(dist>0){
+         double lot=S[i].lot*GlobalLotMult*DlMult()*S[i].lotMult;
+         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         if(S[i].scaRevBoost && S[i].scaDrift>0 &&
+            (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
+         double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+         if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
+            S[i].scaTradedS=true;
+      }
+   }
+}
+
+//============================ 出力（検証用）============================
+double OnTester()
+{
+   double pf = TesterStatistics(STAT_PROFIT_FACTOR);
+   if(EquityLogFile != ""){
+      int eqh=FileOpen(EquityLogFile,FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON,',');
+      if(eqh!=INVALID_HANDLE){
+         FileWrite(eqh,"time","profit","magic","entry","position_id","type","volume","price","sl","usdjpy","profit_jpy");
+         HistorySelect(0,TimeCurrent());
+         int n=HistoryDealsTotal();
+         for(int e=0;e<n;e++){ ulong tk=HistoryDealGetTicket(e); if(tk==0) continue;
+            long ty=HistoryDealGetInteger(tk,DEAL_TYPE);
+            if(ty!=DEAL_TYPE_BUY&&ty!=DEAL_TYPE_SELL) continue;
+            double p=HistoryDealGetDouble(tk,DEAL_PROFIT)+HistoryDealGetDouble(tk,DEAL_SWAP)+HistoryDealGetDouble(tk,DEAL_COMMISSION);
+            datetime deal_time=(datetime)HistoryDealGetInteger(tk,DEAL_TIME);
+            double uj=0.0;
+            int uj_shift=iBarShift("USDJPY",PERIOD_D1,deal_time,false);
+            if(uj_shift>=0) uj=iClose("USDJPY",PERIOD_D1,uj_shift);
+            FileWrite(eqh,(long)deal_time,DoubleToString(p,2),
+                      (long)HistoryDealGetInteger(tk,DEAL_MAGIC),(long)HistoryDealGetInteger(tk,DEAL_ENTRY),
+                      (long)HistoryDealGetInteger(tk,DEAL_POSITION_ID),(long)HistoryDealGetInteger(tk,DEAL_TYPE),
+                      DoubleToString(HistoryDealGetDouble(tk,DEAL_VOLUME),2),
+                      DoubleToString(HistoryDealGetDouble(tk,DEAL_PRICE),8),
+                      DoubleToString(HistoryDealGetDouble(tk,DEAL_SL),8),
+                      DoubleToString(uj,5),DoubleToString(p*uj,2)); }
+         FileClose(eqh);
+      }
+   }
+   if(ResultFileName=="") return pf;
+   int fh=FileOpen(ResultFileName,FILE_WRITE|FILE_CSV|FILE_ANSI,',');
+   if(fh==INVALID_HANDLE) return pf;
+   FileWrite(fh,"key","value");
+   FileWrite(fh,"net_profit",DoubleToString(TesterStatistics(STAT_PROFIT),2));
+   FileWrite(fh,"profit_factor",DoubleToString(TesterStatistics(STAT_PROFIT_FACTOR),4));
+   FileWrite(fh,"max_dd_pct",DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4));
+   FileWrite(fh,"total_trades",IntegerToString((int)TesterStatistics(STAT_TRADES)));
+   FileWrite(fh,"win_trades",IntegerToString((int)TesterStatistics(STAT_PROFIT_TRADES)));
+   FileWrite(fh,"loss_trades",IntegerToString((int)TesterStatistics(STAT_LOSS_TRADES)));
+   FileWrite(fh,"initial_deposit",DoubleToString(TesterStatistics(STAT_INITIAL_DEPOSIT),2));
+   FileWrite(fh,"final_balance",DoubleToString(TesterStatistics(STAT_INITIAL_DEPOSIT)+TesterStatistics(STAT_PROFIT),2));
+   FileClose(fh);
+   return pf;
+}
+//+------------------------------------------------------------------+
