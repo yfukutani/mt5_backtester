@@ -136,6 +136,13 @@ def add_months(d: str, months: int) -> str:
     return f"{y:04d}.{m:02d}.{min(day, md):02d}"
 
 
+def add_days(d: str, days: int) -> str:
+    from datetime import date, timedelta
+    y, m, dd = (int(x) for x in d.split("."))
+    nd = date(y, m, dd) + timedelta(days=days)
+    return f"{nd.year:04d}.{nd.month:02d}.{nd.day:02d}"
+
+
 def run_one(months, origin, mode, k, cap):
     if ea_sha() != _ea_sha:
         raise RuntimeError("EAバイナリが測定中に入れ替わった")
@@ -158,8 +165,11 @@ def run_one(months, origin, mode, k, cap):
     p["DlResultFile"] = f"{run_id}_dl.csv"
     p["ResultFileName"] = f"{run_id}_result.csv"
     p["EquityLogFile"] = f"{run_id}_deals.csv"
-    # 期限より少し後ろまで走らせる（到達/破綻/期限切れはEA側が判定して停止する）
-    to = add_months(origin, months)
+    # 期限**より後ろ**までテスターを走らせる。同日にすると、EAが期限切れを
+    # 判定する前にテストが終わり、結果ファイルが書かれず NO_RESULT になる
+    # （6m 2017.05.09 mode=1 で実際に起きた）。到達/破綻/期限切れは
+    # EA側が判定して停止するので、余分な期間で取引は増えない。
+    to = add_days(add_months(origin, months), 10)
     lines = [f"mt5_path: {EXE}", "expert: MIX_EA_X2HR", "symbol: USDJPY",
              "period: M15", f"from_date: {origin}", f"to_date: {to}",
              f"deposit: {DEPOSIT}", "currency: JPY", "leverage: 25",
