@@ -34,6 +34,16 @@ mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細�
 > [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md)。**未反映**（本番デプロイへの
 > 適用はユーザー判断待ち）。
 
+> 📌 **2026.09.15 OANDA FX「月利6%」の探索は打ち止め:** サイジング・倍率・配分・入口フィルタ・
+> 証拠金の**5軸をすべて測り切り、既存9枠の再調整で6%に届く道筋は無いと確定**。
+> 実行可能な最良は**OOS 2.18%/月・最大DD 30.6%・元本割れなし**（RSI3枠をrisk 1.0%・全複利・倍率1）
+> ＝本番現行0.39%/月の**5.6倍**だが、目標までなお**2.8倍**足りない。
+> 最後に残っていた2軸——**SCAの入口フィルタ**（時間帯フィルタは本物でOOS +31.0%だが
+> ブックでは+0.01〜0.03pt/月）と**証拠金の相殺**（相殺余地0.06〜0.8%で倍率2は理論下限でも不可）——
+> はいずれも差を埋めない。**6%には新しいエッジが要る。**
+> 詳細: [oanda_fx_risk_sizing_20260915.md](oanda_fx_risk_sizing_20260915.md)・
+> [oanda_fx_last_axes_20260915.md](oanda_fx_last_axes_20260915.md)。
+
 > 📌 **2026.09 別軸EA「X2_HIGH_RISK」の検証開始:** 本ブックとは別に、DD制約を外し
 > 「破綻するまでに資金が2倍になる確率」を最大化する別目的のEAの検証を開始（既存14枠を流用した
 > 合算ブックで評価）。理論式の誤り（「到達確率の天井47.4%」）をCodexの指摘で発見・訂正し、
@@ -203,6 +213,7 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [sca_scalping_backlog.md](sca_scalping_backlog.md) | **SCAスキャルピング改善バックログ**: 非ML手法100案・優先度S/A/B/C/D・検証プロトコル |
 | [MIX_EA_UM.md](MIX_EA_UM.md) | **MIX_EAユーザーマニュアル**: 既存ブック+SCA統合EA（XM/OANDA 2版）の使い方・推奨設定・成績 |
 | [oanda_fx_lot_headroom_20260908.md](oanda_fx_lot_headroom_20260908.md) / [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md) | **OANDA FXの資金効率見直し**（2026.09）: 倍率余力+1.22pt・複利化+1.34pt・月利5%目標は到達不能と確定 |
+| [oanda_fx_risk_sizing_20260915.md](oanda_fx_risk_sizing_20260915.md) / [oanda_fx_last_axes_20260915.md](oanda_fx_last_axes_20260915.md) | **月利6%の探索の打ち止め**（2026.09.15）: RSI3枠のrisk%化は有効・SCAは逆効果。倍率フロンティアは実質0.97%が天井。入口フィルタと証拠金相殺も差を埋めず。**実行可能な最良 OOS 2.18%/月・DD 30.6%** |
 | [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
