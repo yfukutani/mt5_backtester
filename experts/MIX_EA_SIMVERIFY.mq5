@@ -147,6 +147,29 @@ input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=S
 input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
 input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
 
+input group "=== SCA 入口フィルタ（SCAFIL・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】X2_HIGH_RISK の V105/V106 が SCA GBPJPY 1枠で測った入口フィルタを、
+// OANDA FX の9枠ブックで測り直す。V106 の実測（弱局面408取引）は次のとおり。
+//
+//   なし（基準）        408取引 / 純益 58,541 / ポートフォリオS比 1.00
+//   レンジ幅 上位25%のみ  84取引 / 純益 47,872（-18.2%）/ S比 1.16
+//   時間帯 IS優位のみ    226取引 / 純益 68,040（+16.2%）/ S比 1.52
+//   方向 買いのみ        221取引 / 純益 62,464（ +6.7%）/ S比 1.68
+//
+// 【重要】レンジ幅フィルタは**純益を18%減らす**。1取引の質は2.5倍になるが
+// 取引を79%捨てるため総額で負ける。固定ロットでは捨てたリスク予算を再投入できない。
+// **risk%化（FXRISK）と組み合わせて初めて意味を持つ**——シャープが上がった分だけ
+// risk% を上げれば、同じDD予算でより多くのリターンを取れる（上限はS比の値）。
+// したがって本ラボは FxRiskMask と**同時に**振ること。単独で測っても結論を誤る。
+//
+// 【時刻の注意】ScaFilHour* は EA が見る**サーバー時刻**（OANDA/XMともGMT+2/+3）。
+// V105 が「UTC」と書いた値は deal ログの time から取ったサーバー時刻なので同じ系である。
+input int    ScaFilMask      = 0;      // bit0=SCA USDJPY(20261000) bit1=SCA GBPJPY(20261001)。0で無効
+input double ScaFilRangeMin  = 0.0;    // |entry-sl|/entry の下限（0で無効）。V105のIS閾値は 0.00595
+input int    ScaFilHourFrom  = -1;     // 発注を許す時間の下限（サーバー時刻・両端含む）。-1で無効
+input int    ScaFilHourTo    = -1;     // 同・上限。-1で無効
+input bool   ScaFilBuyOnly   = false;  // 買いのみ発注する
+
 input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
 // GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
@@ -649,6 +672,21 @@ int OnInit()
    if(FxRiskMask<0 || FxRiskMask>31)
    {
       Print("FxRiskMask must be 0..31");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilMask<0 || ScaFilMask>3)
+   {
+      Print("ScaFilMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilRangeMin<0.0)
+   {
+      Print("ScaFilRangeMin must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilHourFrom>=0 && ScaFilHourTo>=0 && ScaFilHourFrom>ScaFilHourTo)
+   {
+      Print("ScaFilHourFrom must be <= ScaFilHourTo");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(Pb2Enable && Pb2Timeframe()==0)
@@ -1413,6 +1451,31 @@ double GszLot(const int i,const double slDist)
    if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
    if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
    return Clamp(S[i].symbol,lot);
+}
+
+// SCA入口フィルタの対象枠か（FXRISKのbit割り当てとは別物なので混同しないこと）。
+bool ScaFilApplies(const int i)
+{
+   if(ScaFilMask==0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20261000)      bit=0;   // SCA USDJPY
+   else if(m==20261001) bit=1;   // SCA GBPJPY
+   return bit>=0 && ((ScaFilMask>>bit)&1)!=0;
+}
+
+// 発注を許すか。V105の3フィルタ（レンジ幅・時間帯・方向）をANDで適用する。
+bool ScaFilEntryOK(const int i,const bool is_buy,const double entry,const double dist,const int hour)
+{
+   if(!ScaFilApplies(i)) return true;
+   if(ScaFilBuyOnly && !is_buy) return false;
+   if(ScaFilRangeMin>0.0){
+      if(entry<=0.0) return false;
+      if(dist/entry < ScaFilRangeMin) return false;
+   }
+   if(ScaFilHourFrom>=0 && hour<ScaFilHourFrom) return false;
+   if(ScaFilHourTo  >=0 && hour>ScaFilHourTo)   return false;
+   return true;
 }
 
 // SCAの基本ロット。FXRISK(useRisk) / GSZ で risk% 化されていればそちらを使う。
@@ -2588,7 +2651,7 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,true,atrd) && GoldLabEntryOK(i,POSITION_TYPE_BUY)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=S[i].scaRangeLow, dist=ask-sl;
-      if(dist>0){
+      if(dist>0 && ScaFilEntryOK(i,true,ask,dist,dt.hour)){
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
@@ -2602,7 +2665,7 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,false,atrd) && GoldLabEntryOK(i,POSITION_TYPE_SELL)){
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
       double sl=S[i].scaRangeHigh, dist=sl-bid;
-      if(dist>0){
+      if(dist>0 && ScaFilEntryOK(i,false,bid,dist,dt.hour)){
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
@@ -2648,6 +2711,12 @@ double OnTester()
    FileWrite(fh,"net_profit",DoubleToString(TesterStatistics(STAT_PROFIT),2));
    FileWrite(fh,"profit_factor",DoubleToString(TesterStatistics(STAT_PROFIT_FACTOR),4));
    FileWrite(fh,"max_dd_pct",DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4));
+   // STAT_BALANCE_DDREL_PERCENT は残高ベースで建玉中の含み損を含まない。
+   // 2026-09-15 に fxrisk1 の88run全てで「決済損益から作った曲線のDD」と
+   // 小数点以下まで完全一致することが判明した（比の中央値・最小・最大が1.00）。
+   // 含み損込みのDDはこちら。以降のラウンドはこの値も併記すること。
+   FileWrite(fh,"equity_dd_pct",DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4));
+   FileWrite(fh,"equity_dd_abs",DoubleToString(TesterStatistics(STAT_EQUITY_DD_RELATIVE),2));
    FileWrite(fh,"total_trades",IntegerToString((int)TesterStatistics(STAT_TRADES)));
    FileWrite(fh,"win_trades",IntegerToString((int)TesterStatistics(STAT_PROFIT_TRADES)));
    FileWrite(fh,"loss_trades",IntegerToString((int)TesterStatistics(STAT_LOSS_TRADES)));
