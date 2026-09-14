@@ -1415,6 +1415,20 @@ double GszLot(const int i,const double slDist)
    return Clamp(S[i].symbol,lot);
 }
 
+// SCAの基本ロット。FXRISK(useRisk) / GSZ で risk% 化されていればそちらを使う。
+// 【バグ修正 2026-09-15】FxRiskOn() は SCA枠(bit3/bit4)に useRisk を立てるが、
+// SCAの発注経路は LotRisk() を通らず固定ロットを直接計算していたため、
+// FxRiskMask の bit3/bit4 が完全に無効だった。fxrisk1ラウンドでは
+// R008(mask=8)/R009(mask=16)/R016-R021(mask=24) が mask=0 の R003 と
+// 純益・DD・取引数まで完全一致しており、これが実測の証拠である。
+double LotRisk(int i, double slDistPrice);
+double ScaBaseLot(const int i,const double dist)
+{
+   if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) return gl; }
+   if(S[i].useRisk && dist>0.0){ double rl=LotRisk(i,dist); if(rl>0.0) return rl; }
+   return S[i].lot*GlobalLotMult*S[i].lotMult;
+}
+
 double LotRisk(int i, double slDistPrice)
 {
    if(GszApplies(i) && slDistPrice>0.0)
@@ -2575,8 +2589,7 @@ void ProcSCA(int i)
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=S[i].scaRangeLow, dist=ask-sl;
       if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
          double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
@@ -2590,8 +2603,7 @@ void ProcSCA(int i)
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
       double sl=S[i].scaRangeHigh, dist=sl-bid;
       if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+         double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
          double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);

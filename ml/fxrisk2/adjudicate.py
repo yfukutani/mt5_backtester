@@ -98,7 +98,7 @@ def main():
             }
         recs.append(rec)
 
-    base = next((x for x in recs if x["pid"] == "R001"), None)
+    base = next((x for x in recs if x["pid"] == "S001"), None)
 
     for win in ("FULL", "OOS"):
         avail = [x for x in recs if win in x]
