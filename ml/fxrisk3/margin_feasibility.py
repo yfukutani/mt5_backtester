@@ -152,14 +152,16 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     targets = []
     for pat, label in (
-        ("ml/fxrisk1/run_deals/fr_full_R001_*_deals.csv", "R001 本番現行（RefCap=78,000・倍率1）FULL"),
-        ("ml/fxrisk1/run_deals/fr_full_R004_*_deals.csv", "R004 前回推奨（RefCap=250,000・倍率3）FULL"),
-        ("ml/fxrisk3/run_deals/ft_full_T031_*_deals.csv", "T031 RSI risk0.5%・最大複利・倍率1 FULL"),
-        ("ml/fxrisk3/run_deals/ft_oos_T031_*_deals.csv", "T031 同・倍率1 OOS"),
-        ("ml/fxrisk3/run_deals/ft_full_T032_*_deals.csv", "T032 同・倍率2 FULL"),
-        ("ml/fxrisk3/run_deals/ft_oos_T032_*_deals.csv", "T032 同・倍率2 OOS"),
-        ("ml/fxrisk3/run_deals/ft_full_T033_*_deals.csv", "T033 同・倍率3 FULL ★OOS最良"),
-        ("ml/fxrisk3/run_deals/ft_oos_T033_*_deals.csv", "T033 同・倍率3 OOS ★"),
+        ("ml/fxrisk1/run_deals/fr_full_R001_*_deals.csv", "R001 本番現行（倍率1）FULL"),
+        ("ml/fxrisk3/run_deals/ft_full_T031_*_deals.csv", "T031 risk0.5%・倍率1 FULL"),
+        ("ml/fxrisk3/run_deals/ft_oos_T031_*_deals.csv",  "T031 risk0.5%・倍率1 OOS"),
+        ("ml/fxrisk3/run_deals/ft_full_T034_*_deals.csv", "T034 risk1.0%・倍率1 FULL"),
+        ("ml/fxrisk3/run_deals/ft_oos_T034_*_deals.csv",  "T034 risk1.0%・倍率1 OOS"),
+        ("ml/fxrisk3/run_deals/ft_full_T032_*_deals.csv", "T032 risk0.5%・倍率2 FULL"),
+        ("ml/fxrisk3/run_deals/ft_full_T035_*_deals.csv", "T035 risk1.0%・倍率2 FULL"),
+        ("ml/fxrisk3/run_deals/ft_full_T033_*_deals.csv", "T033 risk0.5%・倍率3 FULL"),
+        ("ml/fxrisk3/run_deals/ft_full_T036_*_deals.csv", "T036 risk1.0%・倍率3 FULL ★OOS最良"),
+        ("ml/fxrisk3/run_deals/ft_oos_T036_*_deals.csv",  "T036 risk1.0%・倍率3 OOS ★"),
     ):
         hits = sorted(repo.glob(pat))
         if hits:
