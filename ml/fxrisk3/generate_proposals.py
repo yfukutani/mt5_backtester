@@ -72,8 +72,18 @@ def parameters(raw):
         raise ValueError("3枠のRefCapは同一の非負値にしてください")
     if p["GlobalLotMult"] not in (1, 2, 3):
         raise ValueError("倍率は1・2・3のいずれかにしてください")
-    if any(p[k] != 1.0 for k in MULTS):
-        raise ValueError("サイジング軸の効果を分離するため、枠別重みは1.0に固定してください")
+    # 枠別重みは原則1.0に固定してサイジング軸の効果を分離する。
+    # 例外は Mult_SCA_GBPJPY だけ——J群で「SCA GBPJPYのロットだけ絞る」ことを測るため。
+    # SCA GBPJPY の scaBoostMult=6.0 は固定ロット0.01の前提で調整された値で、
+    # risk%化するとリスク調整済みのロットをさらに6倍するため、実効リスクが risk%×6 になる。
+    # T039 の証拠金ピークは FULL で 87%・OOS で 70% がこの1枠の1建玉だった。
+    for k in MULTS:
+        if k == "Mult_SCA_GBPJPY":
+            if not 0.0 < p[k] <= 1.0:
+                raise ValueError("Mult_SCA_GBPJPYは0より大きく1.0以下にしてください")
+            continue
+        if p[k] != 1.0:
+            raise ValueError("サイジング軸の効果を分離するため、枠別重みは1.0に固定してください")
     return p
 
 
@@ -81,8 +91,9 @@ def generate():
     rows = []
     seen = set()
 
-    def add(family, mask, risk, fxref, refcap, mult):
+    def add(family, mask, risk, fxref, refcap, mult, scagj=1.0):
         p = dict.fromkeys(MULTS, 1.0)
+        p["Mult_SCA_GBPJPY"] = scagj
         p.update(dict.fromkeys(REFCAPS, refcap))
         p.update(FxRiskMask=mask, FxRiskPct=risk, FxRiskRefCap=fxref, GlobalLotMult=mult)
         raw = json.dumps(p, sort_keys=True, separators=(",", ":"))
@@ -90,11 +101,12 @@ def generate():
         if raw in seen:
             return
         seen.add(raw)
-        rows.append(dict(
-            proposal_id=f"T{len(rows) + 1:03d}", family=family,
-            description=(f"マスク={mask} / risk%={risk:g} / FxRiskRefCap={fxref} "
-                         f"/ RefCap={refcap} / 倍率={mult}"),
-            parameter_json=raw))
+        desc = (f"マスク={mask} / risk%={risk:g} / FxRiskRefCap={fxref} "
+                f"/ RefCap={refcap} / 倍率={mult}")
+        if scagj != 1.0:
+            desc += f" / SCA_GJ重み={scagj:g}"
+        rows.append(dict(proposal_id=f"T{len(rows) + 1:03d}", family=family,
+                         description=desc, parameter_json=raw))
 
     # A: 対照。fxrisk2 の S001 / S002 と同一パラメータで、結果を流用する。
     add("A", 0, 0.5, 0, 250000, 1)
@@ -136,6 +148,28 @@ def generate():
     for risk in (0.5, 1.0):
         for mult in (1, 2, 3):
             add("H", 7, risk, 0, 0, mult)
+
+    # I: **RSI 3枠 ＋ SCA GBPJPY** を risk%化（mask = 1+2+4+16 = 23）。
+    #    T003〜T006 の実測で、risk%化の符号が枠ごとに逆だと判明した。
+    #      SCA USDJPY  16,339 → −5,881 → −16,315 → −31,385（risk 0.5/1.0/2.0・単調に破壊）
+    #      SCA GBPJPY 115,992 → 172,652（risk 0.5・+48.9%。OOSでも +21.6%）
+    #    狭いレンジ層が USDJPY は赤字・GBPJPY は黒字だったことと整合する（§4d）。
+    #    **有害な SCA USDJPY だけを外し、有益な SCA GBPJPY を入れた構成**が
+    #    当初の案に無かったので追加する。H群の最良条件（最大複利）に揃える。
+    for risk in (0.5, 1.0):
+        for mult in (1, 2):
+            add("I", 23, risk, 0, 0, mult)
+
+    # J: I群の証拠金問題を **SCA GBPJPY のロットだけ絞って** 解く。EA改修は不要。
+    #    T039（mask=23・risk1.0・倍率1）は「上位3か月を除いた成長率 1.33%」で
+    #    mask=7 の最良（0.97%）を大きく上回ったが、証拠金が OOS 215% で実行できない。
+    #    その証拠金ピークの **FULL 87% / OOS 70% が SCA GBPJPY の1建玉**だった。
+    #    原因は scaBoostMult=6.0——固定ロット0.01の前提で調整された値なので、
+    #    risk%化するとリスク調整済みのロットをさらに6倍してしまう。
+    #    Mult_SCA_GBPJPY で打ち消せば、複利の恩恵を残したまま証拠金を下げられるはず。
+    for scagj in (0.2, 0.1, 0.15, 0.35, 0.5):
+        add("J", 23, 1.0, 0, 0, 1, scagj)
+    add("J", 23, 0.5, 0, 0, 1, 0.35)
 
     return rows
 

@@ -150,22 +150,15 @@ def analyse(path, label):
 
 def main():
     repo = Path(__file__).resolve().parents[2]
+    # 引数で案IDを指定できる（例: python margin_feasibility.py T034 T037 T039）。
+    # 指定が無ければ既定の比較対象を見る。
+    ids = sys.argv[1:] or ["T031", "T034", "T032", "T035", "T033", "T036"]
     targets = []
-    for pat, label in (
-        ("ml/fxrisk1/run_deals/fr_full_R001_*_deals.csv", "R001 本番現行（倍率1）FULL"),
-        ("ml/fxrisk3/run_deals/ft_full_T031_*_deals.csv", "T031 risk0.5%・倍率1 FULL"),
-        ("ml/fxrisk3/run_deals/ft_oos_T031_*_deals.csv",  "T031 risk0.5%・倍率1 OOS"),
-        ("ml/fxrisk3/run_deals/ft_full_T034_*_deals.csv", "T034 risk1.0%・倍率1 FULL"),
-        ("ml/fxrisk3/run_deals/ft_oos_T034_*_deals.csv",  "T034 risk1.0%・倍率1 OOS"),
-        ("ml/fxrisk3/run_deals/ft_full_T032_*_deals.csv", "T032 risk0.5%・倍率2 FULL"),
-        ("ml/fxrisk3/run_deals/ft_full_T035_*_deals.csv", "T035 risk1.0%・倍率2 FULL"),
-        ("ml/fxrisk3/run_deals/ft_full_T033_*_deals.csv", "T033 risk0.5%・倍率3 FULL"),
-        ("ml/fxrisk3/run_deals/ft_full_T036_*_deals.csv", "T036 risk1.0%・倍率3 FULL ★OOS最良"),
-        ("ml/fxrisk3/run_deals/ft_oos_T036_*_deals.csv",  "T036 risk1.0%・倍率3 OOS ★"),
-    ):
-        hits = sorted(repo.glob(pat))
-        if hits:
-            targets.append((hits[-1], label))
+    for pid in ids:
+        for win in ("full", "oos"):
+            hits = sorted(repo.glob(f"ml/fxrisk3/run_deals/ft_{win}_{pid}_*_deals.csv"))
+            if hits:
+                targets.append((hits[-1], f"{pid} {win.upper()}"))
     if not targets:
         sys.exit("deal ログが見つかりません")
 

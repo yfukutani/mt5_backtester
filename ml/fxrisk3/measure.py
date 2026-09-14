@@ -266,7 +266,7 @@ def main():
     #   B: SCA を1枠ずつ。GBPJPY（純益の16.5%）が害を受けるかどうかが最大の未知。
     #   G/F: 最大複利と倍率の限界（A6/D2）。
     #   E/D/C: SCA を含むぶん期待は低い。最後に回す。
-    PRIORITY = {"A": 0, "H": 1, "B": 2, "G": 3, "F": 4, "E": 5, "D": 6, "C": 7}
+    PRIORITY = {"A": 0, "J": 1, "I": 2, "H": 3, "B": 4, "G": 5, "F": 6, "E": 7, "D": 8, "C": 9}
     jobs = [(p, w) for p in sorted(props, key=lambda x: (PRIORITY.get(x["family"], 9),
                                                         x["proposal_id"]))
             for w in WINDOWS if (p["proposal_id"], w) not in done]
