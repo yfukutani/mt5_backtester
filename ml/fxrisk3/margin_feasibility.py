@@ -154,9 +154,12 @@ def main():
     for pat, label in (
         ("ml/fxrisk1/run_deals/fr_full_R001_*_deals.csv", "R001 本番現行（RefCap=78,000・倍率1）FULL"),
         ("ml/fxrisk1/run_deals/fr_full_R004_*_deals.csv", "R004 前回推奨（RefCap=250,000・倍率3）FULL"),
-        ("ml/fxrisk1/run_deals/fr_full_R036_*_deals.csv", "R036 RSI risk%・全複利・倍率1 FULL"),
-        ("ml/fxrisk1/run_deals/fr_full_R037_*_deals.csv", "R037 RSI risk%・全複利・倍率2 FULL ★OOS最良"),
-        ("ml/fxrisk1/run_deals/fr_oos_R037_*_deals.csv", "R037 同・OOS"),
+        ("ml/fxrisk3/run_deals/ft_full_T031_*_deals.csv", "T031 RSI risk0.5%・最大複利・倍率1 FULL"),
+        ("ml/fxrisk3/run_deals/ft_oos_T031_*_deals.csv", "T031 同・倍率1 OOS"),
+        ("ml/fxrisk3/run_deals/ft_full_T032_*_deals.csv", "T032 同・倍率2 FULL"),
+        ("ml/fxrisk3/run_deals/ft_oos_T032_*_deals.csv", "T032 同・倍率2 OOS"),
+        ("ml/fxrisk3/run_deals/ft_full_T033_*_deals.csv", "T033 同・倍率3 FULL ★OOS最良"),
+        ("ml/fxrisk3/run_deals/ft_oos_T033_*_deals.csv", "T033 同・倍率3 OOS ★"),
     ):
         hits = sorted(repo.glob(pat))
         if hits:
