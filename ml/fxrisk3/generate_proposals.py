@@ -128,6 +128,15 @@ def generate():
         for mult in (2, 3):
             add("G", 31, risk, 0, 0, mult)
 
+    # H: RSI 3枠だけを risk% 化した最大複利のフロンティア。
+    #    T003 で SCA の risk%化が逆効果（黒字→赤字）と判明したため、
+    #    **SCAを固定ロットのまま残した mask=7 が実務上の本命**になった。
+    #    fxrisk1 の G群（実質 mask=7）は risk 0.1/0.25/0.5 × 倍率1/2 までしか測っておらず、
+    #    **risk 1.0% と 倍率3 は未測定**。そこを埋める。
+    for risk in (0.5, 1.0):
+        for mult in (1, 2, 3):
+            add("H", 7, risk, 0, 0, mult)
+
     return rows
 
 

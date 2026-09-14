@@ -260,7 +260,16 @@ def main():
     global _ea_sha
     props = sorted(load_proposals(), key=lambda p: p["proposal_id"])
     done = load_done(props)
-    jobs = [(p, w) for p in props for w in WINDOWS if (p["proposal_id"], w) not in done]
+    # 情報価値の高い群から先に measure する。IDは変えない（再開の整合を壊さないため）。
+    #   H: SCAを固定ロットのまま残した mask=7 のフロンティア。T003でSCAのrisk%化が
+    #      逆効果と判明したため、ここが実務上の本命になった。
+    #   B: SCA を1枠ずつ。GBPJPY（純益の16.5%）が害を受けるかどうかが最大の未知。
+    #   G/F: 最大複利と倍率の限界（A6/D2）。
+    #   E/D/C: SCA を含むぶん期待は低い。最後に回す。
+    PRIORITY = {"A": 0, "H": 1, "B": 2, "G": 3, "F": 4, "E": 5, "D": 6, "C": 7}
+    jobs = [(p, w) for p in sorted(props, key=lambda x: (PRIORITY.get(x["family"], 9),
+                                                        x["proposal_id"]))
+            for w in WINDOWS if (p["proposal_id"], w) not in done]
     if not jobs:
         print("全案・両窓が完了済みです")
         return
