@@ -1,0 +1,15 @@
+broker,OANDA
+server,OANDA-Japan MT5 Live
+company,OANDA Corporation
+currency,JPY
+account_leverage,25
+margin_mode,2
+balance,500000.0
+
+symbol,vol_min,vol_max,vol_step,contract_size,margin_initial,margin_maintenance,margin_1lot_buy,digits,point,spread,trade_mode
+USDJPY,0.01,10.0,0.01,100000.0,0.0,0.0,412708.0,3,0.001,23,4
+EURUSD,0.01,10.0,0.01,100000.0,0.0,0.0,504496.0,5,0.00001,45,4
+GBPUSD,0.01,10.0,0.01,100000.0,0.0,0.0,705255.0,5,0.00001,38,4
+GBPJPY,0.01,10.0,0.01,100000.0,0.0,0.0,705255.0,3,0.001,46,4
+AUDJPY,0.01,10.0,0.01,100000.0,0.0,0.0,317684.0,3,0.001,38,4
+XAUUSD,0.01,20.0,0.01,100.0,0.0,0.0,783259.0,3,0.001,2,4
