@@ -29,7 +29,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DEPOSIT = 500000
 TARGET = 6.0
-MONTHS = {"OOS": 55.0, "FULL": 115.0}
+MONTHS = {"OOS": 55.0, "FULL": 115.0,
+          # fxwin1 の24か月窓（W9 だけデータ終端で19か月）
+          "W1": 24.0, "W2": 24.0, "W3": 24.0, "W4": 24.0, "W5": 24.0,
+          "W6": 24.0, "W7": 24.0, "W8": 24.0, "W9": 19.0}
+
+# --root <ラウンド名> で他のラウンドの results.csv を見る（既定は自分のディレクトリ）。
+# 1:25 の再測定（fxlev25）を同じ物差しで並べるために要る。
 
 
 def monthly_returns(path):
@@ -62,12 +68,18 @@ def ex_top(vals, k):
 
 
 def main():
-    res = ROOT / "results.csv"
+    args = sys.argv[1:]
+    root = ROOT
+    if "--root" in args:
+        i = args.index("--root")
+        root = ROOT.parent / args[i + 1]
+        del args[i:i + 2]
+    res = root / "results.csv"
     if not res.exists():
-        sys.exit("results.csv がありません")
+        sys.exit(f"results.csv がありません: {res}")
     rows = [r for r in csv.DictReader(open(res, encoding="utf-8"))
             if r["status"] == "OK"]
-    want = sys.argv[1:]
+    want = args
     if want:
         rows = [r for r in rows if r["proposal_id"] in want]
     if not rows:
@@ -82,7 +94,7 @@ def main():
     for r in rows:
         path = Path(r["deals"])
         if not path.exists():
-            path = ROOT / "run_deals" / path.name
+            path = root / "run_deals" / path.name
         if not path.exists():
             print(f"{r['proposal_id']:<6}{r['window']:<6}  deal ログ無し")
             continue
