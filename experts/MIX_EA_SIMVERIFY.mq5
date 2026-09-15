@@ -465,6 +465,15 @@ input double RefCap_CARRY      = 0;  // Carry複利の基準資金
 input int    CarryExitPeriod   = 0;  // >0 でヒステリシス帯の代わりに退出用SMA（Codex #21）
 input int    CarryHoldBars     = 0;  // >0 で保有上限（D1バー数・0で無制限）
 
+// --- 業者の「1注文あたりロット上限」を上書きする（第12報の準備）----------------
+// バックテストは XM 端末で走っており、FX の `SYMBOL_VOLUME_MAX` は **50.0**。
+// 本番の OANDA証券は実機計測で **10.0**（docs/oanda_broker_specs_20260915.md）。
+// 複利の天井が 1/5 になるので、XM の数字はそのままでは本番で再現しない。
+// 端末を替えずに**上限だけ**を OANDA 相当にして、天井の影響を切り分けるための入力。
+// フィード差・スプレッド差・スワップ差は別問題であり、これでは埋まらない。
+// 0 のときは端末の値をそのまま使う＝**既定では従来と1ビットも変わらない。**
+input double BrokerMaxLot   = 0.0;   // 1注文あたりロット上限の上書き（0=端末の値）
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -1365,6 +1374,11 @@ int    g_capCut[32];      // cap がロットを削った回数（発注はで�
 int    g_capDeny[32];     // cap が 0 にした回数＝発注を見送った
 double g_capWant[32];     // cap を掛ける前の希望ロットの合計
 double g_capGot[32];      // 実際に返したロットの合計
+// 業者のロット上限（SYMBOL_VOLUME_MAX / BrokerMaxLot）に当たった回数と、
+// そこで切り落とされたロットの総量。**証拠金capとは別物なので分けて数える。**
+// 第8報は「複利を止めているのは銘柄上限」と診断したが、その量も測っていなかった。
+int    g_capVmaxN[32];    // 上限に当たった回数
+double g_capVmaxCut[32];  // 上限で切り落としたロットの合計
 
 // 削られた/見送られた注文を**1件ずつ**記録する。
 // 集計値だけでは Codex #1「退出を先、参入を後に」を判定できない。
@@ -1387,6 +1401,8 @@ double Clamp(string sym, double lot, int si=-1)
    lot=capped;
    double mn=SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN);
    double mx=SymbolInfoDouble(sym,SYMBOL_VOLUME_MAX);
+   // 業者の1注文上限を下げて模擬する（0なら端末の値のまま＝従来と同一）。
+   if(BrokerMaxLot>0.0 && BrokerMaxLot<mx) mx=BrokerMaxLot;
    double st=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
    if(st>0) lot=MathFloor(lot/st)*st;
    // capで削られた結果 最小ロットに満たないなら**発注しない**。
@@ -1399,6 +1415,8 @@ double Clamp(string sym, double lot, int si=-1)
       if(deny) g_capDeny[si]++;
       g_capWant[si]+=want;
       g_capGot[si]+=got;
+      // 証拠金cap を通り抜けた後に、業者のロット上限で頭打ちになったか。
+      if(!deny && lot>mx+1e-12){ g_capVmaxN[si]++; g_capVmaxCut[si]+=(lot-mx); }
       if(cut && g_capEvN<CAPEV_MAX){
          int k=g_capEvN++;
          g_capEvT[k]=TimeCurrent();
@@ -2813,12 +2831,15 @@ double OnTester()
    if(CapLogFile != ""){
       int ch=FileOpen(CapLogFile,FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON,',');
       if(ch!=INVALID_HANDLE){
-         FileWrite(ch,"kind","magic","calls","cut","deny","lot_want","lot_got");
+         FileWrite(ch,"kind","magic","calls","cut","deny","lot_want","lot_got",
+                   "vmax_n","vmax_cut");
          for(int i=0;i<NS;i++){
             if(g_capN[i]==0) continue;
             FileWrite(ch,"sleeve",(long)S[i].magic,IntegerToString(g_capN[i]),
                       IntegerToString(g_capCut[i]),IntegerToString(g_capDeny[i]),
-                      DoubleToString(g_capWant[i],4),DoubleToString(g_capGot[i],4));
+                      DoubleToString(g_capWant[i],4),DoubleToString(g_capGot[i],4),
+                      IntegerToString(g_capVmaxN[i]),
+                      DoubleToString(g_capVmaxCut[i],4));
          }
          FileWrite(ch,"equity_dd_pct",0,"","","",
                    DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4),"");

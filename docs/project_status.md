@@ -189,6 +189,24 @@ mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細�
 > **OANDA端末で再現するまで採用判断に使えない。これが次の最優先。**
 > 詳細: [oanda_fx_cap_curve_deposit_20260915.md](oanda_fx_cap_curve_deposit_20260915.md)。
 
+> 📌 **2026.09.16 枠を外す16案の実測と、「重みが効いていなかった」という発見:**
+> 第9報の宿題だった fxeff1（16案・64run）が完了。**Carry＋PB USDJPY を外すと
+> OOS窓中央値 5.60% → 8.65%**（E04・通期OOS純益 22,269,102円・月利 7.19%・最大DD 72.4%）、
+> **倍率4を足した E09 が最もバランスが良い**（中央値 8.49%・最悪窓 5.11%・DD 61.9%）。
+> 一方**RSI EURUSD を外すのは逆効果**（中央値 2.44%）——証拠金を空けても置く先が無かった。
+> **E13 の「取引1・DD 88.4%」は集計バグではなく、倍率5の Carry が
+> 米大統領選当日（2016-11-09）に7時間でロスカットされた実像**である。
+> ⚠️ **発見: `Mult_RSI_EURUSD` を 4.0→2.0 にした run が、対照と deal ログまで完全同一だった。**
+> `MarginCapLot()` が返すのは「空き証拠金で建てられる最大ロット」で**希望ロットに依存しない**ため、
+> 希望が cap を超えているかぎり重みは通らない。**RSI EU は発注の 86.7% が削られており、
+> 重みどおり通った発注は 264本中 0本。** 第3報・第7報の「重みが効いた」は事実だが、
+> 効いていたのは **固定ロット枠の重み**であって risk%枠（RSI×3）の重みではなかった。
+> 🚨 **ただし本報の数字は OANDA では再現しない**——すべて XM の1注文上限 **50ロット**の下で、
+> かつ cap100（＝追証ライン）で出ている。本番の上限は **10ロット**。
+> **「6%を超えた」とは書かない。** 上限10・cap90 に戻して何が残るかを測るラウンド
+> `ml/fxvmax1`（8案×4窓＝32run・EA に `BrokerMaxLot` を追加）をキューに積んだ。
+> 詳細: [oanda_fx_sleeve_removal_20260916.md](oanda_fx_sleeve_removal_20260916.md)。
+
 > 📌 **2026.09 別軸EA「X2_HIGH_RISK」の検証開始:** 本ブックとは別に、DD制約を外し
 > 「破綻するまでに資金が2倍になる確率」を最大化する別目的のEAの検証を開始（既存14枠を流用した
 > 合算ブックで評価）。理論式の誤り（「到達確率の天井47.4%」）をCodexの指摘で発見・訂正し、
@@ -360,6 +378,7 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [oanda_fx_lot_headroom_20260908.md](oanda_fx_lot_headroom_20260908.md) / [oanda_fx_compounding_20260909.md](oanda_fx_compounding_20260909.md) | **OANDA FXの資金効率見直し**（2026.09）: 倍率余力+1.22pt・複利化+1.34pt・月利5%目標は到達不能と確定 |
 | [oanda_fx_risk_sizing_20260915.md](oanda_fx_risk_sizing_20260915.md) / [oanda_fx_last_axes_20260915.md](oanda_fx_last_axes_20260915.md) | **月利6%の探索の打ち止め**（2026.09.15）: RSI3枠のrisk%化は有効・SCAは逆効果。倍率フロンティアは実質0.97%が天井。入口フィルタと証拠金相殺も差を埋めず。**実行可能な最良 OOS 2.18%/月・DD 30.6%** |
 | [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
+| [oanda_broker_specs_20260915.md](oanda_broker_specs_20260915.md) / [oanda_fx_sleeve_removal_20260916.md](oanda_fx_sleeve_removal_20260916.md) | **OANDA実機の銘柄仕様**（FX 1注文上限は **10ロット**・XMは50）と、**枠を外す16案の実測**（E04 中央値 8.65%／E09 8.49%）。`Mult_*` が cap の下で効いていなかったことの発見も含む。**いずれも上限50・cap100 の下の数字で本番では再現しない** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
 | [../CLAUDE.md](../CLAUDE.md) | **プロジェクト運用ルール**: ドキュメント管理方針（Obsidian Vaultとの二層構造）・開発時の注意 |
