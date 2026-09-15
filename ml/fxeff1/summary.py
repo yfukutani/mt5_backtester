@@ -48,8 +48,8 @@ def main():
         print("結果がまだ無い")
         return 0
 
-    print("| 案 | W1 | W2 | W3 | **OOS窓 中央値** | 最悪 | 通期OOS月利 | 通期OOS 純益 | 通期OOS 最大DD | 取引 | 説明 |")
-    print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
+    print("| 案 | W1 | W2 | W3 | **中央値** | 平均 | 最悪 | 中央値の窓 | 通期OOS月利 | 通期OOS 純益 | 通期OOS 最大DD | 取引 | 説明 |")
+    print("|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---|")
     rows = []
     for pid, d in by.items():
         ws = [monthly(d[w][0], 24.0) for w in ("W1", "W2", "W3") if w in d]
@@ -61,7 +61,15 @@ def main():
         cells = ["{:.2f}%".format(monthly(d[w][0], 24.0)) if w in d else "—"
                  for w in ("W1", "W2", "W3")]
         mcell = "**{:.2f}%**".format(med) if med is not None else "—"
+        acell = "{:.2f}%".format(statistics.fmean(ws)) if len(ws) == 3 else "—"
         wcell = "{:.2f}%".format(min(ws)) if len(ws) == 3 else "—"
+        # 中央値がどの窓のものか。n=3 の中央値は「真ん中の1本」でしかないので、
+        # 案によって別の窓が中央値になる。入れ替わっていたら中央値の比較は成立しない。
+        if med is not None:
+            names = ["W1", "W2", "W3"]
+            mw = names[min(range(3), key=lambda k: abs(ws[k] - med))]
+        else:
+            mw = "—"
         if oos:
             ocell = "{:.2f}%".format(monthly(oos[0], 55.0))
             ncell = "{:,.0f}".format(oos[0])
@@ -69,8 +77,8 @@ def main():
             tcell = str(oos[2])
         else:
             ocell = ncell = dcell = tcell = "—"
-        print("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
-            pid, cells[0], cells[1], cells[2], mcell, wcell,
+        print("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            pid, cells[0], cells[1], cells[2], mcell, acell, wcell, mw,
             ocell, ncell, dcell, tcell, desc.get(pid, "")))
     return 0
 
