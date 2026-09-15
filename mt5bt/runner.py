@@ -79,11 +79,76 @@ class MT5Runner:
                     dirs.append(files_dir)
         return dirs
 
+    @staticmethod
+    def find_tester_log_dirs(mt5_exe: str) -> list[Path]:
+        """Tester エージェントのジャーナル（logs）ディレクトリを返す。
+
+        `Agent-<ip>-<port>\\logs\\<YYYYMMDD>.log`（UTF-16LE）に、各 run の冒頭で
+        `initial deposit 500000 JPY, leverage 1:100` のように**実際に適用された**
+        口座設定が出る。ini に書いた値が通っているかは、ここでしか確かめられない。
+        """
+        import os
+        appdata = os.environ.get("APPDATA", "")
+        if not appdata:
+            return []
+        h = MT5Runner._find_terminal_hash(mt5_exe)
+        if not h:
+            return []
+        tester_root = Path(appdata) / "MetaQuotes" / "Tester" / h
+        out: list[Path] = []
+        if tester_root.exists():
+            for agent_dir in sorted(tester_root.iterdir()):
+                logs = agent_dir / "logs"
+                if logs.exists():
+                    out.append(logs)
+        return out
+
+    def verify_leverage(self) -> Optional[int]:
+        """ジャーナルから、この run に**実際に適用された**レバレッジを読んで検証する。
+
+        ini の `Leverage` は書式を誤ると MT5 が黙って既定値（1:100）を使う。
+        2026-09-15 まで `Leverage=25` と書いており、**全 run が 1:100 で走っていた**。
+        「設定したつもり」で証拠金の結論を出さないよう、毎回ジャーナルで突き合わせる。
+
+        Returns: 適用されたレバレッジ。読めなければ None（この場合は警告のみ）。
+        """
+        import re
+        want = int(self.config.leverage)
+        start = getattr(self, "_run_start", 0.0)
+        pat = re.compile(r"leverage 1:(\d+)")
+        found: Optional[int] = None
+        for logs in self.find_tester_log_dirs(self.config.mt5_path):
+            for log in sorted(logs.glob("*.log")):
+                try:
+                    if log.stat().st_mtime < start - 60:
+                        continue
+                    # 走行中のテスターが掴んでいるので共有読みが要る。
+                    with open(log, "rb") as fh:
+                        raw = fh.read()
+                except OSError:
+                    continue
+                text = raw.decode("utf-16-le", errors="ignore")
+                hits = pat.findall(text)
+                if hits:
+                    found = int(hits[-1])
+        if found is None:
+            click.echo("  ⚠ レバレッジの適用をジャーナルで確認できませんでした")
+            return None
+        if found != want:
+            click.echo(
+                f"  ⚠⚠ レバレッジ不一致: 設定 1:{want} に対し、実際に適用されたのは "
+                f"1:{found} です。証拠金に依存する結論（高倍率・複利の実行可能性）は "
+                f"この run からは出せません。")
+        else:
+            click.echo(f"  レバレッジ確認: 1:{found}")
+        return found
+
     def __init__(self, config: BacktestConfig, report_path: Path):
         self.config = config
         self.report_path = report_path
         self.mql5_files_dir: Optional[Path] = self.find_mql5_files_dir(config.mt5_path)
         self._tester_files_dirs: list[Path] = self.find_tester_files_dirs(config.mt5_path)
+        self.applied_leverage: Optional[int] = None
 
     def run(self, timeout: int = 3600, portable_mode: bool = False) -> bool:
         """バックテストを実行する。
@@ -136,7 +201,10 @@ class MT5Runner:
                 click.echo(f"  SETファイル: {set_path}")
 
             proc = subprocess.Popen(cmd)
-            return self._wait_for_completion(proc, timeout)
+            ok = self._wait_for_completion(proc, timeout)
+            # 成否にかかわらず、実際に適用されたレバレッジを確認して記録する。
+            self.applied_leverage = self.verify_leverage()
+            return ok
 
     def _write_set_file(self, path: Path) -> None:
         """EAパラメータのSETファイルを書き込む（Profiles/Tester形式）。
@@ -193,7 +261,14 @@ class MT5Runner:
             "Period": str(cfg.period_value),
             "Deposit": str(int(cfg.deposit)),
             "Currency": cfg.currency,
-            "Leverage": str(cfg.leverage),
+            # MT5 の [Tester] Leverage は **"1:25" 形式**で書かなければならない。
+            # 2026-09-15 まで "25" と書いており、MT5 はこれを解釈できずに黙って既定の
+            # **1:100** を使っていた（テスターのジャーナルに
+            # "initial deposit 500000 JPY, leverage 1:100" と出る）。
+            # その日までの全 run は 1:100 で走っている。証拠金の要る結論
+            # （高倍率・複利の実行可能性）は、この日より前のものは信用できない。
+            # 適用されたかは verify_leverage() がジャーナルで確認する。
+            "Leverage": f"1:{int(cfg.leverage)}",
             "Model": str(cfg.model_value),
             "FromDate": cfg.from_date,
             "ToDate": cfg.to_date,
