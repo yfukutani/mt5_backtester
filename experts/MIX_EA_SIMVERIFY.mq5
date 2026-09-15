@@ -1313,12 +1313,45 @@ bool CryptoGuardOK(int i)
    return true;
 }
 
+//--- A10: 証拠金維持率でロットを制限する -------------------------------------
+// ml/fxmargin2/ の段階2検証で、このブックを止めているのは DD でもリスク許容度でもなく
+// 「レバレッジ25の証拠金」だと分かった。T036（mask=7・risk1%・倍率3）は OOS 4.81%/月
+// だが使用証拠金が equity の 987.9% に達する瞬間があり実口座では成立しない。
+// しかしそれは「ピーク」であって「常時」ではない。収まる範囲までロットを削れば
+// 残り時間の成績は保てる——段階2では、削ったほうが OOS 成績が良くなった。
+//
+// MarginCapPct = 使用証拠金 / 口座equity の上限（%）。0 で無効（従来どおり）。
+// EA側は AccountInfoDouble(ACCOUNT_EQUITY) を使うので**含み損益込み**である。
+// 段階2のシミュレーションは決済損益ベースだったので、こちらのほうが厳しく・正しい。
+input double MarginCapPct = 0;   // A10: 使用証拠金/equityの上限%（0=無効・段階2の推奨80）
+
+double MarginCapLot(const string sym, const double lot)
+{
+   if(MarginCapPct<=0.0 || lot<=0.0) return lot;
+   double eq=AccountInfoDouble(ACCOUNT_EQUITY);
+   if(eq<=0.0) return 0.0;
+   double avail=eq*MarginCapPct/100.0 - AccountInfoDouble(ACCOUNT_MARGIN);
+   if(avail<=0.0) return 0.0;
+   double price=SymbolInfoDouble(sym,SYMBOL_ASK);
+   if(price<=0.0) return lot;
+   double m1=0.0;                                   // 1ロットあたりの必要証拠金
+   if(!OrderCalcMargin(ORDER_TYPE_BUY,sym,1.0,price,m1) || m1<=0.0) return lot;
+   double maxlot=avail/m1;
+   return (maxlot<lot) ? maxlot : lot;
+}
+
 double Clamp(string sym, double lot)
 {
+   double capped=MarginCapLot(sym,lot);
+   bool cut=(capped < lot-1e-12);                   // capで削られたか
+   lot=capped;
    double mn=SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN);
    double mx=SymbolInfoDouble(sym,SYMBOL_VOLUME_MAX);
    double st=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
    if(st>0) lot=MathFloor(lot/st)*st;
+   // capで削られた結果 最小ロットに満たないなら**発注しない**。
+   // ここで MathMax(mn,..) に戻すと cap を突き破るので、0 を返して呼び側に捨てさせる。
+   if(cut && lot<mn) return 0.0;
    return MathMax(mn,MathMin(mx,lot));
 }
 
@@ -2110,13 +2143,16 @@ void ProcPair(int i)
    int st=ml?1:(msh?-1:0);
    trade.SetExpertMagicNumber(S[i].magic);
    double lot=LotComplex(i,sym);
-   if(st==0){
+   double lot2=LotComplex(i,sec);
+   // A10: どちらかの脚がcapで0になったら**両脚とも出さない**。
+   // 片脚だけ建てると中立枠が方向性リスクに変わってしまう。
+   if(st==0 && lot>0.0 && lot2>0.0){
       if(z>=S[i].entryZ){ // 主売り・従買い
          trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,"PairMain");
-         trade.Buy(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
+         trade.Buy(lot2,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
       } else if(z<=-S[i].entryZ){ // 主買い・従売り
          trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"PairMain");
-         trade.Sell(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
+         trade.Sell(lot2,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
       }
    } else if(st==1){
       if(z>=-S[i].exitZ || z<=-S[i].stopZ) CloseSleeveAll(i);
@@ -2155,7 +2191,8 @@ void ProcCarry(int i)
    if(cp>entry_th && swap_ok && !has && cd_ok && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      trade.Buy(LotComplex(i,sym),sym,ask,sl,0,"Carry");
+      double lotC=LotComplex(i,sym);                 // A10: capで0になったら発注しない
+      if(lotC>0.0) trade.Buy(lotC,sym,ask,sl,0,"Carry");
    } else if(cp<exit_th && has){
       CloseSleeveAll(i);
       S[i].cdExitBar=iTime(sym,tf,0);
@@ -2361,7 +2398,8 @@ void ProcFunding(int i)
    if(avg<FundThreshold && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult),S[i].symbol,ask,sl,0,"FundRev"))
+      double lotF=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult);   // A10
+      if(lotF>0.0 && trade.Buy(lotF,S[i].symbol,ask,sl,0,"FundRev"))
          Print("[FUNDREV BUY] avg=",DoubleToString(avg,4),"%/8h");
    }
 }
@@ -2527,7 +2565,8 @@ void ProcBfx(int i)
    if(chg<-BfxDropPct && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult),S[i].symbol,ask,sl,0,"BfxRev"))
+      double lotB=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult);   // A10
+      if(lotB>0.0 && trade.Buy(lotB,S[i].symbol,ask,sl,0,"BfxRev"))
          Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/",BfxLookbackDays,"日");
    }
 }
@@ -2552,10 +2591,12 @@ void ProcVBO(int i)
       }
       if(sq && cp>hh){
          double ask=SymbolInfoDouble(sym,SYMBOL_ASK); double sl=ask-S[i].atrSLmult*atr1;
-         trade.Buy(LotRisk(i,ask-sl),sym,ask,NormalizeDouble(sl,S[i].digits),0,"VBO-L");
+         double lotVL=LotRisk(i,ask-sl);             // A10: capで0になったら発注しない
+         if(lotVL>0.0) trade.Buy(lotVL,sym,ask,NormalizeDouble(sl,S[i].digits),0,"VBO-L");
       } else if(sq && cp<ll){
          double bid=SymbolInfoDouble(sym,SYMBOL_BID); double sl=bid+S[i].atrSLmult*atr1;
-         trade.Sell(LotRisk(i,sl-bid),sym,bid,NormalizeDouble(sl,S[i].digits),0,"VBO-S");
+         double lotVS=LotRisk(i,sl-bid);             // A10
+         if(lotVS>0.0) trade.Sell(lotVS,sym,bid,NormalizeDouble(sl,S[i].digits),0,"VBO-S");
       }
    } else {
       // チャンデリア・トレーリング
@@ -2656,7 +2697,8 @@ void ProcSCA(int i)
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
          double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
-         if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
+         double lotL=Clamp(sym,lot);                // A10: capで0になったら発注しない
+         if(lotL>0.0 && trade.Buy(lotL,sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
             S[i].scaTradedL=true;
       }
    }
@@ -2670,7 +2712,8 @@ void ProcSCA(int i)
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
          double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
-         if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
+         double lotS=Clamp(sym,lot);                // A10: capで0になったら発注しない
+         if(lotS>0.0 && trade.Sell(lotS,sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
             S[i].scaTradedS=true;
       }
    }
