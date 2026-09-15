@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# fxmargin3 の「まだ分かっていない案」が終わったら、fxmargin3 を止めて fxwin1 を始める。
+# fxlev25 の OOS が全案ぶん終わったら、fxlev25 を止めて fxwin1（24か月窓の実測）へ移す。
 #
-# fxmargin3 に残っているのは
-#   U011 / U010 / U007 / U003  … 未知が残る（回す価値がある）
-#   U008 / U005 / U004 / U006 / U002FULL … cap 違いだけ＝no-op と分かっている
-# なので **U003 FULL が終わった時点で打ち切り**、価値の高い fxwin1（24か月窓の実測）へ移す。
-# 打ち切った分は measure.py の resume（results.csv 基準）で後から拾える。
+# fxlev25 は OOS 7本 → FULL 7本 の順。**判断に効くのは OOS のほうで**、
+# FULL（115か月・各10分）は口座が数千万〜億に育った領域の数字なので
+# 「50万円で月利6%」という問いには答えない。
+# 一方 fxwin1 は**毎回50万円から始める24か月窓**で、まさにその問いに答える。
+# よって **V003 OOS（OOSの最後）で打ち切り**、fxwin1 を先に回す。
+# 打ち切った FULL は measure.py の resume（results.csv 基準）で後から拾える。
 #
-# 端末は1台しか使えないので、**必ず fxmargin3 を落としてから** fxwin1 を起動する。
-# ロックは fxmargin3 の measure.lock を共有しているため、二重起動にはならない。
+# 端末は1台しか使えないので、**必ず fxlev25 を落としてから** fxwin1 を起動する。
 set -u
 
 REPO="C:/Users/f/source/repos/mt5_backtester"
 PY="C:/Users/f/AppData/Local/Programs/Python/Python314/python.exe"
-M3LOG="$REPO/ml/fxmargin3/measure.log"
+SRCLOG="$REPO/ml/fxlev25/measure.log"
 LOG="$REPO/ml/fxwin1/chain.log"
 
 say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
@@ -26,33 +26,30 @@ fi
 echo $$ > "$LOCKF"
 trap 'rm -f "$LOCKF"' EXIT
 
-say "CHAIN_START fxmargin3 の U003 FULL の完了を待つ"
+say "CHAIN_START fxlev25 の V003 OOS の完了を待つ"
 
-# 最大3時間待つ（U011FULL+U010x2+U007x2+U003x2 で約1時間の見込み）。
 deadline=$(( $(date +%s) + 10800 ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
-  if grep -q "RUN_END U003 FULL" "$M3LOG" 2>/dev/null; then
-    say "U003 FULL の完了を検出"
+  if grep -q "RUN_END V003 OOS" "$SRCLOG" 2>/dev/null; then
+    say "V003 OOS の完了を検出"
     break
   fi
-  if grep -q "FXMARGIN3_END" "$M3LOG" 2>/dev/null; then
-    say "fxmargin3 が自力で完了した"
+  if grep -q "FXLEV25_END" "$SRCLOG" 2>/dev/null; then
+    say "fxlev25 が自力で完了した"
     break
   fi
   sleep 30
 done
 
-if ! grep -qE "RUN_END U003 FULL|FXMARGIN3_END" "$M3LOG" 2>/dev/null; then
-  say "CHAIN_ABORT 3時間待っても U003 FULL に到達しなかった"
+if ! grep -qE "RUN_END V003 OOS|FXLEV25_END" "$SRCLOG" 2>/dev/null; then
+  say "CHAIN_ABORT 3時間待っても V003 OOS に到達しなかった"
   exit 1
 fi
 
-# fxmargin3 を止める。measure.lock に書かれている pid を落とし、
-# 走っているテスターも落としてから解放する。
 LOCK="$REPO/ml/fxmargin3/measure.lock"
 if [ -f "$LOCK" ]; then
   pid=$(cat "$LOCK" 2>/dev/null)
-  say "fxmargin3 (pid=$pid) を停止する"
+  say "fxlev25 (pid=$pid) を停止する"
   powershell -NoProfile -NonInteractive -Command \
     "Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue" || true
 fi
@@ -61,6 +58,6 @@ powershell -NoProfile -NonInteractive -Command \
 sleep 10
 rm -f "$LOCK"
 
-say "FXWIN1 を開始する"
+say "FXWIN1 を開始する（24か月窓・45run・1:25）"
 cd "$REPO" && "$PY" ml/fxwin1/measure.py >> "$LOG" 2>&1
 say "CHAIN_END exit=$?"
