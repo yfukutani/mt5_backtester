@@ -21,6 +21,13 @@ ALLOWED = {
     "U000": {}, "U001": {}, "U002": {}, "U003": {},
     "U006": {"GlobalLotMult": 3}, "U007": {"GlobalLotMult": 3},
     "U008": {}, "U004": {}, "U005": {},
+    # 枠別の重み案は Mult_* だけが base と異なってよい（倍率・マスクは T036 のまま）
+    "U010": {"Mult_PB_USDJPY": 0.3, "Mult_RSI_USDJPY": 2.0, "Mult_RSI_EURUSD": 4.0,
+             "Mult_RSI_GBPUSD": 4.0, "Mult_PAIR": 8.0, "Mult_CARRY": 0.75,
+             "Mult_SCA_USDJPY": 12.0, "Mult_SCA_GBPJPY": 12.0},
+    "U011": {"Mult_PB_USDJPY": 0.5, "Mult_RSI_USDJPY": 2.0, "Mult_RSI_EURUSD": 4.0,
+             "Mult_RSI_GBPUSD": 4.0, "Mult_PAIR": 4.0, "Mult_CARRY": 0.75,
+             "Mult_SCA_USDJPY": 4.0, "Mult_SCA_GBPJPY": 4.0},
 }
 
 ref = {}

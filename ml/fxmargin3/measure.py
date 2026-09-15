@@ -82,7 +82,7 @@ assert _fx3.DEPOSIT == DEPOSIT and _fx3.MAGICS == MAGICS
 # MarginCapPct 以外は fxrisk3 の対応案と1文字も変えない（parameter_json をそのまま使う）。
 
 
-def cfg(mask, pct, mult, cap, sca_gj=1.0):
+def cfg(mask, pct, mult, cap, sca_gj=1.0, **weights):
     p = {"FxRiskMask": mask, "FxRiskPct": pct, "FxRiskRefCap": 0,
          "GlobalLotMult": mult, "RefCap_CARRY": 0, "RefCap_PB_GBPJPY": 0,
          "RefCap_PB_USDJPY": 0, "MarginCapPct": cap}
@@ -91,6 +91,11 @@ def cfg(mask, pct, mult, cap, sca_gj=1.0):
               "SCA_GOLD", "SCA_USDJPY", "VBO"):
         p[f"Mult_{k}"] = 1.0
     p["Mult_SCA_GBPJPY"] = sca_gj
+    for k, v in weights.items():                     # 枠別の重み（A3/A7）
+        key = f"Mult_{k}"
+        if key not in p:
+            raise KeyError(f"未知の枠: {key}")
+        p[key] = v
     return p
 
 
@@ -111,6 +116,19 @@ PROPOSALS = [
      cfg(7, 1.0, 1, 80)),
     ("U005", "T043", "対照: T043 ＋ cap80%。段階2では 10/1375＝ほぼ無影響のはず",
      cfg(23, 1.0, 1, 80, 0.15)),
+
+    # --- 枠別の重み（A3/A7・Codex #7）— ml/fxmargin3/weights.py の座標降下 ------
+    # 重みは IS(60か月)だけで決め、OOS では評価しかしていない。
+    # 段階2では OOS 4.67% -> 7.90%/月（+3.24pt・最大DD 56.1% -> 52.3%）。
+    # ただし探索は SCA/Pair でグリッド上限に張り付いており**収束していない**。
+    # 段階2の数字は採用の根拠にしない。MT5で符号が出るかだけを見る。
+    ("U010", "T036", "IS最適重み: PB_UJ 0.3 / RSI_UJ 2 / RSI_EU 4 / RSI_GU 4 / "
+                     "Pair 8 / Carry 0.75 / SCA×2 12 ＋ cap80%",
+     cfg(7, 1.0, 3, 80, PB_USDJPY=0.3, RSI_USDJPY=2.0, RSI_EURUSD=4.0,
+         RSI_GBPUSD=4.0, PAIR=8.0, CARRY=0.75, SCA_USDJPY=12.0, SCA_GBPJPY=12.0)),
+    ("U011", "T036", "上の保守版: 固定・小口枠を一律4倍まで（上限張り付きを外す）＋ cap80%",
+     cfg(7, 1.0, 3, 80, PB_USDJPY=0.5, RSI_USDJPY=2.0, RSI_EURUSD=4.0,
+         RSI_GBPUSD=4.0, PAIR=4.0, CARRY=0.75, SCA_USDJPY=4.0, SCA_GBPJPY=4.0)),
 ]
 
 # U000 が再現しなければならない fxrisk3 T043 の実測値（results.csv より）。
