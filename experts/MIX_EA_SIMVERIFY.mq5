@@ -457,6 +457,13 @@ input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分�
 input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
 input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
 input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+// --- Carry の保有を短くする2つの軸（第11報の準備・既定は現行と同一挙動）---------
+// 第9報の証拠金効率で Carry は IS 最下位（平均保有 184.8日）だった。
+// fxeff1 の E01（Carry を止める）は中央値・平均とも最良だったが、
+// 最悪窓が 4.96%→3.54% に落ちた（Carry は逆相関の分散源でもある）。
+// **止めるか残すかの二択ではなく、間を測れるようにする。**
+input int    CarryExitPeriod   = 0;  // >0 でヒステリシス帯の代わりに退出用SMA（Codex #21）
+input int    CarryHoldBars     = 0;  // >0 で保有上限（D1バー数・0で無制限）
 
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
@@ -826,6 +833,8 @@ int OnInit()
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol="AUDJPY"; x.tf=PERIOD_D1;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
      x.useHyst=true; x.hystMult=0.75; x.cdBars=10;
+     // CarryExitPeriod>0 なら ProcCarry() 側でヒステリシス帯より優先される（排他）。
+     x.exitPeriod=CarryExitPeriod;
      x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
@@ -1482,7 +1491,8 @@ void GoldPBHoldLimit()
       // 第2時間軸(20260641)は自分のバー数で数える。H4版と違う時間軸を持つので
       // GoldPBHoldBars をそのまま流用すると意味が変わってしまう。
       int bars = (S[i].magic==20260640) ? GoldPBHoldBars
-               : (S[i].magic==20260641) ? Pb2HoldBars : 0;
+               : (S[i].magic==20260641) ? Pb2HoldBars
+               : (S[i].magic==20260650) ? CarryHoldBars : 0;   // Carry（第11報）
       if(bars<=0) continue;
       long limit=(long)bars*PeriodSeconds(S[i].tf);
       for(int k=PositionsTotal()-1;k>=0;k--)
