@@ -64,20 +64,54 @@ def main():
     print("  重みは IS だけで決めた。窓はISを含むので、これは OOS 測定ではなく安定性の診断。\n")
     for span, step in ((24, 12), (12, 6)):
         es = edges(rows, span, step)
+        vals = {label: [W.simulate(rows, comp, w, args.cap, t0, t1)["geo"]
+                        for t0, t1, _ in es] for label, w in cases}
         print(f"  --- {span}か月窓・進め幅{step}か月・{len(es)}本 ---")
         print("  %-22s %8s %8s %8s %8s %10s %10s"
               % ("", "中央値", "平均", "最悪", "最良", "6%以上", "マイナス"))
-        for label, w in cases:
-            xs = sorted(W.simulate(rows, comp, w, args.cap, t0, t1)["geo"]
-                        for t0, t1, _ in es)
+        for label, _ in cases:
+            xs = sorted(vals[label])
             n = len(xs)
             med = xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
             print("  %-22s %7.2f%% %7.2f%% %7.2f%% %7.2f%% %6d/%-3d %6d/%-3d"
                   % (label, med, sum(xs) / n, xs[0], xs[-1],
                      sum(1 for x in xs if x >= 6.0), n,
                      sum(1 for x in xs if x < 0.0), n))
+
+        # 【符号の数え上げ】capの「純益が増える」は、期間を切ったら 4勝5敗で消えた
+        # （docs/oanda_fx_cap_pathdep_20260915.md）。**同じ物差しを重みにも当てる。**
+        # 自分の新しい発見にだけ甘い基準を使わないための手続きである。
+        base = vals[cases[0][0]]
+        print(f"\n  期間ごとの符号（基準に対する月利の差・pt）")
+        print("  %-18s %12s %12s" % ("期間", "IS最適重み", "保守版"))
+        for i, (_, _, label) in enumerate(es):
+            print("  %-18s %+11.2f %+11.2f"
+                  % (label, vals["IS最適重み"][i] - base[i],
+                     vals["保守版（一律4倍まで）"][i] - base[i]))
+        # 重みは IS(2021-06-20〜) で決めたので、IS を含む窓は有利に出て当然である。
+        # **窓全体が OOS に収まるものだけ**を分けて数え直す。ここが本当の判定になる。
+        is_from = int(W.IS_FROM)
+        oos_only = [i for i, (t0, t1, _) in enumerate(es) if t1 <= is_from]
+        for name in ("IS最適重み", "保守版（一律4倍まで）"):
+            w_ = sum(1 for i in range(len(base)) if vals[name][i] > base[i])
+            wo = sum(1 for i in oos_only if vals[name][i] > base[i])
+            print(f"  {name}: 全窓 勝ち {w_} / 負け {len(base)-w_}"
+                  f"   ‖ **OOSに収まる窓だけ** 勝ち {wo} / 負け {len(oos_only)-wo}")
+
+        # 目標指標（6%以上の窓）も、OOSに収まる窓だけで数え直す。
+        if oos_only:
+            print(f"\n  OOSに収まる窓だけ（{len(oos_only)}本）の分布")
+            print("  %-22s %8s %8s %8s %10s" % ("", "中央値", "最悪", "最良", "6%以上"))
+            for label, _ in cases:
+                xs = sorted(vals[label][i] for i in oos_only)
+                n = len(xs)
+                med = xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+                print("  %-22s %7.2f%% %7.2f%% %7.2f%% %6d/%-3d"
+                      % (label, med, xs[0], xs[-1],
+                         sum(1 for x in xs if x >= 6.0), n))
         print()
     print("注: 段階2の簡易検証であり、採用の根拠にはしない。")
+    print("    重みは IS で決めたので、IS を含む窓は有利に出る。符号の数えはその分を割り引く。")
 
 
 if __name__ == "__main__":

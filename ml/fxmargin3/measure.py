@@ -119,16 +119,21 @@ PROPOSALS = [
 
     # --- 枠別の重み（A3/A7・Codex #7）— ml/fxmargin3/weights.py の座標降下 ------
     # 重みは IS(60か月)だけで決め、OOS では評価しかしていない。
-    # 段階2では OOS 4.67% -> 7.90%/月（+3.24pt・最大DD 56.1% -> 52.3%）。
-    # ただし探索は SCA/Pair でグリッド上限に張り付いており**収束していない**。
-    # 段階2の数字は採用の根拠にしない。MT5で符号が出るかだけを見る。
-    ("U010", "T036", "IS最適重み: PB_UJ 0.3 / RSI_UJ 2 / RSI_EU 4 / RSI_GU 4 / "
-                     "Pair 8 / Carry 0.75 / SCA×2 12 ＋ cap80%",
-     cfg(7, 1.0, 3, 80, PB_USDJPY=0.3, RSI_USDJPY=2.0, RSI_EURUSD=4.0,
-         RSI_GBPUSD=4.0, PAIR=8.0, CARRY=0.75, SCA_USDJPY=12.0, SCA_GBPJPY=12.0)),
-    ("U011", "T036", "上の保守版: 固定・小口枠を一律4倍まで（上限張り付きを外す）＋ cap80%",
+    # 55か月まとめた OOS では 4.67% -> 7.90%（IS最適）/ 7.67%（保守版）。
+    #
+    # **ただし OOS を窓に切ると評価が分かれる**（weights_windows.py）。
+    # OOSに収まる24か月窓3本の月利中央値は 基準 4.73% / IS最適 3.45% / 保守版 6.16%。
+    # **IS最適重みは基準を下回る＝過学習の疑いが濃い。保守版だけが持ちこたえている。**
+    # したがって **U011（保守版）を先に回す。**
+    ("U011", "T036", "本命（重み）: 固定・小口枠を一律4倍まで。"
+                     "PB_UJ 0.5 / RSI_UJ 2 / RSI_EU 4 / RSI_GU 4 / Pair 4 / "
+                     "Carry 0.75 / SCA×2 4 ＋ cap80%",
      cfg(7, 1.0, 3, 80, PB_USDJPY=0.5, RSI_USDJPY=2.0, RSI_EURUSD=4.0,
          RSI_GBPUSD=4.0, PAIR=4.0, CARRY=0.75, SCA_USDJPY=4.0, SCA_GBPJPY=4.0)),
+    ("U010", "T036", "対照（過学習の疑い）: IS最適重み。PB_UJ 0.3 / Pair 8 / SCA×2 12 ＋ cap80%。"
+                     "OOS窓では基準を下回るので、MT5でも保守版に負けるはず",
+     cfg(7, 1.0, 3, 80, PB_USDJPY=0.3, RSI_USDJPY=2.0, RSI_EURUSD=4.0,
+         RSI_GBPUSD=4.0, PAIR=8.0, CARRY=0.75, SCA_USDJPY=12.0, SCA_GBPJPY=12.0)),
 ]
 
 # U000 が再現しなければならない fxrisk3 T043 の実測値（results.csv より）。
