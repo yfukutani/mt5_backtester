@@ -1357,6 +1357,19 @@ int    g_capDeny[32];     // cap が 0 にした回数＝発注を見送った
 double g_capWant[32];     // cap を掛ける前の希望ロットの合計
 double g_capGot[32];      // 実際に返したロットの合計
 
+// 削られた/見送られた注文を**1件ずつ**記録する。
+// 集計値だけでは Codex #1「退出を先、参入を後に」を判定できない。
+// 見送られた注文は deal ログに残らないので、**いつ見送られたか**を EA 側で残す必要がある。
+// これがあれば「その足の中で、後から別の枠が決済して証拠金が空いたか」を後で突き合わせられる。
+#define CAPEV_MAX 20000
+int      g_capEvN=0;
+datetime g_capEvT[CAPEV_MAX];
+long     g_capEvMagic[CAPEV_MAX];
+double   g_capEvWant[CAPEV_MAX];
+double   g_capEvGot[CAPEV_MAX];
+double   g_capEvEq[CAPEV_MAX];      // その時点の equity
+double   g_capEvUsed[CAPEV_MAX];    // その時点の使用証拠金
+
 double Clamp(string sym, double lot, int si=-1)
 {
    double want=lot;                                 // cap を掛ける前の希望量
@@ -1377,6 +1390,15 @@ double Clamp(string sym, double lot, int si=-1)
       if(deny) g_capDeny[si]++;
       g_capWant[si]+=want;
       g_capGot[si]+=got;
+      if(cut && g_capEvN<CAPEV_MAX){
+         int k=g_capEvN++;
+         g_capEvT[k]=TimeCurrent();
+         g_capEvMagic[k]=S[si].magic;
+         g_capEvWant[k]=want;
+         g_capEvGot[k]=got;
+         g_capEvEq[k]=AccountInfoDouble(ACCOUNT_EQUITY);
+         g_capEvUsed[k]=AccountInfoDouble(ACCOUNT_MARGIN);
+      }
    }
    return got;
 }
@@ -2792,6 +2814,13 @@ double OnTester()
                    DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4),"");
          FileWrite(ch,"balance_dd_pct",0,"","","",
                    DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4),"");
+         // 削られた注文を1件ずつ。kind=event, magic, 時刻, 希望, 通過, equity, 使用証拠金
+         for(int e=0;e<g_capEvN;e++)
+            FileWrite(ch,"event",g_capEvMagic[e],(long)g_capEvT[e],
+                      DoubleToString(g_capEvWant[e],4),DoubleToString(g_capEvGot[e],4),
+                      DoubleToString(g_capEvEq[e],2),DoubleToString(g_capEvUsed[e],2));
+         FileWrite(ch,"event_overflow",0,IntegerToString(g_capEvN>=CAPEV_MAX?1:0),
+                   "","","","");
          FileClose(ch);
       }
    }
