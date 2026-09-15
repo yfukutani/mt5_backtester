@@ -86,8 +86,14 @@ def compounding_magics(params):
     return out
 
 
-def simulate(rows, comp_magics, cap):
-    """cap = 使用証拠金/equity の上限（None で無制限＝logged の再現）。"""
+def simulate(rows, comp_magics, cap, reserve=0.0):
+    """cap = 使用証拠金/equity の上限（None で無制限＝logged の再現）。
+
+    reserve = Claude A5「利益の一部を取り置いて複利対象から外す」の割合（0.0〜1.0）。
+    0.3 なら利益の30%をサイジングの基準から外す。**口座からは出さない**ので、
+    取り置いた分も証拠金は支えるし、DDの分母にも入る。
+    複利の伸びだけを抑えて、裾の深さを減らす操作である。
+    """
     log_eq = sim_eq = float(DEPOSIT)
     sim_eq_min = float(DEPOSIT)
     sim_eq_peak = float(DEPOSIT)
@@ -111,7 +117,9 @@ def simulate(rows, comp_magics, cap):
                 continue
             opened += 1
             need_unit = vol * CONTRACT * rate / LEVERAGE      # logged ロットの必要証拠金
-            k = (sim_eq / log_eq) if (magic in comp_magics and log_eq > 0) else 1.0
+            # A5: サイジングの基準は「入金 ＋ 利益×(1−reserve)」。口座残高そのものではない。
+            size_eq = DEPOSIT + (sim_eq - DEPOSIT) * (1.0 - reserve)
+            k = (size_eq / log_eq) if (magic in comp_magics and log_eq > 0) else 1.0
             if k < 0:
                 k = 0.0
             if cap is not None and sim_eq > 0:
@@ -210,10 +218,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ids", nargs="*")
     ap.add_argument("--caps", default="none,1.0,0.7,0.5,0.3")
+    ap.add_argument("--reserves", default="0",
+                    help="A5の取り置き割合をカンマ区切りで（0＝全額複利）")
     args = ap.parse_args()
     ids = args.ids or ["T039", "T043", "T045", "T035"]
     repo = Path(__file__).resolve().parents[2]
     caps = [None if c == "none" else float(c) for c in args.caps.split(",")]
+    reserves = [float(x) for x in args.reserves.split(",")]
 
     print("A10 証拠金上限サイジング（レバレッジ%d・入金%s円）" % (LEVERAGE, format(DEPOSIT, ",")))
     print("equityは決済損益ベース＝含み損を含まない。段階2の簡易検証。\n")
@@ -227,19 +238,20 @@ def main():
             if not rows:
                 continue
             print("  --- %s ---" % win.upper())
-            print("  %6s %14s %8s %8s %9s %7s %11s %10s %11s %9s %9s"
-                  % ("cap", "純益", "月利", "中央値", "上位3除外",
+            print("  %6s %7s %14s %8s %8s %9s %7s %11s %10s %11s %9s %9s"
+                  % ("cap", "取置", "純益", "月利", "中央値", "上位3除外",
                      "最大DD", "最低資産", "証拠金最大", "削った注文",
                      "最大ロット", "証拠金実額"))
             for cap in caps:
-                s = simulate(rows, comp, cap)
-                g, med, d3 = geo_monthly(s["monthly"])
-                label = "無制限" if cap is None else "%.0f%%" % (cap * 100)
-                print("  %6s %14s %7.2f%% %7.2f%% %8.2f%% %6.1f%% %11s %9.1f%% %5d/%-5d %9.2f %13s"
-                      % (label, format(round(s["net"]), ","), g, med, d3,
-                         s["dd"] * 100, format(round(s["min_eq"]), ","),
-                         s["worst_ratio"] * 100, s["trimmed"], s["opened"],
-                         s["max_lot"], format(round(s["max_margin"]), ",")))
+                for rsv in reserves:
+                    s = simulate(rows, comp, cap, rsv)
+                    g, med, d3 = geo_monthly(s["monthly"])
+                    label = "無制限" if cap is None else "%.0f%%" % (cap * 100)
+                    print("  %6s %6.0f%% %14s %7.2f%% %7.2f%% %8.2f%% %6.1f%% %11s %9.1f%% %5d/%-5d %9.2f %13s"
+                          % (label, rsv * 100, format(round(s["net"]), ","), g, med, d3,
+                             s["dd"] * 100, format(round(s["min_eq"]), ","),
+                             s["worst_ratio"] * 100, s["trimmed"], s["opened"],
+                             s["max_lot"], format(round(s["max_margin"]), ",")))
         print()
     print("注: 拒否された注文は deal ログに無い。ロット削減の損益は k 倍で厳密だが、")
     print("    equity 経路が変わる分の再帰は比例近似である。MT5 で確認するまで採用しない。")
