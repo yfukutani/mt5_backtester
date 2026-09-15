@@ -40,9 +40,13 @@ int OnInit()
    FileWrite(fh, "margin_mode", (long)AccountInfoInteger(ACCOUNT_MARGIN_MODE));
    FileWrite(fh, "balance", AccountInfoDouble(ACCOUNT_BALANCE));
    FileWrite(fh, "");
-   FileWrite(fh, "symbol", "vol_min", "vol_max", "vol_step", "contract_size",
-             "margin_initial", "margin_maintenance", "margin_1lot_buy",
-             "digits", "point", "spread", "trade_mode");
+   // vol_limit = SYMBOL_VOLUME_LIMIT ＝ **同一銘柄の合計**建玉＋注文の上限。
+   // vol_max（1注文あたり）とは別物で、**「注文を分割して天井を超える」設計が
+   // 成立するかを決めるのはこちら。** 2026-09-15 の OANDA 実機計測はこの値を取っておらず、
+   // 上限10ロットに対する打ち手を決められないままになっていた。
+   FileWrite(fh, "symbol", "vol_min", "vol_max", "vol_limit", "vol_step",
+             "contract_size", "margin_initial", "margin_maintenance",
+             "margin_1lot_buy", "digits", "point", "spread", "trade_mode");
 
    for(int i = 0; i < ArraySize(SYMS); i++)
    {
@@ -63,6 +67,7 @@ int OnInit()
       FileWrite(fh, s,
                 SymbolInfoDouble(s, SYMBOL_VOLUME_MIN),
                 SymbolInfoDouble(s, SYMBOL_VOLUME_MAX),
+                SymbolInfoDouble(s, SYMBOL_VOLUME_LIMIT),
                 SymbolInfoDouble(s, SYMBOL_VOLUME_STEP),
                 SymbolInfoDouble(s, SYMBOL_TRADE_CONTRACT_SIZE),
                 SymbolInfoDouble(s, SYMBOL_MARGIN_INITIAL),
