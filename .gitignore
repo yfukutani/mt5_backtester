@@ -61,3 +61,7 @@ Desktop.ini
 
 # バックアップファイル
 *.bak
+
+# 測定プロセスの実行ログ（内容は各ラウンドの measure.log に残る）
+ml/*/stdout.log
+ml/*/stderr.log

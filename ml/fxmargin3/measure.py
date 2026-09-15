@@ -136,6 +136,23 @@ PROPOSALS = [
          RSI_GBPUSD=4.0, PAIR=8.0, CARRY=0.75, SCA_USDJPY=12.0, SCA_GBPJPY=12.0)),
 ]
 
+# --- 測定順の差し替え（2026-09-15 15:20 JST・U002 FULL の途中で判断） ------------
+# U001（T036 ＋ cap80%）と U002 OOS（cap85%）が、cap を掛けない fxrisk3 の T036 と
+# **純益・DD・取引数まで完全に一致した**（net=6,431,197 / dd=85.3875 / trades=1375）。
+# テスターのジャーナルにも、この時間帯の [No money] は**1件も無い**
+# （当日の22件はすべて 01:29-01:38 UTC＝T030 の run のもの）。
+# つまり **cap は発注時に一度も効いていない＝段階2の再構成が約10倍過大だった**。
+# 原因は再構成が equity を「決済損益のみ」で作っていたこと。このブックは
+# Carry AUDJPY と PB GBPJPY が数か月級の**含み益**を抱えたまま持ち続けるので、
+# 実際の equity は再構成値よりはるかに大きい。doc の「実際の維持率はこれより悪い」
+# という注意書きは、**符号が逆だった**。
+#
+# したがって cap 違いの run（U002 FULL / U003 / U004 / U005 / U006 / U008）は
+# ほぼ確実に no-op で、先に回す価値が無い。**未知が残っているのは重みの U011 / U010 と、
+# 未測定の構成である U007 だけ**なので、そこから回す。
+# cap の否定を確定させるための最小限として、台地の下端 U003（cap75%）は残す。
+MEASURE_ORDER = ["U011", "U010", "U007", "U003", "U008", "U005", "U004", "U006", "U002"]
+
 # U000 が再現しなければならない fxrisk3 T043 の実測値（results.csv より）。
 U000_EXPECT = {"FULL": {"net": 17072185.0, "trades": 2969, "dd_pct": 40.0584},
                "OOS":  {"net": 1213378.0,  "trades": 1375, "dd_pct": 29.4954}}
@@ -333,8 +350,10 @@ def main():
     if not acquire_lock():
         return
     done = load_done()
+    order = {pid: i for i, pid in enumerate(MEASURE_ORDER)}
+    props = sorted(PROPOSALS, key=lambda t: order.get(t[0], -1))
     jobs = [(pid, base, desc, params, w)
-            for (pid, base, desc, params) in PROPOSALS
+            for (pid, base, desc, params) in props
             for w in ("OOS", "FULL") if (pid, w) not in done]
     if not jobs:
         print("全案・両窓が完了済みです")
