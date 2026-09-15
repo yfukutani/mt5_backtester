@@ -461,6 +461,9 @@ input double RefCap_CARRY      = 0;  // Carry複利の基準資金
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
+// cap がどれだけロットを削り、どれだけ発注を見送ったかを枠別に出す（第10報）。
+// 含み損込みDD もここに出す。空なら1バイトも書かない。
+input string CapLogFile     = "";
 
 input group "=== 運用ログ（フォワード分析用・ライブで有効化） ==="
 // MQL5\Files\<prefix>_YYYYMM.csv に月次追記。3種のレコードを出力:
@@ -1340,8 +1343,23 @@ double MarginCapLot(const string sym, const double lot)
    return (maxlot<lot) ? maxlot : lot;
 }
 
-double Clamp(string sym, double lot)
+// --- cap 計装（2026-09-15・第10報）--------------------------------------
+// cap の応答曲線が 60→100% で単調だったので「証拠金が律速している」と診断したが、
+// **cap が実際にどれだけ削っているかは一度も測っていない。**
+// 削っている量が小さければ、「退出を先に処理する」「発注順を効率順にする」といった
+// 配分側の案（Codex #1/#2/#4/#7）は**まとめて価値が無い**ことになる。
+//
+// 計装は受動的である。ロット・発注・決済のどれも変えない。数えるだけ。
+// 既定（CapLogFile="" / MarginCapPct=0）では1バイトも出力しない。
+int    g_capN[32];        // Clamp の呼び出し回数（cap有効時のみ）
+int    g_capCut[32];      // cap がロットを削った回数（発注はできた）
+int    g_capDeny[32];     // cap が 0 にした回数＝発注を見送った
+double g_capWant[32];     // cap を掛ける前の希望ロットの合計
+double g_capGot[32];      // 実際に返したロットの合計
+
+double Clamp(string sym, double lot, int si=-1)
 {
+   double want=lot;                                 // cap を掛ける前の希望量
    double capped=MarginCapLot(sym,lot);
    bool cut=(capped < lot-1e-12);                   // capで削られたか
    lot=capped;
@@ -1351,8 +1369,16 @@ double Clamp(string sym, double lot)
    if(st>0) lot=MathFloor(lot/st)*st;
    // capで削られた結果 最小ロットに満たないなら**発注しない**。
    // ここで MathMax(mn,..) に戻すと cap を突き破るので、0 を返して呼び側に捨てさせる。
-   if(cut && lot<mn) return 0.0;
-   return MathMax(mn,MathMin(mx,lot));
+   bool deny=(cut && lot<mn);
+   double got = deny ? 0.0 : MathMax(mn,MathMin(mx,lot));
+   if(si>=0 && si<32 && MarginCapPct>0.0){
+      g_capN[si]++;
+      if(cut)  g_capCut[si]++;
+      if(deny) g_capDeny[si]++;
+      g_capWant[si]+=want;
+      g_capGot[si]+=got;
+   }
+   return got;
 }
 
 // Round 4の後処理と同じく「各スリーブの直近N完了deal」を群内で連結して平均する。
@@ -1483,7 +1509,7 @@ double GszLot(const int i,const double slDist)
    double lot=(eq*GszRiskPct/100.0)/mpl;
    if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
    if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
-   return Clamp(S[i].symbol,lot);
+   return Clamp(S[i].symbol,lot,i);
 }
 
 // SCA入口フィルタの対象枠か（FXRISKのbit割り当てとは別物なので混同しないこと）。
@@ -1546,7 +1572,7 @@ double LotRisk(int i, double slDistPrice)
    }
    double factor=SimVerifyFactor(i);
    if(factor<=0.0) return 0.0;
-   return Clamp(S[i].symbol, base*GlobalLotMult*S[i].lotMult*factor);
+   return Clamp(S[i].symbol, base*GlobalLotMult*S[i].lotMult*factor, i);
 }
 double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
 {
@@ -1556,7 +1582,7 @@ double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
       double rd=(S[i].refDeposit>0)?S[i].refDeposit:100000.0;
       base=S[i].lot*(eq/rd);
    }
-   return Clamp(sym, base*GlobalLotMult*S[i].lotMult);
+   return Clamp(sym, base*GlobalLotMult*S[i].lotMult, i);
 }
 double GetBuf(int h,int idx)
 {
@@ -2398,7 +2424,7 @@ void ProcFunding(int i)
    if(avg<FundThreshold && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      double lotF=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult);   // A10
+      double lotF=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult,i);   // A10
       if(lotF>0.0 && trade.Buy(lotF,S[i].symbol,ask,sl,0,"FundRev"))
          Print("[FUNDREV BUY] avg=",DoubleToString(avg,4),"%/8h");
    }
@@ -2565,7 +2591,7 @@ void ProcBfx(int i)
    if(chg<-BfxDropPct && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      double lotB=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult);   // A10
+      double lotB=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult,i);   // A10
       if(lotB>0.0 && trade.Buy(lotB,S[i].symbol,ask,sl,0,"BfxRev"))
          Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/",BfxLookbackDays,"日");
    }
@@ -2697,7 +2723,7 @@ void ProcSCA(int i)
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
          double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
-         double lotL=Clamp(sym,lot);                // A10: capで0になったら発注しない
+         double lotL=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
          if(lotL>0.0 && trade.Buy(lotL,sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
             S[i].scaTradedL=true;
       }
@@ -2712,7 +2738,7 @@ void ProcSCA(int i)
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
          double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
-         double lotS=Clamp(sym,lot);                // A10: capで0になったら発注しない
+         double lotS=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
          if(lotS>0.0 && trade.Sell(lotS,sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
             S[i].scaTradedS=true;
       }
@@ -2745,6 +2771,28 @@ double OnTester()
                       DoubleToString(HistoryDealGetDouble(tk,DEAL_SL),8),
                       DoubleToString(uj,5),DoubleToString(p*uj,2)); }
          FileClose(eqh);
+      }
+   }
+   // --- cap 計装の出力（第10報）。CapLogFile が空なら何もしない ------------
+   // 併せて含み損込みDD（STAT_EQUITY_DDREL_PERCENT）もここに出す。
+   // ResultFileName は FILE_COMMON を付けずに開いているためテスターエージェントの
+   // サンドボックスに落ちており、**2026-09-15 時点で誰も読んでいない**。
+   // そのため報告してきた最大DDはすべて残高ベース（含み損を含まない下限値）のままだった。
+   if(CapLogFile != ""){
+      int ch=FileOpen(CapLogFile,FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON,',');
+      if(ch!=INVALID_HANDLE){
+         FileWrite(ch,"kind","magic","calls","cut","deny","lot_want","lot_got");
+         for(int i=0;i<NS;i++){
+            if(g_capN[i]==0) continue;
+            FileWrite(ch,"sleeve",(long)S[i].magic,IntegerToString(g_capN[i]),
+                      IntegerToString(g_capCut[i]),IntegerToString(g_capDeny[i]),
+                      DoubleToString(g_capWant[i],4),DoubleToString(g_capGot[i],4));
+         }
+         FileWrite(ch,"equity_dd_pct",0,"","","",
+                   DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4),"");
+         FileWrite(ch,"balance_dd_pct",0,"","","",
+                   DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4),"");
+         FileClose(ch);
       }
    }
    if(ResultFileName=="") return pf;

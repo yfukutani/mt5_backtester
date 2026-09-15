@@ -157,6 +157,10 @@ MEASURE_ORDER = ["U011", "U010", "U007", "U003", "U008", "U005", "U004", "U006",
 U000_EXPECT = {"FULL": {"net": 17072185.0, "trades": 2969, "dd_pct": 40.0584},
                "OOS":  {"net": 1213378.0,  "trades": 1375, "dd_pct": 29.4954}}
 
+# cap 計装（第10報）。ラウンド側で True にすると run() が CapLogFile を付ける。
+# 既定 False。EA側も CapLogFile="" なら1バイトも書かないので、既存ラウンドは無影響。
+CAP_LOG = False
+
 FIELDS = (["proposal_id", "base", "description", "parameter_json", "cap", "window",
            "status", "net", "pf", "dd_pct", "monthly_pct", "trades", "final_balance",
            "balance_source", "deals", "elapsed", "run_id"]
@@ -199,6 +203,8 @@ def run(pid, base, desc, params, window):
     p.update(params)
     p["ResultFileName"] = f"{run_id}_result.csv"
     p["EquityLogFile"] = f"{run_id}_deals.csv"
+    if CAP_LOG:
+        p["CapLogFile"] = f"{run_id}_cap.csv"
     frm, to, months = WINDOWS[window]
     lines = [f"mt5_path: {EXE}", "expert: MIX_EA_SIMVERIFY", "symbol: USDJPY",
              "period: M15", f"from_date: {frm}", f"to_date: {to}",
@@ -240,6 +246,15 @@ def run(pid, base, desc, params, window):
             src.replace(dst)
         except OSError:
             dst = src
+
+    # cap 計装の回収（第10報）。CAP_LOG が False なら EA が書いていないので何もしない。
+    if CAP_LOG:
+        csrc = COMMON / f"{run_id}_cap.csv"
+        if csrc.exists():
+            try:
+                csrc.replace(DEAL_DIR / f"{run_id}_cap.csv")
+            except OSError:
+                pass
 
     st, deal_profit = {}, 0.0
     if dst.exists():
