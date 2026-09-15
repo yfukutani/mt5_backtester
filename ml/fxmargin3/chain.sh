@@ -16,6 +16,17 @@ LOG="$REPO/ml/fxmargin3/chain.log"
 
 say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 
+# 二重起動を防ぐ。chain が2本走ると MetaEditor が同じ .ex5 を同時に書きに行き、
+# その後 measure.py も2本立ち上がって互いのテスターを殺し合う
+# （measure.py 側にもロックはあるが、コンパイルの競合はそこでは防げない）。
+LOCKF="$REPO/ml/fxmargin3/chain.lock"
+if [ -f "$LOCKF" ] && kill -0 "$(cat "$LOCKF" 2>/dev/null)" 2>/dev/null; then
+  say "CHAIN_BUSY 既に別のchainが待機中。起動しない"
+  exit 0
+fi
+echo $$ > "$LOCKF"
+trap 'rm -f "$LOCKF"' EXIT
+
 say "CHAIN_START 掃引の終了を待つ"
 
 # 最大6時間待つ。残り10案 x 約14分 = 約2.3時間の見込み。
