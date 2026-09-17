@@ -38,6 +38,18 @@ int OnInit()
    FileWrite(fh, "currency", AccountInfoString(ACCOUNT_CURRENCY));
    FileWrite(fh, "account_leverage", (long)AccountInfoInteger(ACCOUNT_LEVERAGE));
    FileWrite(fh, "margin_mode", (long)AccountInfoInteger(ACCOUNT_MARGIN_MODE));
+   // --- 強制ロスカット水準（2026-09-17 追加）------------------------------
+   // **これを測っていなかったせいで、XM の結果が OANDA でも成り立つと思っていた。**
+   // テスターのジャーナルに出た実測値は
+   //   XM    `position stop out triggered at 19.02%`
+   //   OANDA `position stop out triggered at 99.77%`
+   // ＝**XM は証拠金維持率 20% まで耐えるが、OANDA は 100% で切られる。**
+   // `MarginCapPct` は**発注時**の上限であって維持率の保証ではない。
+   // cap90 で建てた直後の維持率は約111%で、OANDA では少し逆行しただけでロスカットになる。
+   // 推測で書かないために口座から直接引く。
+   FileWrite(fh, "so_mode", (long)AccountInfoInteger(ACCOUNT_MARGIN_SO_MODE));
+   FileWrite(fh, "margin_call_level", AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL));
+   FileWrite(fh, "stop_out_level", AccountInfoDouble(ACCOUNT_MARGIN_SO_SO));
    FileWrite(fh, "balance", AccountInfoDouble(ACCOUNT_BALANCE));
    FileWrite(fh, "");
    // vol_limit = SYMBOL_VOLUME_LIMIT ＝ **同一銘柄の合計**建玉＋注文の上限。
