@@ -1,0 +1,4 @@
+2026-09-15T10:03:24Z CHAIN_START fxinstr1 の完了を待つ
+2026-09-15T20:03:56Z CHAIN_ABORT 10時間待っても fxinstr1 が終わらなかった
+2026-09-15T20:04:20Z CHAIN_START fxinstr1 の完了を待つ
+2026-09-17T14:57:52Z CHAIN_START(ps1) 共有ロックが空くのを待つ（最大12時間）
