@@ -499,6 +499,45 @@ input double Bud_CARRY      = 0.0;
 input double Bud_SCA_USDJPY = 0.0;
 input double Bud_SCA_GBPJPY = 0.0;
 
+// ===== 枠そのものの質を測る軸（第14報・2026-09-18・すべて既定OFF）=================
+// 2026-09-08〜09-17 の掃引は全部「ロットの大小」だった（倍率・複利・risk%・cap・重み・
+// 証拠金予算）。ユーザー指示が変わり、主題は **枠ごとのシグナル／執行の質**になった。
+// ここで足す3軸は、取引ログの段階2解析（ml/fxqual1/）が指した場所である。
+//
+// 【段階2で分かったこと（本番現行サイジング C001・FULL窓を OOS/IS に割った実測）】
+//   1. RSI 3枠の「SLでもTPでもない決済」は **97〜100% が反対シグナルのドテン**で、
+//      **両窓・3枠すべて負け**（出た側 ΣR: OOS -8.1 / IS -17.9）。
+//      ただし**ドテンで入った側**は OOS +15.9R / IS -8.8R。**OOSでは入った側が稼いでいる。**
+//      → 「ドテンをやめる」は IS には効きそうだが OOS では逆。**測らないと決まらない。**
+//   2. SCA 2枠は取引の 60〜77% が **22時の強制決済**で終わり、**利益はそこに集中**する
+//      （SCA_GJ: 22時決済 ΣR +106(OOS)/+116(IS)、それ以外 -116/-102）。
+//      TP到達は 3〜7% しかない。**退出時刻はこの枠の主要パラメータなのに一度も掃いていない。**
+//   3. PB GBPJPY は 115か月で 28取引しかないが **平均 R 1.34(OOS)/1.69(IS)** と桁違いに良い。
+//      **律速は質ではなく頻度**である。ADX(10)>=30・slope>=1.5ATR が絞りすぎていないか。
+//
+// 既定値はすべて「無効」で、**従来と1ビットも変わらない**。対照runで一致を確認すること。
+
+input group "=== RSI ドテン制御（第14報・0=現行）==="
+// 現行の ProcRSI は、反対シグナルが立つと保有を決済して即座に反対に建てる。
+// 1 = 反対シグナルを無視する（保有を続け、反対の新規も出さない）
+// 2 = 決済はするが反対の新規は出さない（ポジションを持たない側に倒す）
+input int    RsiNoFlipMode  = 0;
+input int    RsiNoFlipMask  = 0;   // bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全RSI枠）
+
+input group "=== SCA FX 枠の時間（第14報・0=現行）==="
+// SCA USDJPY/GBPJPY は レンジ0-9時・発注締切12時・強制決済22時。
+// 締切と強制決済は一度も掃いていないが、利益の大半は強制決済から出ている。
+input int    ScaHourMask       = 0;   // bit0=SCA USDJPY bit1=SCA GBPJPY（0で無効）
+input int    ScaForceCloseOv   = 0;   // >0 で強制決済時刻を上書き（1-23）
+input int    ScaTradeEndOv     = 0;   // >0 で発注締切を上書き（1-23）
+
+input group "=== PullbackTrend 入口の広さ（第14報・0=現行）==="
+// PB 2枠は最も質が高く最も取引が少ない。絞りを緩めて頻度を上げられるか。
+input double PbAdxThr_UJ    = 0.0;   // >0 で PB USDJPY の ADX閾値を上書き（現行27.5）
+input double PbSlopeATR_UJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.2）
+input double PbAdxThr_GJ    = 0.0;   // >0 で PB GBPJPY の ADX閾値を上書き（現行30.0）
+input double PbSlopeATR_GJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.5）
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -706,6 +745,15 @@ void FxRiskOn(SLEEVE &x, const int bit)
    x.refCap  = FxRiskRefCap;
 }
 
+// SCA FX枠（USDJPY=bit1 / GBPJPY=bit2）の発注締切・強制決済時刻を上書きする（第14報・既定OFF）。
+// GOLD の SCA枠と第2セッション枠には掛からない。マスクが立っていない枠は1ビットも変わらない。
+void ScaHourOverride(SLEEVE &x, const int bit)
+{
+   if((ScaHourMask & bit)==0) return;
+   if(ScaTradeEndOv   > 0) x.scaTradeEnd   = ScaTradeEndOv;
+   if(ScaForceCloseOv > 0) x.scaForceClose = ScaForceCloseOv;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
@@ -722,6 +770,52 @@ int OnInit()
    if(ScaFilMask<0 || ScaFilMask>3)
    {
       Print("ScaFilMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // --- 第14報の3軸（既定はすべて無効）---
+   if(RsiNoFlipMode<0 || RsiNoFlipMode>2)
+   {
+      Print("RsiNoFlipMode must be 0..2");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(RsiNoFlipMask<0 || RsiNoFlipMask>7)
+   {
+      Print("RsiNoFlipMask must be 0..7");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask<0 || ScaHourMask>3)
+   {
+      Print("ScaHourMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask!=0 && ScaTradeEndOv<=0 && ScaForceCloseOv<=0)
+   {
+      Print("ScaHourMask is set but neither ScaTradeEndOv nor ScaForceCloseOv is > 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaTradeEndOv<0 || ScaTradeEndOv>23 || ScaForceCloseOv<0 || ScaForceCloseOv>23)
+   {
+      Print("ScaTradeEndOv / ScaForceCloseOv must be 0..23");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // レンジ確定(9時)より前に締切・強制決済を置くと枠が沈黙するだけで測定にならない。
+   if(ScaHourMask!=0 && ScaTradeEndOv>0 && ScaTradeEndOv<=9)
+   {
+      Print("ScaTradeEndOv must be > 9 (SCA FX range ends at 9)");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask!=0 && ScaForceCloseOv>0)
+   {
+      int te = (ScaTradeEndOv>0 ? ScaTradeEndOv : 12);
+      if(ScaForceCloseOv<=te)
+      {
+         Print("ScaForceCloseOv must be > the effective trade-end hour");
+         return INIT_PARAMETERS_INCORRECT;
+      }
+   }
+   if(PbAdxThr_UJ<0.0 || PbSlopeATR_UJ<0.0 || PbAdxThr_GJ<0.0 || PbSlopeATR_GJ<0.0)
+   {
+      Print("Pb*_UJ / Pb*_GJ overrides must be >= 0");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(ScaFilRangeMin<0.0)
@@ -779,7 +873,10 @@ int OnInit()
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.budPct=Bud_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.adxThr=27.5; AddSleeve(x); }
+     x.adxThr=27.5;
+     if(PbAdxThr_UJ>0.0)   x.adxThr=PbAdxThr_UJ;         // 第14報（0=現行）
+     if(PbSlopeATR_UJ>0.0) x.slopeMinATR=PbSlopeATR_UJ;
+     AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    //    v1.6: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
    //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
@@ -805,7 +902,10 @@ int OnInit()
      x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.budPct=Bud_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
-     x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }
+     x.fastEMA=25; x.slowEMA=35;
+     if(PbAdxThr_GJ>0.0)   x.adxThr=PbAdxThr_GJ;         // 第14報（0=現行）
+     if(PbSlopeATR_GJ>0.0) x.slopeMinATR=PbSlopeATR_GJ;
+     AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    //    v2.2: RR_Ratio 2.0→5.0（トレードオフ8案の組合せ検証#5・ほぼ利益の出ていなかった枠が
    //    IS+6,157(PF1.74)/OOS+5,619(PF1.40)と両期間で明確に黒字化。
@@ -952,6 +1052,7 @@ int OnInit()
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     ScaHourOverride(x,1);                               // 第14報（マスク未指定なら不変）
      FxRiskOn(x,3); AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
@@ -972,6 +1073,7 @@ int OnInit()
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
+     ScaHourOverride(x,2);                               // 第14報（マスク未指定なら不変）
      FxRiskOn(x,4); AddSleeve(x); }
 
    // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
@@ -2208,19 +2310,38 @@ void ProcRSI(int i)
    double sld=S[i].useATRstops?atr*S[i].atrSLmult:S[i].slPips*S[i].pip;
    double tpd=S[i].useATRstops?sld*S[i].rr:S[i].tpPips*S[i].pip;
    trade.SetExpertMagicNumber(S[i].magic);
+
+   // --- ドテン制御（第14報・既定0で現行と同一）---
+   // 0 = 反対建玉を決済して即座に反対へ建てる（現行）
+   // 1 = 反対シグナルを無視する（保有を続け、新規も出さない）
+   // 2 = 決済はするが反対の新規は出さない
+   int nf = RsiNoFlipOn(i) ? RsiNoFlipMode : 0;
+
    if(eb && !hb){
-      if(hs) CloseType(i,POSITION_TYPE_SELL);
-      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
-      double lot=LotRisk(i,sld);
-      if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
-      if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
+      if(hs && nf==1){
+         // 何もしない。保有を続け、このシグナルは消費しない（次のバーで再判定される）。
+      } else {
+         if(hs) CloseType(i,POSITION_TYPE_SELL);
+         if(!(hs && nf==2)){
+            double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+            double lot=LotRisk(i,sld);
+            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
+         }
+         if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
+      }
    }
    if(es && !hs){
-      if(hb) CloseType(i,POSITION_TYPE_BUY);
-      double bid=SymbolInfoDouble(sym,SYMBOL_BID);
-      double lot=LotRisk(i,sld);
-      if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
-      if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
+      if(hb && nf==1){
+         // 同上
+      } else {
+         if(hb) CloseType(i,POSITION_TYPE_BUY);
+         if(!(hb && nf==2)){
+            double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+            double lot=LotRisk(i,sld);
+            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
+         }
+         if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
+      }
    }
    // 保有中に完成したシグナルを消費する（既定OFF）。現行は注文分岐に入らないと
    // 消えないため、同方向で保有している間に完成した反転を、決済後に新しい機会として
@@ -2234,6 +2355,17 @@ void ProcRSI(int i)
 
 // RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
 // 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+// ドテン制御を枠に適用するか（第14報）。マスク0は「モードが立っていれば全RSI枠」。
+bool RsiNoFlipOn(const int i)
+{
+   if(RsiNoFlipMode<=0) return false;
+   if(RsiNoFlipMask==0) return true;
+   if(S[i].magic==20260610) return (RsiNoFlipMask&1)!=0;   // RSI USDJPY
+   if(S[i].magic==20260605) return (RsiNoFlipMask&2)!=0;   // RSI EURUSD
+   if(S[i].magic==20260774) return (RsiNoFlipMask&4)!=0;   // RSI GBPUSD
+   return false;
+}
+
 bool RsiMemLabOn(const int i)
 {
    if(RsiBBFlagMaxBars<=0 && RsiRSIFlagMaxBars<=0
