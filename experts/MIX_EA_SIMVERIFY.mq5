@@ -474,6 +474,31 @@ input int    CarryHoldBars     = 0;  // >0 で保有上限（D1バー数・0で�
 // 0 のときは端末の値をそのまま使う＝**既定では従来と1ビットも変わらない。**
 input double BrokerMaxLot   = 0.0;   // 1注文あたりロット上限の上書き（0=端末の値）
 
+// --- 枠ごとの証拠金予算（第13報の準備・Codex #4）--------------------------------
+// 第10報の cap 計装で分かったこと:
+//   ・注文だけで数えた通過率は 30.2%（通期OOS・cap90）。RSI EURUSD は 23.8% しか通らない。
+//   ・cap を 20pt 開けても通過率は 5.6pt しか動かないのに、OOS窓中央値は 0.78pt 動く。
+//     **効いているのは総量ではなく「通る取引の顔ぶれ」**である。
+//   ・`Mult_*` は cap を上回る領域では何も変えない（希望を変えても cap が先に決めるため）。
+// 顔ぶれを変えるには「希望を下げる」のではなく「**その枠が取れる上限を下げる**」必要がある。
+//
+// ここで足すのは **1注文の所要証拠金が equity の何%までか**という上限である。
+// `Mult_*` と違い cap と同じ側（上限）に効くので、**cap の下でも必ず通る。**
+//
+// fxeff1 が測ったのは RSI EU の「全停止（中央値 2.44%）」と「重み half（無効）」の2点だけで、
+// **その間は空白**である。10/20/30/40% を刻めば「止めずに小さくした場合」が分かる。
+// 0 のときは無効＝**既定では従来と1ビットも変わらない。**
+input group "=== 枠ごとの証拠金予算（%of equity・0=無効・第13報）==="
+input double Bud_PB_USDJPY  = 0.0;
+input double Bud_PB_GBPJPY  = 0.0;
+input double Bud_RSI_USDJPY = 0.0;
+input double Bud_RSI_EURUSD = 0.0;
+input double Bud_RSI_GBPUSD = 0.0;
+input double Bud_PAIR       = 0.0;
+input double Bud_CARRY      = 0.0;
+input double Bud_SCA_USDJPY = 0.0;
+input double Bud_SCA_GBPJPY = 0.0;
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -548,6 +573,7 @@ struct SLEEVE
    // 増レバ配分（deploy）
    double          lotMult;   // per-sleeve ロット倍率
    double          refCap;    // risk%/複利の基準資金（0=口座equity）
+   double          budPct;    // 1注文の所要証拠金の上限（%of equity・0=無効・第13報）
    // SCA（セッションORB）
    int             scaRangeStart, scaRangeEnd, scaTradeEnd, scaForceClose;
    double          scaMinRange, scaMaxRange, scaBuf;
@@ -751,7 +777,7 @@ int OnInit()
    //    OOS+3,332＝現行OOS-3,299から黒字化。ポートフォリオ合算でDD抑制に寄与(-0.0775pt)。
    //    docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.budPct=Bud_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.adxThr=27.5; AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
@@ -776,7 +802,7 @@ int OnInit()
    //    IS+34,242→+38,136/OOS+22,692→+25,204＝旧単独測定(IS35,946/OOS20,684)より更に良化する
    //    正の相互作用を確認。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.budPct=Bud_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
      x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }
@@ -814,13 +840,13 @@ int OnInit()
    //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
-     x.lotMult=Mult_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
+     x.lotMult=Mult_RSI_USDJPY; x.budPct=Bud_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
    //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
    //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD;
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; x.budPct=Bud_RSI_EURUSD;
      FxRiskOn(x,1); AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
@@ -829,12 +855,12 @@ int OnInit()
    //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
      x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
-     x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
+     x.lotMult=Mult_RSI_GBPUSD; x.budPct=Bud_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
      x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
-     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
+     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; x.budPct=Bud_PAIR; AddSleeve(x); }
 
    // 8. Carry AUDJPY D1 (複利0.05, スワップ条件ON, ヒステリシス帯±0.75ATR採用)
    //    v2.2: ReentryCooldown 0→10（トレードオフ8案の組合せ検証#7・ISは完全不変(105,817)のまま
@@ -844,7 +870,7 @@ int OnInit()
      x.useHyst=true; x.hystMult=0.75; x.cdBars=10;
      // CarryExitPeriod>0 なら ProcCarry() 側でヒステリシス帯より優先される（排他）。
      x.exitPeriod=CarryExitPeriod;
-     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
+     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.budPct=Bud_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
    { SLEEVE x=z; x.enabled=En_VBO; x.strat=ST_VBO; x.symbol="USDJPY"; x.tf=PERIOD_H4;
@@ -922,7 +948,7 @@ int OnInit()
    //     ⚠️ただしOOS純利益+110円/PF1.0024と経済的には極薄で、スプレッド変動で消えうる水準。
    //     トレードオフなしの純改善ではあるがユーザー承認のうえ採用。docs/param_reopt_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_USDJPY; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
-     x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
+     x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY; x.budPct=Bud_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
@@ -942,7 +968,7 @@ int OnInit()
    //     ⚠️Boost4.5は0.01×4.5=0.045がロットステップで0.04に丸められ4.0と完全同値＝
    //     0.01ロット基準では整数倍しか意味を持たない。docs/codex500_round3_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_GBPJPY; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
-     x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
+     x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY; x.budPct=Bud_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
@@ -950,7 +976,7 @@ int OnInit()
 
    // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
    { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
-     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY;
+     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY; x.budPct=Bud_SCA_USDJPY;
      x.scaRangeStart=Sca5RangeStart; x.scaRangeEnd=Sca5RangeEnd;
      x.scaTradeEnd=Sca5TradeEnd; x.scaForceClose=Sca5ForceClose;
      x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
@@ -967,7 +993,7 @@ int OnInit()
      x.scaBoostMult=ScaNewBoostMult; AddSleeve(x); }
    // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
    { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
-     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
+     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY; x.budPct=Bud_SCA_GBPJPY;
      x.scaRangeStart=Sca6RangeStart; x.scaRangeEnd=Sca6RangeEnd;
      x.scaTradeEnd=Sca6TradeEnd; x.scaForceClose=Sca6ForceClose;
      x.scaMinRange=Sca6MinRange; x.scaMaxRange=Sca6MaxRange; x.scaBuf=Sca6Buffer;
@@ -1058,7 +1084,7 @@ void ZeroSleeve(SLEEVE &x)
    x.exitPeriod=0; x.hExit=INVALID_HANDLE; x.cdBars=0; x.cdExitBar=0; x.disasterSL=0;
    x.cryptoGroup=false;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
-   x.lotMult=1.0; x.refCap=0.0;
+   x.lotMult=1.0; x.refCap=0.0; x.budPct=0.0;
    x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=22;
    x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
    x.scaSkipFriday=false; x.scaRevBoost=false; x.scaBoostMult=2.0;
@@ -1396,8 +1422,24 @@ double   g_capEvUsed[CAPEV_MAX];    // その時点の使用証拠金
 double Clamp(string sym, double lot, int si=-1)
 {
    double want=lot;                                 // cap を掛ける前の希望量
+   // 枠ごとの証拠金予算（第13報・Codex #4）。**cap より先に**掛ける——
+   // 予算は「この枠にこれ以上は使わせない」という意思であり、
+   // 空き証拠金が潤沢なときにも効かなければ意味が無い（cap の後だと効かない局面がある）。
+   // 既定 budPct=0 では1ビットも変わらない。
+   bool budCut=false;
+   if(si>=0 && si<ArraySize(S) && S[si].budPct>0.0){
+      double eqb=AccountInfoDouble(ACCOUNT_EQUITY);
+      double pb=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double mb=0.0;
+      if(eqb>0.0 && pb>0.0 && OrderCalcMargin(ORDER_TYPE_BUY,sym,1.0,pb,mb) && mb>0.0){
+         double budlot=(eqb*S[si].budPct/100.0)/mb;
+         if(budlot<lot){ lot=budlot; budCut=true; }
+      }
+   }
    double capped=MarginCapLot(sym,lot);
-   bool cut=(capped < lot-1e-12);                   // capで削られたか
+   // 予算で削った分も「削られた」に数える——そうしないと、予算で最小ロットを
+   // 下回ったときに `MathMax(mn,..)` が予算を突き破って最小ロットを建ててしまう。
+   bool cut=(capped < lot-1e-12) || budCut;
    lot=capped;
    double mn=SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN);
    double mx=SymbolInfoDouble(sym,SYMBOL_VOLUME_MAX);
