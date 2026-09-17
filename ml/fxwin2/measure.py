@@ -95,15 +95,27 @@ def oa(mult, cap, off=()):
     return p
 
 
+def prod():
+    """本番現行（`RefCap_*=78,000`・倍率1・cap無し）。"""
+    p = cfg(0, 1.0, 1, 0)
+    p["RefCap_PB_USDJPY"] = 78000
+    p["RefCap_PB_GBPJPY"] = 78000
+    p["RefCap_CARRY"] = 78000
+    return p
+
+
 PROPOSALS = [
     ("Q001", "E04", "Carry＋PB UJ を外す・倍率3・cap90", oa(3, 90, (CARRY, PBUJ))),
     ("Q003", "E15", "Carry＋PB UJ＋RSI EU を外す・倍率3・cap90",
      oa(3, 90, (CARRY, PBUJ, RSIEU))),
     ("Q002", "E09", "Carry＋PB UJ を外す・倍率4・cap90", oa(4, 90, (CARRY, PBUJ))),
     ("Q000", "Y090", "対照: X005（9枠すべて）・倍率3・cap90", oa(3, 90)),
+    # 本番現行。**OANDA側（ml/fxoanda2 の P000）と同じ窓で対になる**ので、
+    # 「フィード差が窓ごとにどれだけか」を素の構成で測れる（倍率もcapも掛かっていない）。
+    ("Q004", "本番現行", "本番現行（RefCap=78,000・倍率1・cap無し）", prod()),
 ]
 
-ORDER = ["Q001", "Q003", "Q002", "Q000"]
+ORDER = ["Q001", "Q003", "Q004", "Q002", "Q000"]
 
 
 def main():
