@@ -108,6 +108,7 @@ QUALITY_OFF = {
     "PbAdxThr_GJ": 0.0, "PbSlopeATR_GJ": 0.0,
     "ScaFilMask": 0, "ScaFilRangeMin": 0.0,
     "ScaFilHourFrom": -1, "ScaFilHourTo": -1, "ScaFilBuyOnly": False,
+    "CarryExitPeriod": 0, "CarryExitOnly": False, "CarryHoldBars": 0,
 }
 
 
@@ -161,12 +162,26 @@ PROPOSALS = [
     ("Q017", "Q000", "SCA GBPJPY だけ買い限定（直近の負けは売り側に集中）",
      q(ScaFilMask=2, ScaFilBuyOnly=True)),
     ("Q018", "Q000", "SCA 2枠とも買い限定", q(ScaFilMask=3, ScaFilBuyOnly=True)),
+
+    # --- 5. Carry: 「退出だけ変える」を本当に退出だけにする（Codex #36）--------
+    # Codex の査読で、`CarryExitPeriod>0` が ProcCarry() で
+    #   entry_th = MathMax(MA200, ExitMA) / exit_th = ExitMA
+    # と**入口も退出も同時に**置き換えていることが分かった。ヒステリシス帯
+    # （entry=MA200+0.75ATR）が消えるので、**「退出だけ変えた実験」になっていない。**
+    # `ml/fxcarry1` の C10/C11 はこの交絡を含む。
+    # ここで 3対照（現行 / 既存切替＝交絡あり / 退出だけ）を同じ土俵で並べる。
+    ("Q019", "Q000", "Carry: 既存の退出SMA切替 40（入口も変わる＝交絡あり・fxcarry1 C10 相当）",
+     q(CarryExitPeriod=40)),
+    ("Q020", "Q019", "Carry: 入口はヒステリシス帯のまま・退出だけ SMA40（Codex #36）",
+     q(CarryExitPeriod=40, CarryExitOnly=True)),
+    ("Q021", "Q019", "Carry: 同じく退出だけ SMA20", q(CarryExitPeriod=20, CarryExitOnly=True)),
 ]
 
 # 対照 → 手がかりの強い順。途中で止まっても判断に効く数字から埋まる。
 ORDER = ["Q000",
          "Q001", "Q003", "Q002", "Q004",
          "Q005", "Q008", "Q006", "Q007", "Q009", "Q010",
+         "Q019", "Q020", "Q021",
          "Q011", "Q013", "Q014", "Q012", "Q015", "Q016",
          "Q017", "Q018"]
 
@@ -188,7 +203,7 @@ def main():
     import ctypes
     ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
     try:
-        m3.log(f"FXQUAL1_START jobs={len(jobs)} 枠の質の3軸 leverage=1:25 "
+        m3.log(f"FXQUAL1_START jobs={len(jobs)} 枠の質の4軸 leverage=1:25 "
                "sizing=本番現行(RefCap78000/倍率1/重み1.0)")
         for pid, base, desc, params, window in jobs:
             row = m3.run(pid, base, desc, params, window)

@@ -464,6 +464,13 @@ input double RefCap_CARRY      = 0;  // Carry複利の基準資金
 // **止めるか残すかの二択ではなく、間を測れるようにする。**
 input int    CarryExitPeriod   = 0;  // >0 でヒステリシス帯の代わりに退出用SMA（Codex #21）
 input int    CarryHoldBars     = 0;  // >0 で保有上限（D1バー数・0で無制限）
+// ⚠️ 2026-09-18 Codex の査読で判明: `CarryExitPeriod>0` は ProcCarry() で
+//    entry_th=MathMax(ma, ExitMA) / exit_th=ExitMA と**入口も退出も同時に**置き換える。
+//    ヒステリシス帯（entry=MA+0.75ATR）が消えるので、**「退出だけ変えた実験」になっていない。**
+//    `ml/fxcarry1` の C10/C11 はこの交絡を含む。
+//    下を true にすると **入口はヒステリシス帯のまま・退出だけ ExitMA** になる（Codex #36）。
+//    ETH枠（useHyst=false）には掛からない。既定 false で従来と同一挙動。
+input bool   CarryExitOnly     = false;
 
 // --- 業者の「1注文あたりロット上限」を上書きする（第12報の準備）----------------
 // バックテストは XM 端末で走っており、FX の `SYMBOL_VOLUME_MAX` は **50.0**。
@@ -2431,7 +2438,10 @@ void ProcCarry(int i)
    if(S[i].exitPeriod>0){
       double eb[]; ArraySetAsSeries(eb,true);
       if(CopyBuffer(S[i].hExit,0,1,1,eb)<1) return;
-      entry_th=MathMax(ma,eb[0]); exit_th=eb[0];
+      // CarryExitOnly: ヒステリシス帯を使う枠（Carry AUDJPY）では入口を帯のまま残し、
+      // 退出だけ ExitMA にする。ETH枠は useHyst=false なのでここには入らない（従来どおり）。
+      if(CarryExitOnly && S[i].useHyst) exit_th=eb[0];
+      else { entry_th=MathMax(ma,eb[0]); exit_th=eb[0]; }
    }
    // v1.2 クールダウン（S9）: 退出後cdBarsは再entry禁止
    bool cd_ok=true;
