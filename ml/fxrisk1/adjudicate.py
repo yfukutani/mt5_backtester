@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent
 DEAL_DIR = ROOT / "run_deals"
 DEPOSIT = 500000
 MONTHS = {"FULL": 115.0, "OOS": 55.0, "IS": 60.0}
-TARGET_MONTHLY = 5.0     # ユーザー指定の目標（%/月）
+TARGET_MONTHLY = 6.0     # ユーザー指定の目標（%/月）
 
 
 def equity_curve(path):
@@ -98,7 +98,7 @@ def main():
             }
         recs.append(rec)
 
-    base = next((x for x in recs if x["pid"] == "C001"), None)
+    base = next((x for x in recs if x["pid"] == "R001"), None)
 
     for win in ("FULL", "OOS"):
         avail = [x for x in recs if win in x]

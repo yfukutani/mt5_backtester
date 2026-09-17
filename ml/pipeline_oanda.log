@@ -1,0 +1,2 @@
+﻿2026-09-17T15:32:35Z PIPELINE_START(oanda) fxoanda2 の完了を待って fxoanda3 を始める
+2026-09-17T15:41:05Z FXOANDA3 を開始する（cap掃引・判定は「完走したか」が先）

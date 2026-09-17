@@ -147,6 +147,29 @@ input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=S
 input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
 input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
 
+input group "=== SCA 入口フィルタ（SCAFIL・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】X2_HIGH_RISK の V105/V106 が SCA GBPJPY 1枠で測った入口フィルタを、
+// OANDA FX の9枠ブックで測り直す。V106 の実測（弱局面408取引）は次のとおり。
+//
+//   なし（基準）        408取引 / 純益 58,541 / ポートフォリオS比 1.00
+//   レンジ幅 上位25%のみ  84取引 / 純益 47,872（-18.2%）/ S比 1.16
+//   時間帯 IS優位のみ    226取引 / 純益 68,040（+16.2%）/ S比 1.52
+//   方向 買いのみ        221取引 / 純益 62,464（ +6.7%）/ S比 1.68
+//
+// 【重要】レンジ幅フィルタは**純益を18%減らす**。1取引の質は2.5倍になるが
+// 取引を79%捨てるため総額で負ける。固定ロットでは捨てたリスク予算を再投入できない。
+// **risk%化（FXRISK）と組み合わせて初めて意味を持つ**——シャープが上がった分だけ
+// risk% を上げれば、同じDD予算でより多くのリターンを取れる（上限はS比の値）。
+// したがって本ラボは FxRiskMask と**同時に**振ること。単独で測っても結論を誤る。
+//
+// 【時刻の注意】ScaFilHour* は EA が見る**サーバー時刻**（OANDA/XMともGMT+2/+3）。
+// V105 が「UTC」と書いた値は deal ログの time から取ったサーバー時刻なので同じ系である。
+input int    ScaFilMask      = 0;      // bit0=SCA USDJPY(20261000) bit1=SCA GBPJPY(20261001)。0で無効
+input double ScaFilRangeMin  = 0.0;    // |entry-sl|/entry の下限（0で無効）。V105のIS閾値は 0.00595
+input int    ScaFilHourFrom  = -1;     // 発注を許す時間の下限（サーバー時刻・両端含む）。-1で無効
+input int    ScaFilHourTo    = -1;     // 同・上限。-1で無効
+input bool   ScaFilBuyOnly   = false;  // 買いのみ発注する
+
 input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
 // GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
@@ -434,10 +457,100 @@ input group "=== risk%/複利枠の基準資金（0=口座equity・>0で配分�
 input double RefCap_PB_USDJPY = 0;   // PB USDJPY risk%の基準資金（配分額）
 input double RefCap_PB_GBPJPY = 0;   // PB GBPJPY risk%の基準資金
 input double RefCap_CARRY      = 0;  // Carry複利の基準資金
+// --- Carry の保有を短くする2つの軸（第11報の準備・既定は現行と同一挙動）---------
+// 第9報の証拠金効率で Carry は IS 最下位（平均保有 184.8日）だった。
+// fxeff1 の E01（Carry を止める）は中央値・平均とも最良だったが、
+// 最悪窓が 4.96%→3.54% に落ちた（Carry は逆相関の分散源でもある）。
+// **止めるか残すかの二択ではなく、間を測れるようにする。**
+input int    CarryExitPeriod   = 0;  // >0 でヒステリシス帯の代わりに退出用SMA（Codex #21）
+input int    CarryHoldBars     = 0;  // >0 で保有上限（D1バー数・0で無制限）
+// ⚠️ 2026-09-18 Codex の査読で判明: `CarryExitPeriod>0` は ProcCarry() で
+//    entry_th=MathMax(ma, ExitMA) / exit_th=ExitMA と**入口も退出も同時に**置き換える。
+//    ヒステリシス帯（entry=MA+0.75ATR）が消えるので、**「退出だけ変えた実験」になっていない。**
+//    `ml/fxcarry1` の C10/C11 はこの交絡を含む。
+//    下を true にすると **入口はヒステリシス帯のまま・退出だけ ExitMA** になる（Codex #36）。
+//    ETH枠（useHyst=false）には掛からない。既定 false で従来と同一挙動。
+input bool   CarryExitOnly     = false;
+
+// --- 業者の「1注文あたりロット上限」を上書きする（第12報の準備）----------------
+// バックテストは XM 端末で走っており、FX の `SYMBOL_VOLUME_MAX` は **50.0**。
+// 本番の OANDA証券は実機計測で **10.0**（docs/oanda_broker_specs_20260915.md）。
+// 複利の天井が 1/5 になるので、XM の数字はそのままでは本番で再現しない。
+// 端末を替えずに**上限だけ**を OANDA 相当にして、天井の影響を切り分けるための入力。
+// フィード差・スプレッド差・スワップ差は別問題であり、これでは埋まらない。
+// 0 のときは端末の値をそのまま使う＝**既定では従来と1ビットも変わらない。**
+input double BrokerMaxLot   = 0.0;   // 1注文あたりロット上限の上書き（0=端末の値）
+
+// --- 枠ごとの証拠金予算（第13報の準備・Codex #4）--------------------------------
+// 第10報の cap 計装で分かったこと:
+//   ・注文だけで数えた通過率は 30.2%（通期OOS・cap90）。RSI EURUSD は 23.8% しか通らない。
+//   ・cap を 20pt 開けても通過率は 5.6pt しか動かないのに、OOS窓中央値は 0.78pt 動く。
+//     **効いているのは総量ではなく「通る取引の顔ぶれ」**である。
+//   ・`Mult_*` は cap を上回る領域では何も変えない（希望を変えても cap が先に決めるため）。
+// 顔ぶれを変えるには「希望を下げる」のではなく「**その枠が取れる上限を下げる**」必要がある。
+//
+// ここで足すのは **1注文の所要証拠金が equity の何%までか**という上限である。
+// `Mult_*` と違い cap と同じ側（上限）に効くので、**cap の下でも必ず通る。**
+//
+// fxeff1 が測ったのは RSI EU の「全停止（中央値 2.44%）」と「重み half（無効）」の2点だけで、
+// **その間は空白**である。10/20/30/40% を刻めば「止めずに小さくした場合」が分かる。
+// 0 のときは無効＝**既定では従来と1ビットも変わらない。**
+input group "=== 枠ごとの証拠金予算（%of equity・0=無効・第13報）==="
+input double Bud_PB_USDJPY  = 0.0;
+input double Bud_PB_GBPJPY  = 0.0;
+input double Bud_RSI_USDJPY = 0.0;
+input double Bud_RSI_EURUSD = 0.0;
+input double Bud_RSI_GBPUSD = 0.0;
+input double Bud_PAIR       = 0.0;
+input double Bud_CARRY      = 0.0;
+input double Bud_SCA_USDJPY = 0.0;
+input double Bud_SCA_GBPJPY = 0.0;
+
+// ===== 枠そのものの質を測る軸（第14報・2026-09-18・すべて既定OFF）=================
+// 2026-09-08〜09-17 の掃引は全部「ロットの大小」だった（倍率・複利・risk%・cap・重み・
+// 証拠金予算）。ユーザー指示が変わり、主題は **枠ごとのシグナル／執行の質**になった。
+// ここで足す3軸は、取引ログの段階2解析（ml/fxqual1/）が指した場所である。
+//
+// 【段階2で分かったこと（本番現行サイジング C001・FULL窓を OOS/IS に割った実測）】
+//   1. RSI 3枠の「SLでもTPでもない決済」は **97〜100% が反対シグナルのドテン**で、
+//      **両窓・3枠すべて負け**（出た側 ΣR: OOS -8.1 / IS -17.9）。
+//      ただし**ドテンで入った側**は OOS +15.9R / IS -8.8R。**OOSでは入った側が稼いでいる。**
+//      → 「ドテンをやめる」は IS には効きそうだが OOS では逆。**測らないと決まらない。**
+//   2. SCA 2枠は取引の 60〜77% が **22時の強制決済**で終わり、**利益はそこに集中**する
+//      （SCA_GJ: 22時決済 ΣR +106(OOS)/+116(IS)、それ以外 -116/-102）。
+//      TP到達は 3〜7% しかない。**退出時刻はこの枠の主要パラメータなのに一度も掃いていない。**
+//   3. PB GBPJPY は 115か月で 28取引しかないが **平均 R 1.34(OOS)/1.69(IS)** と桁違いに良い。
+//      **律速は質ではなく頻度**である。ADX(10)>=30・slope>=1.5ATR が絞りすぎていないか。
+//
+// 既定値はすべて「無効」で、**従来と1ビットも変わらない**。対照runで一致を確認すること。
+
+input group "=== RSI ドテン制御（第14報・0=現行）==="
+// 現行の ProcRSI は、反対シグナルが立つと保有を決済して即座に反対に建てる。
+// 1 = 反対シグナルを無視する（保有を続け、反対の新規も出さない）
+// 2 = 決済はするが反対の新規は出さない（ポジションを持たない側に倒す）
+input int    RsiNoFlipMode  = 0;
+input int    RsiNoFlipMask  = 0;   // bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全RSI枠）
+
+input group "=== SCA FX 枠の時間（第14報・0=現行）==="
+// SCA USDJPY/GBPJPY は レンジ0-9時・発注締切12時・強制決済22時。
+// 締切と強制決済は一度も掃いていないが、利益の大半は強制決済から出ている。
+input int    ScaHourMask       = 0;   // bit0=SCA USDJPY bit1=SCA GBPJPY（0で無効）
+input int    ScaForceCloseOv   = 0;   // >0 で強制決済時刻を上書き（1-23）
+input int    ScaTradeEndOv     = 0;   // >0 で発注締切を上書き（1-23）
+
+input group "=== PullbackTrend 入口の広さ（第14報・0=現行）==="
+// PB 2枠は最も質が高く最も取引が少ない。絞りを緩めて頻度を上げられるか。
+input double PbAdxThr_UJ    = 0.0;   // >0 で PB USDJPY の ADX閾値を上書き（現行27.5）
+input double PbSlopeATR_UJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.2）
+input double PbAdxThr_GJ    = 0.0;   // >0 で PB GBPJPY の ADX閾値を上書き（現行30.0）
+input double PbSlopeATR_GJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.5）
 
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
+// cap がどれだけロットを削り、どれだけ発注を見送ったかを枠別に出す（第10報）。
+// 含み損込みDD もここに出す。空なら1バイトも書かない。
+input string CapLogFile     = "";
 
 input group "=== 運用ログ（フォワード分析用・ライブで有効化） ==="
 // MQL5\Files\<prefix>_YYYYMM.csv に月次追記。3種のレコードを出力:
@@ -506,6 +619,7 @@ struct SLEEVE
    // 増レバ配分（deploy）
    double          lotMult;   // per-sleeve ロット倍率
    double          refCap;    // risk%/複利の基準資金（0=口座equity）
+   double          budPct;    // 1注文の所要証拠金の上限（%of equity・0=無効・第13報）
    // SCA（セッションORB）
    int             scaRangeStart, scaRangeEnd, scaTradeEnd, scaForceClose;
    double          scaMinRange, scaMaxRange, scaBuf;
@@ -638,6 +752,15 @@ void FxRiskOn(SLEEVE &x, const int bit)
    x.refCap  = FxRiskRefCap;
 }
 
+// SCA FX枠（USDJPY=bit1 / GBPJPY=bit2）の発注締切・強制決済時刻を上書きする（第14報・既定OFF）。
+// GOLD の SCA枠と第2セッション枠には掛からない。マスクが立っていない枠は1ビットも変わらない。
+void ScaHourOverride(SLEEVE &x, const int bit)
+{
+   if((ScaHourMask & bit)==0) return;
+   if(ScaTradeEndOv   > 0) x.scaTradeEnd   = ScaTradeEndOv;
+   if(ScaForceCloseOv > 0) x.scaForceClose = ScaForceCloseOv;
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
@@ -649,6 +772,67 @@ int OnInit()
    if(FxRiskMask<0 || FxRiskMask>31)
    {
       Print("FxRiskMask must be 0..31");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilMask<0 || ScaFilMask>3)
+   {
+      Print("ScaFilMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // --- 第14報の3軸（既定はすべて無効）---
+   if(RsiNoFlipMode<0 || RsiNoFlipMode>2)
+   {
+      Print("RsiNoFlipMode must be 0..2");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(RsiNoFlipMask<0 || RsiNoFlipMask>7)
+   {
+      Print("RsiNoFlipMask must be 0..7");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask<0 || ScaHourMask>3)
+   {
+      Print("ScaHourMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask!=0 && ScaTradeEndOv<=0 && ScaForceCloseOv<=0)
+   {
+      Print("ScaHourMask is set but neither ScaTradeEndOv nor ScaForceCloseOv is > 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaTradeEndOv<0 || ScaTradeEndOv>23 || ScaForceCloseOv<0 || ScaForceCloseOv>23)
+   {
+      Print("ScaTradeEndOv / ScaForceCloseOv must be 0..23");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // レンジ確定(9時)より前に締切・強制決済を置くと枠が沈黙するだけで測定にならない。
+   if(ScaHourMask!=0 && ScaTradeEndOv>0 && ScaTradeEndOv<=9)
+   {
+      Print("ScaTradeEndOv must be > 9 (SCA FX range ends at 9)");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaHourMask!=0 && ScaForceCloseOv>0)
+   {
+      int te = (ScaTradeEndOv>0 ? ScaTradeEndOv : 12);
+      if(ScaForceCloseOv<=te)
+      {
+         Print("ScaForceCloseOv must be > the effective trade-end hour");
+         return INIT_PARAMETERS_INCORRECT;
+      }
+   }
+   if(PbAdxThr_UJ<0.0 || PbSlopeATR_UJ<0.0 || PbAdxThr_GJ<0.0 || PbSlopeATR_GJ<0.0)
+   {
+      Print("Pb*_UJ / Pb*_GJ overrides must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilRangeMin<0.0)
+   {
+      Print("ScaFilRangeMin must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaFilHourFrom>=0 && ScaFilHourTo>=0 && ScaFilHourFrom>ScaFilHourTo)
+   {
+      Print("ScaFilHourFrom must be <= ScaFilHourTo");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(Pb2Enable && Pb2Timeframe()==0)
@@ -694,9 +878,12 @@ int OnInit()
    //    OOS+3,332＝現行OOS-3,299から黒字化。ポートフォリオ合算でDD抑制に寄与(-0.0775pt)。
    //    docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_USDJPY; x.symbol="USDJPY"; x.magic=20260622;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_USDJPY; x.budPct=Bud_PB_USDJPY; x.refCap=RefCap_PB_USDJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
-     x.adxThr=27.5; AddSleeve(x); }
+     x.adxThr=27.5;
+     if(PbAdxThr_UJ>0.0)   x.adxThr=PbAdxThr_UJ;         // 第14報（0=現行）
+     if(PbSlopeATR_UJ>0.0) x.slopeMinATR=PbSlopeATR_UJ;
+     AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    //    v1.6: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
    //    IS-90→+18,665／OOS+13,254→+4,641。現状市場(IS)の利益を優先しユーザー承認、
@@ -719,10 +906,13 @@ int OnInit()
    //    IS+34,242→+38,136/OOS+22,692→+25,204＝旧単独測定(IS35,946/OOS20,684)より更に良化する
    //    正の相互作用を確認。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=pb; x.enabled=En_PB_GBPJPY; x.symbol="GBPJPY"; x.magic=20260627;
-     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
+     x.useRisk=true; x.riskPct=2.0; x.lot=0.01; x.lotMult=Mult_PB_GBPJPY; x.budPct=Bud_PB_GBPJPY; x.refCap=RefCap_PB_GBPJPY;
      x.useHigherTF=true; x.higherTF=PERIOD_D1; x.higherTFMA=200;
      x.slopeMinATR=1.5; x.rr=4.0; x.adxPeriod=10; x.adxThr=30.0;
-     x.fastEMA=25; x.slowEMA=35; AddSleeve(x); }
+     x.fastEMA=25; x.slowEMA=35;
+     if(PbAdxThr_GJ>0.0)   x.adxThr=PbAdxThr_GJ;         // 第14報（0=現行）
+     if(PbSlopeATR_GJ>0.0) x.slopeMinATR=PbSlopeATR_GJ;
+     AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    //    v2.2: RR_Ratio 2.0→5.0（トレードオフ8案の組合せ検証#5・ほぼ利益の出ていなかった枠が
    //    IS+6,157(PF1.74)/OOS+5,619(PF1.40)と両期間で明確に黒字化。
@@ -757,13 +947,13 @@ int OnInit()
    //    両期間がほぼ均等に高い＝期間依存が最小の構成。docs/tradeoff8_combined_20260812.md）
    { SLEEVE x=rs; x.enabled=En_RSI_USDJPY; x.symbol="USDJPY"; x.tf=PERIOD_H4; x.magic=20260610;
      x.useDP=true; x.dpBars=100; x.dpTolATR=1.5; x.slPips=50; x.tpPips=110;
-     x.lotMult=Mult_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
+     x.lotMult=Mult_RSI_USDJPY; x.budPct=Bud_RSI_USDJPY; FxRiskOn(x,0); AddSleeve(x); }
    // 6. RSI EURUSD H1 (DP OFF, SL25/TP105)
    //    v2.1: StopLoss_Pips 45→25（全パラメータ再最適化・IS+8,253→+8,400/
    //    **OOS-1,867→+2,582＝OOS赤字を黒字転換**・OOS-DD13.10→7.79%。
    //    トレードオフなしの純改善。docs/param_reopt_20260811.md）
    { SLEEVE x=rs; x.enabled=En_RSI_EURUSD; x.symbol="EURUSD"; x.tf=PERIOD_H1; x.magic=20260605;
-     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD;
+     x.useDP=false; x.dpBars=60; x.slPips=25; x.tpPips=105; x.lotMult=Mult_RSI_EURUSD; x.budPct=Bud_RSI_EURUSD;
      FxRiskOn(x,1); AddSleeve(x); }
    // 6b. RSI GBPUSD H4 (DP OFF, SL50/TP110) — レンジ枠強化
    //     v1.6: BB_Deviation 2.5→2.0（応答曲面M129・本番同一条件tier2確認: IS+5,241→+12,442/
@@ -772,12 +962,12 @@ int OnInit()
    //     トレードオフなしの純改善。docs/codex500_verification_20260810.md）
    { SLEEVE x=rs; x.enabled=En_RSI_GBPUSD; x.symbol="GBPUSD"; x.tf=PERIOD_H4; x.magic=20260774;
      x.useDP=false; x.dpBars=100; x.slPips=50; x.tpPips=110; x.bbDev=2.0; x.bbPeriod=30;
-     x.lotMult=Mult_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
+     x.lotMult=Mult_RSI_GBPUSD; x.budPct=Bud_RSI_GBPUSD; FxRiskOn(x,2); AddSleeve(x); }
 
    // 7. PairTrade EURUSD/GBPUSD H1
    { SLEEVE x=z; x.enabled=En_PAIR; x.strat=ST_PAIR; x.symbol="EURUSD"; x.second="GBPUSD";
      x.tf=PERIOD_H1; x.magic=20260629; x.lot=0.01; x.useRisk=false; x.refDeposit=100000;
-     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; AddSleeve(x); }
+     x.lookback=200; x.entryZ=4.0; x.exitZ=-1.0; x.stopZ=5.0; x.lotMult=Mult_PAIR; x.budPct=Bud_PAIR; AddSleeve(x); }
 
    // 8. Carry AUDJPY D1 (複利0.05, スワップ条件ON, ヒステリシス帯±0.75ATR採用)
    //    v2.2: ReentryCooldown 0→10（トレードオフ8案の組合せ検証#7・ISは完全不変(105,817)のまま
@@ -785,7 +975,9 @@ int OnInit()
    { SLEEVE x=z; x.enabled=En_CARRY; x.strat=ST_CARRY; x.symbol="AUDJPY"; x.tf=PERIOD_D1;
      x.magic=20260650; x.trendPeriod=200; x.reqPosSwap=true;
      x.useHyst=true; x.hystMult=0.75; x.cdBars=10;
-     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
+     // CarryExitPeriod>0 なら ProcCarry() 側でヒステリシス帯より優先される（排他）。
+     x.exitPeriod=CarryExitPeriod;
+     x.useRisk=true; x.lot=0.05; x.refDeposit=100000; x.lotMult=Mult_CARRY; x.budPct=Bud_CARRY; x.refCap=RefCap_CARRY; AddSleeve(x); }
 
    // 9. VolBreakout USDJPY H4 (固定)
    { SLEEVE x=z; x.enabled=En_VBO; x.strat=ST_VBO; x.symbol="USDJPY"; x.tf=PERIOD_H4;
@@ -863,10 +1055,11 @@ int OnInit()
    //     ⚠️ただしOOS純利益+110円/PF1.0024と経済的には極薄で、スプレッド変動で消えうる水準。
    //     トレードオフなしの純改善ではあるがユーザー承認のうえ採用。docs/param_reopt_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_USDJPY; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
-     x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY;
+     x.magic=20261000; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_USDJPY; x.budPct=Bud_SCA_USDJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.10;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=2.0;
+     ScaHourOverride(x,1);                               // 第14報（マスク未指定なら不変）
      FxRiskOn(x,3); AddSleeve(x); }
    // 13. SCA GBPJPY M15（初版形: buf0）
    //     v1.6: Boost_Mult 2.0→3.0（応答曲面M239・本番同一条件tier2確認: IS+27,445→+39,027/
@@ -883,15 +1076,16 @@ int OnInit()
    //     ⚠️Boost4.5は0.01×4.5=0.045がロットステップで0.04に丸められ4.0と完全同値＝
    //     0.01ロット基準では整数倍しか意味を持たない。docs/codex500_round3_20260811.md）
    { SLEEVE x=z; x.enabled=En_SCA_GBPJPY; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
-     x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY;
+     x.magic=20261001; x.lot=0.01; x.useRisk=false; x.rr=2.0; x.lotMult=Mult_SCA_GBPJPY; x.budPct=Bud_SCA_GBPJPY;
      x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=12; x.scaForceClose=22;
      x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
      x.scaSkipFriday=false; x.scaRevBoost=true; x.scaBoostMult=6.0;
+     ScaHourOverride(x,2);                               // 第14報（マスク未指定なら不変）
      FxRiskOn(x,4); AddSleeve(x); }
 
    // 12b. SCA USDJPY 第2セッション（既定OFF・別magicで親枠20261000と分離）
    { SLEEVE x=z; x.enabled=Sca5Enable; x.strat=ST_SCA; x.symbol="USDJPY"; x.tf=PERIOD_M15;
-     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY;
+     x.magic=20261006; x.lot=Sca5Lot; x.useRisk=false; x.rr=Sca5RR; x.lotMult=Mult_SCA_USDJPY; x.budPct=Bud_SCA_USDJPY;
      x.scaRangeStart=Sca5RangeStart; x.scaRangeEnd=Sca5RangeEnd;
      x.scaTradeEnd=Sca5TradeEnd; x.scaForceClose=Sca5ForceClose;
      x.scaMinRange=Sca5MinRange; x.scaMaxRange=Sca5MaxRange; x.scaBuf=Sca5Buffer;
@@ -908,7 +1102,7 @@ int OnInit()
      x.scaBoostMult=ScaNewBoostMult; AddSleeve(x); }
    // 13b. SCA GBPJPY 第2セッション（既定OFF・別magicで親枠20261001と分離）
    { SLEEVE x=z; x.enabled=Sca6Enable; x.strat=ST_SCA; x.symbol="GBPJPY"; x.tf=PERIOD_M15;
-     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY;
+     x.magic=20261007; x.lot=Sca6Lot; x.useRisk=false; x.rr=Sca6RR; x.lotMult=Mult_SCA_GBPJPY; x.budPct=Bud_SCA_GBPJPY;
      x.scaRangeStart=Sca6RangeStart; x.scaRangeEnd=Sca6RangeEnd;
      x.scaTradeEnd=Sca6TradeEnd; x.scaForceClose=Sca6ForceClose;
      x.scaMinRange=Sca6MinRange; x.scaMaxRange=Sca6MaxRange; x.scaBuf=Sca6Buffer;
@@ -999,7 +1193,7 @@ void ZeroSleeve(SLEEVE &x)
    x.exitPeriod=0; x.hExit=INVALID_HANDLE; x.cdBars=0; x.cdExitBar=0; x.disasterSL=0;
    x.cryptoGroup=false;
    x.channel=20; x.useSqueeze=false; x.sqLB=50; x.sqFactor=1.0; x.trailMult=0;
-   x.lotMult=1.0; x.refCap=0.0;
+   x.lotMult=1.0; x.refCap=0.0; x.budPct=0.0;
    x.scaRangeStart=0; x.scaRangeEnd=9; x.scaTradeEnd=15; x.scaForceClose=22;
    x.scaMinRange=0.30; x.scaMaxRange=1.00; x.scaBuf=0.0;
    x.scaSkipFriday=false; x.scaRevBoost=false; x.scaBoostMult=2.0;
@@ -1275,13 +1469,116 @@ bool CryptoGuardOK(int i)
    return true;
 }
 
-double Clamp(string sym, double lot)
+//--- A10: 証拠金維持率でロットを制限する -------------------------------------
+// ml/fxmargin2/ の段階2検証で、このブックを止めているのは DD でもリスク許容度でもなく
+// 「レバレッジ25の証拠金」だと分かった。T036（mask=7・risk1%・倍率3）は OOS 4.81%/月
+// だが使用証拠金が equity の 987.9% に達する瞬間があり実口座では成立しない。
+// しかしそれは「ピーク」であって「常時」ではない。収まる範囲までロットを削れば
+// 残り時間の成績は保てる——段階2では、削ったほうが OOS 成績が良くなった。
+//
+// MarginCapPct = 使用証拠金 / 口座equity の上限（%）。0 で無効（従来どおり）。
+// EA側は AccountInfoDouble(ACCOUNT_EQUITY) を使うので**含み損益込み**である。
+// 段階2のシミュレーションは決済損益ベースだったので、こちらのほうが厳しく・正しい。
+input double MarginCapPct = 0;   // A10: 使用証拠金/equityの上限%（0=無効・段階2の推奨80）
+
+double MarginCapLot(const string sym, const double lot)
 {
+   if(MarginCapPct<=0.0 || lot<=0.0) return lot;
+   double eq=AccountInfoDouble(ACCOUNT_EQUITY);
+   if(eq<=0.0) return 0.0;
+   double avail=eq*MarginCapPct/100.0 - AccountInfoDouble(ACCOUNT_MARGIN);
+   if(avail<=0.0) return 0.0;
+   double price=SymbolInfoDouble(sym,SYMBOL_ASK);
+   if(price<=0.0) return lot;
+   double m1=0.0;                                   // 1ロットあたりの必要証拠金
+   if(!OrderCalcMargin(ORDER_TYPE_BUY,sym,1.0,price,m1) || m1<=0.0) return lot;
+   double maxlot=avail/m1;
+   return (maxlot<lot) ? maxlot : lot;
+}
+
+// --- cap 計装（2026-09-15・第10報）--------------------------------------
+// cap の応答曲線が 60→100% で単調だったので「証拠金が律速している」と診断したが、
+// **cap が実際にどれだけ削っているかは一度も測っていない。**
+// 削っている量が小さければ、「退出を先に処理する」「発注順を効率順にする」といった
+// 配分側の案（Codex #1/#2/#4/#7）は**まとめて価値が無い**ことになる。
+//
+// 計装は受動的である。ロット・発注・決済のどれも変えない。数えるだけ。
+// 既定（CapLogFile="" / MarginCapPct=0）では1バイトも出力しない。
+int    g_capN[32];        // Clamp の呼び出し回数（cap有効時のみ）
+int    g_capCut[32];      // cap がロットを削った回数（発注はできた）
+int    g_capDeny[32];     // cap が 0 にした回数＝発注を見送った
+double g_capWant[32];     // cap を掛ける前の希望ロットの合計
+double g_capGot[32];      // 実際に返したロットの合計
+// 業者のロット上限（SYMBOL_VOLUME_MAX / BrokerMaxLot）に当たった回数と、
+// そこで切り落とされたロットの総量。**証拠金capとは別物なので分けて数える。**
+// 第8報は「複利を止めているのは銘柄上限」と診断したが、その量も測っていなかった。
+int    g_capVmaxN[32];    // 上限に当たった回数
+double g_capVmaxCut[32];  // 上限で切り落としたロットの合計
+
+// 削られた/見送られた注文を**1件ずつ**記録する。
+// 集計値だけでは Codex #1「退出を先、参入を後に」を判定できない。
+// 見送られた注文は deal ログに残らないので、**いつ見送られたか**を EA 側で残す必要がある。
+// これがあれば「その足の中で、後から別の枠が決済して証拠金が空いたか」を後で突き合わせられる。
+#define CAPEV_MAX 20000
+int      g_capEvN=0;
+datetime g_capEvT[CAPEV_MAX];
+long     g_capEvMagic[CAPEV_MAX];
+double   g_capEvWant[CAPEV_MAX];
+double   g_capEvGot[CAPEV_MAX];
+double   g_capEvEq[CAPEV_MAX];      // その時点の equity
+double   g_capEvUsed[CAPEV_MAX];    // その時点の使用証拠金
+
+double Clamp(string sym, double lot, int si=-1)
+{
+   double want=lot;                                 // cap を掛ける前の希望量
+   // 枠ごとの証拠金予算（第13報・Codex #4）。**cap より先に**掛ける——
+   // 予算は「この枠にこれ以上は使わせない」という意思であり、
+   // 空き証拠金が潤沢なときにも効かなければ意味が無い（cap の後だと効かない局面がある）。
+   // 既定 budPct=0 では1ビットも変わらない。
+   bool budCut=false;
+   if(si>=0 && si<ArraySize(S) && S[si].budPct>0.0){
+      double eqb=AccountInfoDouble(ACCOUNT_EQUITY);
+      double pb=SymbolInfoDouble(sym,SYMBOL_ASK);
+      double mb=0.0;
+      if(eqb>0.0 && pb>0.0 && OrderCalcMargin(ORDER_TYPE_BUY,sym,1.0,pb,mb) && mb>0.0){
+         double budlot=(eqb*S[si].budPct/100.0)/mb;
+         if(budlot<lot){ lot=budlot; budCut=true; }
+      }
+   }
+   double capped=MarginCapLot(sym,lot);
+   // 予算で削った分も「削られた」に数える——そうしないと、予算で最小ロットを
+   // 下回ったときに `MathMax(mn,..)` が予算を突き破って最小ロットを建ててしまう。
+   bool cut=(capped < lot-1e-12) || budCut;
+   lot=capped;
    double mn=SymbolInfoDouble(sym,SYMBOL_VOLUME_MIN);
    double mx=SymbolInfoDouble(sym,SYMBOL_VOLUME_MAX);
+   // 業者の1注文上限を下げて模擬する（0なら端末の値のまま＝従来と同一）。
+   if(BrokerMaxLot>0.0 && BrokerMaxLot<mx) mx=BrokerMaxLot;
    double st=SymbolInfoDouble(sym,SYMBOL_VOLUME_STEP);
    if(st>0) lot=MathFloor(lot/st)*st;
-   return MathMax(mn,MathMin(mx,lot));
+   // capで削られた結果 最小ロットに満たないなら**発注しない**。
+   // ここで MathMax(mn,..) に戻すと cap を突き破るので、0 を返して呼び側に捨てさせる。
+   bool deny=(cut && lot<mn);
+   double got = deny ? 0.0 : MathMax(mn,MathMin(mx,lot));
+   if(si>=0 && si<32 && MarginCapPct>0.0){
+      g_capN[si]++;
+      if(cut)  g_capCut[si]++;
+      if(deny) g_capDeny[si]++;
+      g_capWant[si]+=want;
+      g_capGot[si]+=got;
+      // 証拠金cap を通り抜けた後に、業者のロット上限で頭打ちになったか。
+      if(!deny && lot>mx+1e-12){ g_capVmaxN[si]++; g_capVmaxCut[si]+=(lot-mx); }
+      if(cut && g_capEvN<CAPEV_MAX){
+         int k=g_capEvN++;
+         g_capEvT[k]=TimeCurrent();
+         g_capEvMagic[k]=S[si].magic;
+         g_capEvWant[k]=want;
+         g_capEvGot[k]=got;
+         g_capEvEq[k]=AccountInfoDouble(ACCOUNT_EQUITY);
+         g_capEvUsed[k]=AccountInfoDouble(ACCOUNT_MARGIN);
+      }
+   }
+   return got;
 }
 
 // Round 4の後処理と同じく「各スリーブの直近N完了deal」を群内で連結して平均する。
@@ -1363,7 +1660,8 @@ void GoldPBHoldLimit()
       // 第2時間軸(20260641)は自分のバー数で数える。H4版と違う時間軸を持つので
       // GoldPBHoldBars をそのまま流用すると意味が変わってしまう。
       int bars = (S[i].magic==20260640) ? GoldPBHoldBars
-               : (S[i].magic==20260641) ? Pb2HoldBars : 0;
+               : (S[i].magic==20260641) ? Pb2HoldBars
+               : (S[i].magic==20260650) ? CarryHoldBars : 0;   // Carry（第11報）
       if(bars<=0) continue;
       long limit=(long)bars*PeriodSeconds(S[i].tf);
       for(int k=PositionsTotal()-1;k>=0;k--)
@@ -1412,7 +1710,46 @@ double GszLot(const int i,const double slDist)
    double lot=(eq*GszRiskPct/100.0)/mpl;
    if(GszMaxLot>0.0) lot=MathMin(lot,GszMaxLot);
    if(GszMinLot>0.0) lot=MathMax(lot,GszMinLot);
-   return Clamp(S[i].symbol,lot);
+   return Clamp(S[i].symbol,lot,i);
+}
+
+// SCA入口フィルタの対象枠か（FXRISKのbit割り当てとは別物なので混同しないこと）。
+bool ScaFilApplies(const int i)
+{
+   if(ScaFilMask==0) return false;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20261000)      bit=0;   // SCA USDJPY
+   else if(m==20261001) bit=1;   // SCA GBPJPY
+   return bit>=0 && ((ScaFilMask>>bit)&1)!=0;
+}
+
+// 発注を許すか。V105の3フィルタ（レンジ幅・時間帯・方向）をANDで適用する。
+bool ScaFilEntryOK(const int i,const bool is_buy,const double entry,const double dist,const int hour)
+{
+   if(!ScaFilApplies(i)) return true;
+   if(ScaFilBuyOnly && !is_buy) return false;
+   if(ScaFilRangeMin>0.0){
+      if(entry<=0.0) return false;
+      if(dist/entry < ScaFilRangeMin) return false;
+   }
+   if(ScaFilHourFrom>=0 && hour<ScaFilHourFrom) return false;
+   if(ScaFilHourTo  >=0 && hour>ScaFilHourTo)   return false;
+   return true;
+}
+
+// SCAの基本ロット。FXRISK(useRisk) / GSZ で risk% 化されていればそちらを使う。
+// 【バグ修正 2026-09-15】FxRiskOn() は SCA枠(bit3/bit4)に useRisk を立てるが、
+// SCAの発注経路は LotRisk() を通らず固定ロットを直接計算していたため、
+// FxRiskMask の bit3/bit4 が完全に無効だった。fxrisk1ラウンドでは
+// R008(mask=8)/R009(mask=16)/R016-R021(mask=24) が mask=0 の R003 と
+// 純益・DD・取引数まで完全一致しており、これが実測の証拠である。
+double LotRisk(int i, double slDistPrice);
+double ScaBaseLot(const int i,const double dist)
+{
+   if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) return gl; }
+   if(S[i].useRisk && dist>0.0){ double rl=LotRisk(i,dist); if(rl>0.0) return rl; }
+   return S[i].lot*GlobalLotMult*S[i].lotMult;
 }
 
 double LotRisk(int i, double slDistPrice)
@@ -1436,7 +1773,7 @@ double LotRisk(int i, double slDistPrice)
    }
    double factor=SimVerifyFactor(i);
    if(factor<=0.0) return 0.0;
-   return Clamp(S[i].symbol, base*GlobalLotMult*S[i].lotMult*factor);
+   return Clamp(S[i].symbol, base*GlobalLotMult*S[i].lotMult*factor, i);
 }
 double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
 {
@@ -1446,7 +1783,7 @@ double LotComplex(int i, string sym)  // Carry/Pair 資産連動複利
       double rd=(S[i].refDeposit>0)?S[i].refDeposit:100000.0;
       base=S[i].lot*(eq/rd);
    }
-   return Clamp(sym, base*GlobalLotMult*S[i].lotMult);
+   return Clamp(sym, base*GlobalLotMult*S[i].lotMult, i);
 }
 double GetBuf(int h,int idx)
 {
@@ -1980,19 +2317,38 @@ void ProcRSI(int i)
    double sld=S[i].useATRstops?atr*S[i].atrSLmult:S[i].slPips*S[i].pip;
    double tpd=S[i].useATRstops?sld*S[i].rr:S[i].tpPips*S[i].pip;
    trade.SetExpertMagicNumber(S[i].magic);
+
+   // --- ドテン制御（第14報・既定0で現行と同一）---
+   // 0 = 反対建玉を決済して即座に反対へ建てる（現行）
+   // 1 = 反対シグナルを無視する（保有を続け、新規も出さない）
+   // 2 = 決済はするが反対の新規は出さない
+   int nf = RsiNoFlipOn(i) ? RsiNoFlipMode : 0;
+
    if(eb && !hb){
-      if(hs) CloseType(i,POSITION_TYPE_SELL);
-      double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
-      double lot=LotRisk(i,sld);
-      if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
-      if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
+      if(hs && nf==1){
+         // 何もしない。保有を続け、このシグナルは消費しない（次のバーで再判定される）。
+      } else {
+         if(hs) CloseType(i,POSITION_TYPE_SELL);
+         if(!(hs && nf==2)){
+            double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
+            double lot=LotRisk(i,sld);
+            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
+         }
+         if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
+      }
    }
    if(es && !hs){
-      if(hb) CloseType(i,POSITION_TYPE_BUY);
-      double bid=SymbolInfoDouble(sym,SYMBOL_BID);
-      double lot=LotRisk(i,sld);
-      if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
-      if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
+      if(hb && nf==1){
+         // 同上
+      } else {
+         if(hb) CloseType(i,POSITION_TYPE_BUY);
+         if(!(hb && nf==2)){
+            double bid=SymbolInfoDouble(sym,SYMBOL_BID);
+            double lot=LotRisk(i,sld);
+            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
+         }
+         if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
+      }
    }
    // 保有中に完成したシグナルを消費する（既定OFF）。現行は注文分岐に入らないと
    // 消えないため、同方向で保有している間に完成した反転を、決済後に新しい機会として
@@ -2006,6 +2362,17 @@ void ProcRSI(int i)
 
 // RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
 // 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+// ドテン制御を枠に適用するか（第14報）。マスク0は「モードが立っていれば全RSI枠」。
+bool RsiNoFlipOn(const int i)
+{
+   if(RsiNoFlipMode<=0) return false;
+   if(RsiNoFlipMask==0) return true;
+   if(S[i].magic==20260610) return (RsiNoFlipMask&1)!=0;   // RSI USDJPY
+   if(S[i].magic==20260605) return (RsiNoFlipMask&2)!=0;   // RSI EURUSD
+   if(S[i].magic==20260774) return (RsiNoFlipMask&4)!=0;   // RSI GBPUSD
+   return false;
+}
+
 bool RsiMemLabOn(const int i)
 {
    if(RsiBBFlagMaxBars<=0 && RsiRSIFlagMaxBars<=0
@@ -2033,13 +2400,16 @@ void ProcPair(int i)
    int st=ml?1:(msh?-1:0);
    trade.SetExpertMagicNumber(S[i].magic);
    double lot=LotComplex(i,sym);
-   if(st==0){
+   double lot2=LotComplex(i,sec);
+   // A10: どちらかの脚がcapで0になったら**両脚とも出さない**。
+   // 片脚だけ建てると中立枠が方向性リスクに変わってしまう。
+   if(st==0 && lot>0.0 && lot2>0.0){
       if(z>=S[i].entryZ){ // 主売り・従買い
          trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,"PairMain");
-         trade.Buy(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
+         trade.Buy(lot2,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
       } else if(z<=-S[i].entryZ){ // 主買い・従売り
          trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"PairMain");
-         trade.Sell(LotComplex(i,sec),sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
+         trade.Sell(lot2,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
       }
    } else if(st==1){
       if(z>=-S[i].exitZ || z<=-S[i].stopZ) CloseSleeveAll(i);
@@ -2068,7 +2438,10 @@ void ProcCarry(int i)
    if(S[i].exitPeriod>0){
       double eb[]; ArraySetAsSeries(eb,true);
       if(CopyBuffer(S[i].hExit,0,1,1,eb)<1) return;
-      entry_th=MathMax(ma,eb[0]); exit_th=eb[0];
+      // CarryExitOnly: ヒステリシス帯を使う枠（Carry AUDJPY）では入口を帯のまま残し、
+      // 退出だけ ExitMA にする。ETH枠は useHyst=false なのでここには入らない（従来どおり）。
+      if(CarryExitOnly && S[i].useHyst) exit_th=eb[0];
+      else { entry_th=MathMax(ma,eb[0]); exit_th=eb[0]; }
    }
    // v1.2 クールダウン（S9）: 退出後cdBarsは再entry禁止
    bool cd_ok=true;
@@ -2078,7 +2451,8 @@ void ProcCarry(int i)
    if(cp>entry_th && swap_ok && !has && cd_ok && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      trade.Buy(LotComplex(i,sym),sym,ask,sl,0,"Carry");
+      double lotC=LotComplex(i,sym);                 // A10: capで0になったら発注しない
+      if(lotC>0.0) trade.Buy(lotC,sym,ask,sl,0,"Carry");
    } else if(cp<exit_th && has){
       CloseSleeveAll(i);
       S[i].cdExitBar=iTime(sym,tf,0);
@@ -2284,7 +2658,8 @@ void ProcFunding(int i)
    if(avg<FundThreshold && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult),S[i].symbol,ask,sl,0,"FundRev"))
+      double lotF=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult,i);   // A10
+      if(lotF>0.0 && trade.Buy(lotF,S[i].symbol,ask,sl,0,"FundRev"))
          Print("[FUNDREV BUY] avg=",DoubleToString(avg,4),"%/8h");
    }
 }
@@ -2450,7 +2825,8 @@ void ProcBfx(int i)
    if(chg<-BfxDropPct && CryptoGuardOK(i)){
       double ask=SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
       double sl=(S[i].disasterSL>0 ? NormalizeDouble(ask*(1-S[i].disasterSL/100),S[i].digits) : 0);
-      if(trade.Buy(Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult),S[i].symbol,ask,sl,0,"BfxRev"))
+      double lotB=Clamp(S[i].symbol,S[i].lot*S[i].lotMult*GlobalLotMult,i);   // A10
+      if(lotB>0.0 && trade.Buy(lotB,S[i].symbol,ask,sl,0,"BfxRev"))
          Print("[BFXREV BUY] long建玉",DoubleToString(chg,1),"%/",BfxLookbackDays,"日");
    }
 }
@@ -2475,10 +2851,12 @@ void ProcVBO(int i)
       }
       if(sq && cp>hh){
          double ask=SymbolInfoDouble(sym,SYMBOL_ASK); double sl=ask-S[i].atrSLmult*atr1;
-         trade.Buy(LotRisk(i,ask-sl),sym,ask,NormalizeDouble(sl,S[i].digits),0,"VBO-L");
+         double lotVL=LotRisk(i,ask-sl);             // A10: capで0になったら発注しない
+         if(lotVL>0.0) trade.Buy(lotVL,sym,ask,NormalizeDouble(sl,S[i].digits),0,"VBO-L");
       } else if(sq && cp<ll){
          double bid=SymbolInfoDouble(sym,SYMBOL_BID); double sl=bid+S[i].atrSLmult*atr1;
-         trade.Sell(LotRisk(i,sl-bid),sym,bid,NormalizeDouble(sl,S[i].digits),0,"VBO-S");
+         double lotVS=LotRisk(i,sl-bid);             // A10
+         if(lotVS>0.0) trade.Sell(lotVS,sym,bid,NormalizeDouble(sl,S[i].digits),0,"VBO-S");
       }
    } else {
       // チャンデリア・トレーリング
@@ -2574,13 +2952,13 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,true,atrd) && GoldLabEntryOK(i,POSITION_TYPE_BUY)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=S[i].scaRangeLow, dist=ask-sl;
-      if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+      if(dist>0 && ScaFilEntryOK(i,true,ask,dist,dt.hour)){
+         double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
          double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
-         if(trade.Buy(Clamp(sym,lot),sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
+         double lotL=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
+         if(lotL>0.0 && trade.Buy(lotL,sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
             S[i].scaTradedL=true;
       }
    }
@@ -2589,13 +2967,13 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,false,atrd) && GoldLabEntryOK(i,POSITION_TYPE_SELL)){
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
       double sl=S[i].scaRangeHigh, dist=sl-bid;
-      if(dist>0){
-         double lot=S[i].lot*GlobalLotMult*S[i].lotMult;
-         if(GszApplies(i)){ double gl=GszLot(i,dist); if(gl>0.0) lot=gl; }
+      if(dist>0 && ScaFilEntryOK(i,false,bid,dist,dt.hour)){
+         double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
          double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
-         if(trade.Sell(Clamp(sym,lot),sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
+         double lotS=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
+         if(lotS>0.0 && trade.Sell(lotS,sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
             S[i].scaTradedS=true;
       }
    }
@@ -2629,6 +3007,38 @@ double OnTester()
          FileClose(eqh);
       }
    }
+   // --- cap 計装の出力（第10報）。CapLogFile が空なら何もしない ------------
+   // 併せて含み損込みDD（STAT_EQUITY_DDREL_PERCENT）もここに出す。
+   // ResultFileName は FILE_COMMON を付けずに開いているためテスターエージェントの
+   // サンドボックスに落ちており、**2026-09-15 時点で誰も読んでいない**。
+   // そのため報告してきた最大DDはすべて残高ベース（含み損を含まない下限値）のままだった。
+   if(CapLogFile != ""){
+      int ch=FileOpen(CapLogFile,FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON,',');
+      if(ch!=INVALID_HANDLE){
+         FileWrite(ch,"kind","magic","calls","cut","deny","lot_want","lot_got",
+                   "vmax_n","vmax_cut");
+         for(int i=0;i<NS;i++){
+            if(g_capN[i]==0) continue;
+            FileWrite(ch,"sleeve",(long)S[i].magic,IntegerToString(g_capN[i]),
+                      IntegerToString(g_capCut[i]),IntegerToString(g_capDeny[i]),
+                      DoubleToString(g_capWant[i],4),DoubleToString(g_capGot[i],4),
+                      IntegerToString(g_capVmaxN[i]),
+                      DoubleToString(g_capVmaxCut[i],4));
+         }
+         FileWrite(ch,"equity_dd_pct",0,"","","",
+                   DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4),"");
+         FileWrite(ch,"balance_dd_pct",0,"","","",
+                   DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4),"");
+         // 削られた注文を1件ずつ。kind=event, magic, 時刻, 希望, 通過, equity, 使用証拠金
+         for(int e=0;e<g_capEvN;e++)
+            FileWrite(ch,"event",g_capEvMagic[e],(long)g_capEvT[e],
+                      DoubleToString(g_capEvWant[e],4),DoubleToString(g_capEvGot[e],4),
+                      DoubleToString(g_capEvEq[e],2),DoubleToString(g_capEvUsed[e],2));
+         FileWrite(ch,"event_overflow",0,IntegerToString(g_capEvN>=CAPEV_MAX?1:0),
+                   "","","","");
+         FileClose(ch);
+      }
+   }
    if(ResultFileName=="") return pf;
    int fh=FileOpen(ResultFileName,FILE_WRITE|FILE_CSV|FILE_ANSI,',');
    if(fh==INVALID_HANDLE) return pf;
@@ -2636,6 +3046,12 @@ double OnTester()
    FileWrite(fh,"net_profit",DoubleToString(TesterStatistics(STAT_PROFIT),2));
    FileWrite(fh,"profit_factor",DoubleToString(TesterStatistics(STAT_PROFIT_FACTOR),4));
    FileWrite(fh,"max_dd_pct",DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4));
+   // STAT_BALANCE_DDREL_PERCENT は残高ベースで建玉中の含み損を含まない。
+   // 2026-09-15 に fxrisk1 の88run全てで「決済損益から作った曲線のDD」と
+   // 小数点以下まで完全一致することが判明した（比の中央値・最小・最大が1.00）。
+   // 含み損込みのDDはこちら。以降のラウンドはこの値も併記すること。
+   FileWrite(fh,"equity_dd_pct",DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4));
+   FileWrite(fh,"equity_dd_abs",DoubleToString(TesterStatistics(STAT_EQUITY_DD_RELATIVE),2));
    FileWrite(fh,"total_trades",IntegerToString((int)TesterStatistics(STAT_TRADES)));
    FileWrite(fh,"win_trades",IntegerToString((int)TesterStatistics(STAT_PROFIT_TRADES)));
    FileWrite(fh,"loss_trades",IntegerToString((int)TesterStatistics(STAT_LOSS_TRADES)));
