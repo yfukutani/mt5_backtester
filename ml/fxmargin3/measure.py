@@ -31,6 +31,7 @@ import importlib.util
 import json
 import math
 import os
+import shutil
 import subprocess
 import time
 import uuid
@@ -46,6 +47,8 @@ OUT = ROOT / "results.csv"
 LOG = ROOT / "measure.log"
 MT5BT = REPO / "mt5bt.bat"
 COMMON = Path(r"C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\Common\Files")
+# テスターエージェントのサンドボックス（第15報・equity DD の回収先を探す起点）
+TESTER_ROOT = Path(r"C:\Users\f\AppData\Roaming\MetaQuotes\Tester")
 EXE = r"C:\Users\f\AppData\Roaming\XMTrading MT5\terminal64.exe"
 EA_EX5 = Path(r"C:\Users\f\AppData\Roaming\MetaQuotes\Terminal"
               r"\BAC624F09E3C5D5AFDD21CE91C0B879D\MQL5\Experts\MIX_EA_SIMVERIFY.ex5")
@@ -246,6 +249,32 @@ def run(pid, base, desc, params, window):
             src.replace(dst)
         except OSError:
             dst = src
+
+    # --- 含み損込みDD（equity DD）の回収（第15報）--------------------------
+    # EA の `ResultFileName` は FILE_COMMON 無しで開かれているため、
+    # **テスターエージェントのサンドボックス**に落ちる:
+    #   ...\Tester\<端末ID>\Agent-127.0.0.1-<port>\MQL5\Files\<run_id>_result.csv
+    # そして **エージェントは次のrunを始めるときにそのフォルダを空にする。**
+    # だから「あとでまとめて集める」ができない。runの直後、ここで拾う。
+    #
+    # 中身には `equity_dd_pct`（STAT_EQUITY_DDREL_PERCENT）が入っている。
+    # results.csv の `dd_pct` は **残高ベース**で含み損が1円も乗っていないので、
+    # Pair（保有中央値 229〜311時間）や Carry（同 1,152〜4,164時間）のように
+    # 長く持つ枠では risk を過小表示する。2026-09-18 に Codex の査読で突かれた。
+    #
+    # **results.csv の列（FIELDS）は増やさない。** 走行中のラウンドが同じ module を
+    # 読み込んでおり、途中で列が増えると再開時にヘッダと列数が食い違うため。
+    # 読むのは `agent_results/` を見る側（例: ml/fxqual1/collect_equity_dd.py --report）。
+    for _box in TESTER_ROOT.glob("*/Agent-*/MQL5/Files"):
+        _rf = _box / f"{run_id}_result.csv"
+        if _rf.exists():
+            try:
+                _adir = DEAL_DIR.parent / "agent_results"
+                _adir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(_rf, _adir / _rf.name)
+            except OSError:
+                pass
+            break
 
     # cap 計装の回収（第10報）。CAP_LOG が False なら EA が書いていないので何もしない。
     if CAP_LOG:
