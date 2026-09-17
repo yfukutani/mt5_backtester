@@ -72,3 +72,4 @@ ml/fxwin1/chain.stderr
 ml/*/collector.log
 ml/*/collector.err
 ml/*/compile_tag_check.log
+ml/*/watchdog.log
