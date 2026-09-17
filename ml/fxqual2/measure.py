@@ -65,16 +65,52 @@ PARAMS = {
     "FxRiskMask": 0, "FxRiskPct": 0.5, "FxRiskRefCap": 0,
     "RefCap_PB_USDJPY": 78000, "RefCap_PB_GBPJPY": 78000, "RefCap_CARRY": 78000,
     "TagDealTriggers": True,
+    # 第15報の Pair 入力は**全案で明示的に既定値を書く**。
+    # Codex の査読より: 差分だけを書いて既定に頼ると、EA の既定値が将来変わったときに
+    # 過去のrunと比較できなくなる。fxqual1 の `QUALITY_OFF` と同じ考え方。
+    "PairSkipAtStop": False, "PairEqualNotional": False,
+    "PairMaxHoldBars": 0, "PairEntryZOv": 0.0,
 }
 for _k in ("BFXREV", "BTC_FUND", "CARRY", "ETH", "PAIR", "PB_GBPJPY", "PB_GOLD",
            "PB_USDJPY", "RSI_EURUSD", "RSI_GBPUSD", "RSI_USDJPY", "SCA_GBPJPY",
            "SCA_GOLD", "SCA_USDJPY", "VBO"):
     PARAMS[f"Mult_{_k}"] = 1.0
 
+def t(**over):
+    p = dict(PARAMS)
+    for k, v in over.items():
+        p[k] = v
+    return p
+
+
+# 第14報のラウンド `ml/fxqual1` は **Pair 枠を1件も含んでいなかった**。
+# ここで同じ土俵（同一サイジング・同一窓）に並べる。
+# 案の並びは Codex の実装コスト評価順で、機構と外れる筋は EA 側のコメントに書いた。
 PROPOSALS = [
     ("T000", "fxqual1/Q000", "計装ON対照: 発火理由タグ＋Pairのz記録。"
                              "売買はQ000と同一でなければならない", PARAMS),
+
+    # --- Pair: 設計の不連続を直す2件（「掃引」ではなく「直し」）-----------
+    ("T001", "T000", "Pair: 参入時に既に |z|>=stopZ(5.0) なら建てない（Codex #23）",
+     t(PairSkipAtStop=True)),
+    ("T002", "T000", "Pair: 両脚の名目を揃える（現行は常に片側15〜20%の方向性リスク）",
+     t(PairEqualNotional=True)),
+    ("T003", "T002", "Pair: 上の2つを同時に（設計の粗さを両方直した形）",
+     t(PairSkipAtStop=True, PairEqualNotional=True)),
+
+    # --- Pair: 保有上限（証拠金を最も長く拘束する枠）---------------------
+    ("T004", "T000", "Pair: 保有上限 240本(H1=10日・現行の保有中央値付近)",
+     t(PairMaxHoldBars=240)),
+    ("T005", "T000", "Pair: 保有上限 480本(H1=20日)", t(PairMaxHoldBars=480)),
+
+    # --- Pair: 頻度（115か月で86取引しかない）---------------------------
+    ("T006", "T000", "Pair: entryZ 4.0 -> 3.5", t(PairEntryZOv=3.5)),
+    ("T007", "T000", "Pair: entryZ 4.0 -> 3.0", t(PairEntryZOv=3.0)),
 ]
+
+# 対照が最初。次に「直し」2件、それから掃引。
+# 途中で止まっても判断に効く数字から埋まる並びにする。
+ORDER = ["T000", "T001", "T002", "T003", "T006", "T004", "T007", "T005"]
 
 
 def main():
@@ -83,8 +119,10 @@ def main():
     if not m3.acquire_lock():
         return
     done = m3.load_done()
+    idx = {p: i for i, p in enumerate(ORDER)}
+    props = sorted(PROPOSALS, key=lambda x: idx.get(x[0], 99))
     jobs = [(pid, base, desc, params, w)
-            for (pid, base, desc, params) in PROPOSALS
+            for (pid, base, desc, params) in props
             for w in WINS if (pid, w) not in done]
     if not jobs:
         print("完了済みです")
@@ -92,10 +130,13 @@ def main():
     import ctypes
     ctypes.windll.kernel32.SetThreadExecutionState(0x80000000 | 0x00000001)
     try:
-        m3.log(f"FXQUAL2_START jobs={len(jobs)} 発火理由の計装（売買は不変のはず）")
+        m3.log(f"FXQUAL2_START jobs={len(jobs)} 計装ON対照 + Pair枠7案")
         for pid, base, desc, params, window in jobs:
             row = m3.run(pid, base, desc, params, window)
             m3.append_result(row)
+            if pid == "T000" and row.get("status") != "OK":
+                m3.log("FXQUAL2_ABORT 計装ON対照が失敗した。回帰試験が取れないので中止")
+                return
     finally:
         ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
         (m3.ROOT / "measure.lock").unlink(missing_ok=True)

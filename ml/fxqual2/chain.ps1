@@ -63,7 +63,7 @@ if (Test-Path $clog) {
 Say ("COMPILE {0}" -f $result)
 if ($result -notlike '*0 errors*') { Say 'CHAIN_ABORT コンパイルにエラー'; exit 1 }
 
-Say 'FXQUAL2 を開始する（計装ON対照 x OOS/IS = 2run）'
+Say 'FXQUAL2 を開始する（計装ON対照+Pair7案 x OOS/IS = 16run）'
 Set-Location $repo
 & $py 'ml\fxqual2\measure.py' 2>&1 | Add-Content -Path $log -Encoding utf8
 Say ("CHAIN_END exit={0}" -f $LASTEXITCODE)

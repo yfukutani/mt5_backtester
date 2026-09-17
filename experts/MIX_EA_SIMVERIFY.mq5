@@ -531,6 +531,41 @@ input group "=== RSI ドテン制御（第14報・0=現行）==="
 input int    RsiNoFlipMode  = 0;
 input int    RsiNoFlipMask  = 0;   // bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全RSI枠）
 
+input group "=== Pair 枠の入口と出口（第15報・すべて既定OFF＝現行）==="
+// Pair は 115か月で86取引・+15,048円と寄与が小さいが、**設計に手つかずの粗さが残る。**
+// 第14報のラウンド `ml/fxqual1` は Pair を1件も含んでいなかった。
+// Codex に実装コスト順で並べさせた上位を、既定OFFの入力として足す。
+//
+// 1) PairSkipAtStop
+//    現行は `|z| >= entryZ(4.0)` で建てるが、退出は `|z| >= stopZ(5.0)` でも起きる。
+//    **|z| が 5.0 以上の領域では、建てた瞬間に退出条件も成立している。**
+//    入口と出口の条件が重なっているという、設計としての不連続である。
+//    → true で `|z| < stopZ` を新規条件に足す。
+//    外れる筋: 極端な乖離ほど平均回帰が強いなら、一番おいしいところを捨てる。
+//
+// 2) PairEqualNotional
+//    両脚は同ロットで建っている（取引ログで確認済み・43組/片脚0件）。だが
+//    1ロットは EURUSD なら 100,000 EUR、GBPUSD なら 100,000 GBP であり、
+//    **円換算の名目は EUR/GBP の比（1.15〜1.20）だけ食い違う。**
+//    この枠は常に片側 15〜20% 相当の方向性リスクを抱えている。
+//    → true で従脚のロットを価格比で調整し、名目を揃える。
+//    外れる筋: いまの方向バイアスが偶然プラスに効いていて、
+//              純粋なスプレッド収益はもっと弱い、という可能性がある。
+//
+// 3) PairMaxHoldBars
+//    保有中央値 229〜311時間＝10〜13日。証拠金を最も長く拘束する枠のひとつ。
+//    → >0 で経過H1本数がこれを超えたら両脚を閉じる。
+//    外れる筋: 収斂待ちを切ると、遅い勝ちだけが消えて負けが残りうる。
+//
+// 4) PairEntryZOv
+//    4σは極端で、115か月で86取引しかない。PB GBPJPY と同じ「頻度が律速」の構造。
+//    → >0 で entryZ を上書き（3.5 / 3.0 を測る）。
+//    外れる筋: 浅い乖離は構造変化で、戻らないまま stop に届く。
+input bool   PairSkipAtStop    = false;
+input bool   PairEqualNotional = false;
+input int    PairMaxHoldBars   = 0;
+input double PairEntryZOv      = 0.0;
+
 input group "=== 発火理由の計装（第15報・false=現行）==="
 // **注文コメントに「どの機構で発火したか」を埋める。売買判断は1ビットも変わらない。**
 // 変わるのはコメント文字列と、OnTester の deals ダンプに1列足すことだけである。
@@ -2435,19 +2470,57 @@ void ProcPair(int i)
       string zs=StringFormat(":z=%.2f", z);
       pMain="PairMain"+zs; pSec="PairSecond"+zs;
    }
-   if(st==0 && lot>0.0 && lot2>0.0){
-      if(z>=S[i].entryZ){ // 主売り・従買い
+   // --- 第15報の Pair 入力（すべて既定OFFで現行と同一）---
+   double entZ = (PairEntryZOv>0.0) ? PairEntryZOv : S[i].entryZ;
+   // 入口の時点で既に退出条件（|z|>=stopZ）が成立している領域を避ける。
+   bool zone_ok = (!PairSkipAtStop) || (MathAbs(z) < S[i].stopZ);
+   // 名目を揃える。1ロット = 主100,000単位 / 従100,000単位 なので、
+   // 円換算の名目を合わせるには従脚を「主/従の価格比」で割る（両方USD建てクロス）。
+   double lot2u = lot2;
+   if(PairEqualNotional){
+      double pm=SymbolInfoDouble(sym,SYMBOL_BID), ps=SymbolInfoDouble(sec,SYMBOL_BID);
+      if(pm>0.0 && ps>0.0){
+         double step=SymbolInfoDouble(sec,SYMBOL_VOLUME_STEP);
+         double vmin=SymbolInfoDouble(sec,SYMBOL_VOLUME_MIN);
+         if(step<=0.0) step=0.01;
+         lot2u = lot2*(pm/ps);
+         lot2u = MathFloor(lot2u/step+1e-8)*step;
+         // 丸めで0になったら**両脚とも出さない。** 片脚だけ建てると中立枠でなくなる。
+         if(lot2u < vmin) lot2u = 0.0;
+      }
+   }
+   if(st==0 && lot>0.0 && lot2u>0.0 && zone_ok){
+      if(z>=entZ){ // 主売り・従買い
          trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,pMain);
-         trade.Buy(lot2,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,pSec);
-      } else if(z<=-S[i].entryZ){ // 主買い・従売り
+         trade.Buy(lot2u,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,pSec);
+      } else if(z<=-entZ){ // 主買い・従売り
          trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,pMain);
-         trade.Sell(lot2,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,pSec);
+         trade.Sell(lot2u,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,pSec);
       }
    } else if(st==1){
-      if(z>=-S[i].exitZ || z<=-S[i].stopZ) CloseSleeveAll(i);
+      if(z>=-S[i].exitZ || z<=-S[i].stopZ || PairHeldTooLong(i,tf)) CloseSleeveAll(i);
    } else if(st==-1){
-      if(z<=S[i].exitZ || z>=S[i].stopZ) CloseSleeveAll(i);
+      if(z<=S[i].exitZ || z>=S[i].stopZ || PairHeldTooLong(i,tf)) CloseSleeveAll(i);
    }
+}
+
+// 保有上限（第15報・既定0で無効）。枠のどれかの建玉が上限本数を超えたら真。
+// 両脚は同時に建つので、片方で判定すれば足りるが、念のため最も古いほうで見る。
+bool PairHeldTooLong(const int i, const ENUM_TIMEFRAMES tf)
+{
+   if(PairMaxHoldBars<=0) return false;
+   long bar=(long)PeriodSeconds(tf);
+   if(bar<=0) return false;
+   datetime oldest=0;
+   for(int k=PositionsTotal()-1;k>=0;k--){
+      ulong tk=PositionGetTicket(k);
+      if(tk==0 || !PositionSelectByTicket(tk)) continue;
+      if(PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      datetime t=(datetime)PositionGetInteger(POSITION_TIME);
+      if(oldest==0 || t<oldest) oldest=t;
+   }
+   if(oldest==0) return false;
+   return ((long)(TimeCurrent()-oldest) >= (long)PairMaxHoldBars*bar);
 }
 
 //============================ Carry / 暗号トレンド ============================
