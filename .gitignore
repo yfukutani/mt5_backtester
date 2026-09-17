@@ -67,3 +67,8 @@ ml/*/stdout.log
 ml/*/stderr.log
 ml/fxwin1/chain.stdout
 ml/fxwin1/chain.stderr
+
+# 第15報: エージェント側の result.csv 回収ログ（内容は agent_results/ に残る）
+ml/*/collector.log
+ml/*/collector.err
+ml/*/compile_tag_check.log

@@ -531,6 +531,22 @@ input group "=== RSI ドテン制御（第14報・0=現行）==="
 input int    RsiNoFlipMode  = 0;
 input int    RsiNoFlipMask  = 0;   // bit0=USDJPY bit1=EURUSD bit2=GBPUSD（0=全RSI枠）
 
+input group "=== 発火理由の計装（第15報・false=現行）==="
+// **注文コメントに「どの機構で発火したか」を埋める。売買判断は1ビットも変わらない。**
+// 変わるのはコメント文字列と、OnTester の deals ダンプに1列足すことだけである。
+//
+// なぜ要るか：RSI枠には RSI反転 / ボリンジャー回帰 / ダブルボトム の3つの入口が
+// `(rbuy||bbuy||dpb)` の OR で同居しているのに、退出は共通の固定SL/TPひとつしかない。
+// **3機構それぞれの成績を一度も見ていない**ので「勝つ機構だけ残す」も
+// 「機構ごとに退出を変える」も測れない（Claude #18/#20・Codex #19〜#21）。
+// Pair も同じで、建てた時点の z が記録されていないため
+// 「参入時に既に stopZ を越えている注文が何件あるか」（Codex #23）を数えられない。
+//
+// 書式（**マジックは変えない**ので枠の集計は壊れない）:
+//   RSI  "RSI:R" / "RSI:B" / "RSI:D"（同時発火は連結。例 "RSI:RB"）
+//   Pair "PairMain:z=-4.12" / "PairSecond:z=-4.12"
+input bool   TagDealTriggers   = false;
+
 input group "=== SCA FX 枠の時間（第14報・0=現行）==="
 // SCA USDJPY/GBPJPY は レンジ0-9時・発注締切12時・強制決済22時。
 // 締切と強制決済は一度も掃いていないが、利益の大半は強制決済から出ている。
@@ -2324,6 +2340,15 @@ void ProcRSI(int i)
    // 2 = 決済はするが反対の新規は出さない
    int nf = RsiNoFlipOn(i) ? RsiNoFlipMode : 0;
 
+   // --- 発火理由のタグ（第15報・既定OFFでコメントは "RSI" のまま）---
+   // 3機構は OR で同居しており、同じ足で同時に成立しうる。**優先順位は無い**ので
+   // 順位をつけずに立ったものを全部連結する（"RB" なら RSI反転とBB回帰が同時）。
+   string tagB="RSI", tagS="RSI";
+   if(TagDealTriggers){
+      tagB="RSI:"; if(rbuy) tagB+="R"; if(bbuy) tagB+="B"; if(dpb) tagB+="D";
+      tagS="RSI:"; if(rsell) tagS+="R"; if(bsell) tagS+="B"; if(dps) tagS+="D";
+   }
+
    if(eb && !hb){
       if(hs && nf==1){
          // 何もしない。保有を続け、このシグナルは消費しない（次のバーで再判定される）。
@@ -2332,7 +2357,7 @@ void ProcRSI(int i)
          if(!(hs && nf==2)){
             double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
             double lot=LotRisk(i,sld);
-            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),"RSI");
+            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),tagB);
          }
          if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
       }
@@ -2345,7 +2370,7 @@ void ProcRSI(int i)
          if(!(hb && nf==2)){
             double bid=SymbolInfoDouble(sym,SYMBOL_BID);
             double lot=LotRisk(i,sld);
-            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),"RSI");
+            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),tagS);
          }
          if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
       }
@@ -2403,13 +2428,20 @@ void ProcPair(int i)
    double lot2=LotComplex(i,sec);
    // A10: どちらかの脚がcapで0になったら**両脚とも出さない**。
    // 片脚だけ建てると中立枠が方向性リスクに変わってしまう。
+   // 建てた時点の z をコメントに残す（第15報・既定OFFで従来の文字列のまま）。
+   // これが無いと「参入時に既に stopZ を越えている注文」（Codex #23）を数えられない。
+   string pMain="PairMain", pSec="PairSecond";
+   if(TagDealTriggers){
+      string zs=StringFormat(":z=%.2f", z);
+      pMain="PairMain"+zs; pSec="PairSecond"+zs;
+   }
    if(st==0 && lot>0.0 && lot2>0.0){
       if(z>=S[i].entryZ){ // 主売り・従買い
-         trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,"PairMain");
-         trade.Buy(lot2,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,"PairSecond");
+         trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,pMain);
+         trade.Buy(lot2,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,pSec);
       } else if(z<=-S[i].entryZ){ // 主買い・従売り
-         trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,"PairMain");
-         trade.Sell(lot2,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,"PairSecond");
+         trade.Buy(lot,sym,SymbolInfoDouble(sym,SYMBOL_ASK),0,0,pMain);
+         trade.Sell(lot2,sec,SymbolInfoDouble(sec,SYMBOL_BID),0,0,pSec);
       }
    } else if(st==1){
       if(z>=-S[i].exitZ || z<=-S[i].stopZ) CloseSleeveAll(i);
@@ -2986,7 +3018,7 @@ double OnTester()
    if(EquityLogFile != ""){
       int eqh=FileOpen(EquityLogFile,FILE_WRITE|FILE_CSV|FILE_ANSI|FILE_COMMON,',');
       if(eqh!=INVALID_HANDLE){
-         FileWrite(eqh,"time","profit","magic","entry","position_id","type","volume","price","sl","usdjpy","profit_jpy");
+         FileWrite(eqh,"time","profit","magic","entry","position_id","type","volume","price","sl","usdjpy","profit_jpy","comment");
          HistorySelect(0,TimeCurrent());
          int n=HistoryDealsTotal();
          for(int e=0;e<n;e++){ ulong tk=HistoryDealGetTicket(e); if(tk==0) continue;
@@ -3003,7 +3035,8 @@ double OnTester()
                       DoubleToString(HistoryDealGetDouble(tk,DEAL_VOLUME),2),
                       DoubleToString(HistoryDealGetDouble(tk,DEAL_PRICE),8),
                       DoubleToString(HistoryDealGetDouble(tk,DEAL_SL),8),
-                      DoubleToString(uj,5),DoubleToString(p*uj,2)); }
+                      DoubleToString(uj,5),DoubleToString(p*uj,2),
+                      HistoryDealGetString(tk,DEAL_COMMENT)); }
          FileClose(eqh);
       }
    }
