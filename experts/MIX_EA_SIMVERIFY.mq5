@@ -650,6 +650,25 @@ input double PbSlopeATR_UJ  = 0.0;   // >0 で同 slope下限を上書き（現�
 input double PbAdxThr_GJ    = 0.0;   // >0 で PB GBPJPY の ADX閾値を上書き（現行30.0）
 input double PbSlopeATR_GJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.5）
 
+input group "=== SCA リバーサル部分集合のゲート（第18報・0=現行）==="
+// 【なぜ入れたか】第18報で取引ログを Boost の有無で割ったところ、
+// **SCA GBPJPY の損益はリバーサル条件（scaDrift がブレイク方向と逆）が成立した
+// 部分集合だけから出ている**ことが分かった（固定サイジング・W000 の実測）:
+//
+//   SCA GBPJPY  plain(0.01) n=462/522  OOS −15,585 / IS  +4,281  平均R −0.067 / +0.005
+//   SCA GBPJPY  Boost(0.06) n=159/162  OOS +57,804 / IS +69,492  平均R +0.129 / +0.065
+//
+// つまり **リバーサル条件は「ロットを増やす条件」ではなく「入口の質の条件」**である。
+// これまで Boost_Mult（2→3→4→6）としてサイジング側でしか触られていない。
+// 入口フィルタとして使ったことは一度も無い。
+//
+// `scaDrift` はレンジ確定時に1回だけ決まり、その日その方向で固定である。
+// したがってこのゲートは日×方向の単位で効き、**取引の入れ替わり（displacement）が
+// 起きない**。上の実測差がそのまま予測値になる（第17報の SCA 時間帯フィルタとは違う）。
+input int    ScaRevOnlyMask    = 0;   // bitを立てた枠は「リバーサル条件が成立した足」でしか建てない
+input int    ScaRevDropMask    = 0;   // 逆に「リバーサル条件が成立した足」だけ建てない（反証対照）
+                                      // 両方とも bit0=SCA USDJPY(20261000) bit1=SCA GBPJPY(20261001)
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -908,6 +927,18 @@ int OnInit()
    if(ScaTradeEndOv<0 || ScaTradeEndOv>23 || ScaForceCloseOv<0 || ScaForceCloseOv>23)
    {
       Print("ScaTradeEndOv / ScaForceCloseOv must be 0..23");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // 第18報。同じ枠に Only と Drop を同時に立てるとその枠が1本も建てなくなる。
+   // 「効いた」のか「沈黙した」のかが結果から区別できないので、設定段階で弾く。
+   if((ScaRevOnlyMask & ScaRevDropMask)!=0)
+   {
+      Print("ScaRevOnlyMask and ScaRevDropMask must not share a bit");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaRevOnlyMask<0 || ScaRevOnlyMask>3 || ScaRevDropMask<0 || ScaRevDropMask>3)
+   {
+      Print("ScaRevOnlyMask / ScaRevDropMask must be 0..3");
       return INIT_PARAMETERS_INCORRECT;
    }
    // レンジ確定(9時)より前に締切・強制決済を置くと枠が沈黙するだけで測定にならない。
@@ -1862,6 +1893,24 @@ bool ScaFilEntryOK(const int i,const bool is_buy,const double entry,const double
    }
    if(ScaFilHourFrom>=0 && hour<ScaFilHourFrom) return false;
    if(ScaFilHourTo  >=0 && hour>ScaFilHourTo)   return false;
+   return true;
+}
+
+// SCA リバーサル部分集合のゲート（第18報）。
+// `rev` は「この足のブレイク方向に対してリバーサル条件が成立しているか」＝
+// ProcSCA の Boost 判定（買いなら scaDrift<0・売りなら scaDrift>0）と同じ式である。
+// ⚠️ Boost が乗るかどうか（`scaRevBoost` / GSZ）とは切り離す。ここで測りたいのは
+//    サイジングではなく**入口の質**なので、条件そのものだけを見る。
+bool ScaRevGateOK(const int i,const bool rev)
+{
+   if(ScaRevOnlyMask==0 && ScaRevDropMask==0) return true;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20261000)      bit=0;   // SCA USDJPY
+   else if(m==20261001) bit=1;   // SCA GBPJPY
+   if(bit<0) return true;
+   if(((ScaRevOnlyMask>>bit)&1)!=0 && !rev) return false;   // 逆張り足だけ建てる
+   if(((ScaRevDropMask>>bit)&1)!=0 &&  rev) return false;   // 逆張り足だけ建てない（反証対照）
    return true;
 }
 
@@ -3210,7 +3259,8 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,true,atrd) && GoldLabEntryOK(i,POSITION_TYPE_BUY)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=S[i].scaRangeLow, dist=ask-sl;
-      if(dist>0 && ScaFilEntryOK(i,true,ask,dist,dt.hour)){
+      if(dist>0 && ScaFilEntryOK(i,true,ask,dist,dt.hour) &&
+         ScaRevGateOK(i,S[i].scaDrift<0)){
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
@@ -3225,7 +3275,8 @@ void ProcSCA(int i)
       GoldLabSCADirectionOK(i,false,atrd) && GoldLabEntryOK(i,POSITION_TYPE_SELL)){
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
       double sl=S[i].scaRangeHigh, dist=sl-bid;
-      if(dist>0 && ScaFilEntryOK(i,false,bid,dist,dt.hour)){
+      if(dist>0 && ScaFilEntryOK(i,false,bid,dist,dt.hour) &&
+         ScaRevGateOK(i,S[i].scaDrift>0)){
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
