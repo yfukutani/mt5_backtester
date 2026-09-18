@@ -287,9 +287,24 @@ def run(pid, base, desc, params, window):
 
     st, deal_profit = {}, 0.0
     if dst.exists():
-        for r in csv.DictReader(open(dst, encoding="utf-8")):
+        # 【第16報の修正】窓の終わりに建ったままだったポジションは、テスターが
+        # 強制決済する。その決済 deal の magic は **0 で記録される**ため、
+        # 従来の magic 直引きでは枠に配賦されず、**枠別の純益から丸ごと落ちていた**
+        # （ブック全体の net には入っているので、枠の合計だけが合わない）。
+        # 第15報の「Carry の退出SMAは枠だけ見れば両窓改善／FX以外の枠が全滅する
+        # 副作用」は、これが原因の**見かけ**だった。実体は Carry AUDJPY の建玉が
+        # IS の終わりに +52,551円 の含み益を持っており、退出SMA を入れると
+        # それを早く切ってしまう、というだけである。
+        # position_id から建玉時の magic を引いて配賦する。
+        rows = list(csv.DictReader(open(dst, encoding="utf-8")))
+        owner = {r["position_id"]: int(r["magic"])
+                 for r in rows if r["entry"] == "0"}
+        for r in rows:
             deal_profit += float(r["profit"])
-            k = MAGICS.get(int(r["magic"]))
+            m = int(r["magic"])
+            if m == 0:
+                m = owner.get(r["position_id"], 0)
+            k = MAGICS.get(m)
             if k is None:
                 continue
             a = st.setdefault(k, {"net": 0.0, "n": 0})

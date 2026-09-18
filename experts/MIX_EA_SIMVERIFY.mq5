@@ -582,6 +582,40 @@ input group "=== 発火理由の計装（第15報・false=現行）==="
 //   Pair "PairMain:z=-4.12" / "PairSecond:z=-4.12"
 input bool   TagDealTriggers   = false;
 
+input group "=== RSI 発火機構ゲート（第16報・0=現行）==="
+// 第15報の計装で RSI 3枠の3機構（R=RSI反転 / B=BB回帰 / D=ダブルボトム）を初めて分離した。
+// OOS窓では**枠ごとに勝つ機構が違う**（EURUSD は RB 同時発火だけが勝ち、単独 B/R は負け。
+// GBPUSD は B 単独が最良。USDJPY は D を含む群が勝ち、B 単独と RB は負け）。
+// ここはその「勝つ組み合わせだけ残す」を測るためのゲートである。
+//
+// 値は **組み合わせコード 1..7 に対するビットマスク**:
+//   コード = (R?1:0) | (B?2:0) | (D?4:0)    例: RB 同時 = 3 / D 単独 = 4
+//   マスク = OR( 1 << (コード-1) )           例: RB だけ許す = 1<<2 = 4
+//                                            例: D を含む全部(4,5,6,7) = 8|16|32|64 = 120
+// 0 = 現行（全部許可）。既定 0 では1ビットも挙動が変わらない。
+//
+// ⚠️ ゲートで落とした足では **フラグを消費しない**（wasOS / belowBB を落とさない）。
+//    「単独では建てず、合流を待つ」という意味にするためである。消費してしまうと
+//    「合流待ち」ではなく「機会の破棄」になり、測りたいものが変わる。
+//    ゲートは eb/es そのものに掛けるので、ドテンの決済も同時に止まる（入口と出口が
+//    同じ条件で動く現行の構造をそのまま保つ）。
+input int    RsiMechMask_UJ = 0;
+input int    RsiMechMask_EU = 0;
+input int    RsiMechMask_GU = 0;
+
+input group "=== PB 入口の律速を割る計装（第16報・false=現行）==="
+// 第14報で PB GBPJPY の ADX を 30→22.5 まで下げても 115か月で取引が5件しか増えなかった。
+// **律速は ADX ではない。** だが「では何か」を推測で潰すのは第14報で21案を空振りした形なので、
+// 数えることにする。売買には触れない（カウンタを回すだけ）。
+//
+// 入口は8条件の AND である（買い側）:
+//   0 up(終値>trendMA かつ fastEMA>slowEMA) / 1 armed(押し目待ちフラグ) /
+//   2 終値>fastEMA / 3 陽線 / 4 終値>2本前の高値 / 5 ADX / 6 slope / 7 上位足(D1 MA200)
+// 各条件について「**それ以外の7条件が全部成立していた**バー数」を数える（leave-one-out）。
+// その数から全条件成立バー数を引いたものが「**その条件だけで落ちた**バー数」＝律速の強さ。
+// 素朴な漏斗（順に絞る）は順序で答えが変わるので、leave-one-out を主に見る。
+input bool   PbDiagCounters = false;
+
 input group "=== SCA FX 枠の時間（第14報・0=現行）==="
 // SCA USDJPY/GBPJPY は レンジ0-9時・発注締切12時・強制決済22時。
 // 締切と強制決済は一度も掃いていないが、利益の大半は強制決済から出ている。
@@ -1556,6 +1590,10 @@ double MarginCapLot(const string sym, const double lot)
 // 計装は受動的である。ロット・発注・決済のどれも変えない。数えるだけ。
 // 既定（CapLogFile="" / MarginCapPct=0）では1バイトも出力しない。
 int    g_capN[32];        // Clamp の呼び出し回数（cap有効時のみ）
+// PB 入口の律速カウンタ（第16報・PbDiagCounters=false なら1度も触らない）
+int    g_pbAll[32];       // 8条件すべて成立したバー数（買い＋売り）
+int    g_pbLOO[32][8];    // 条件kを除く7条件が成立したバー数
+int    g_pbBars[32];      // 評価したバー数
 int    g_capCut[32];      // cap がロットを削った回数（発注はできた）
 int    g_capDeny[32];     // cap が 0 にした回数＝発注を見送った
 double g_capWant[32];     // cap を掛ける前の希望ロットの合計
@@ -2241,6 +2279,29 @@ void ProcPullback(int i)
            GoldLabEntryOK(i,POSITION_TYPE_SELL);
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
+   // --- 入口の律速を数える（第16報・売買には触れない）---------------------
+   if(PbDiagCounters){
+      g_pbBars[i]++;
+      bool cb[8]; bool cs[8];
+      cb[0]=up;                cs[0]=dn;
+      cb[1]=S[i].armedBuy;     cs[1]=S[i].armedSell;
+      cb[2]=(cp>fastema);      cs[2]=(cp<fastema);
+      cb[3]=bull;              cs[3]=bear;
+      cb[4]=mb;                cs[4]=ms;
+      cb[5]=adx_ok;            cs[5]=adx_ok;
+      cb[6]=env_up;            cs[6]=env_down;
+      cb[7]=higher_ok_buy;     cs[7]=higher_ok_sell;
+      for(int side=0;side<2;side++){
+         int nfail=0, kfail=-1;
+         for(int k=0;k<8;k++){
+            bool v = (side==0) ? cb[k] : cs[k];
+            if(!v){ nfail++; kfail=k; }
+         }
+         if(nfail==0){ g_pbAll[i]++; for(int k=0;k<8;k++) g_pbLOO[i][k]++; }
+         else if(nfail==1) g_pbLOO[i][kfail]++;
+      }
+   }
+
    double sld = S[i].useATRstops ? atr*S[i].atrSLmult : S[i].slPips*S[i].pip;
    double tpd = S[i].useATRstops ? sld*S[i].rr        : S[i].tpPips*S[i].pip;
    trade.SetExpertMagicNumber(S[i].magic);
@@ -2361,8 +2422,8 @@ void ProcRSI(int i)
       if(DblBottom(hib,lob,S[i].dpBars,S[i].swingLB,atr,S[i].dpTolATR,nb)) dpb=(cp>=nb);
       if(DblTop(hib,lob,S[i].dpBars,S[i].swingLB,atr,S[i].dpTolATR,nsk)) dps=(cp<=nsk);
    }
-   bool eb=range_ok&&up&&(rbuy||bbuy||dpb);
-   bool es=range_ok&&dn&&(rsell||bsell||dps);
+   bool eb=range_ok&&up&&(rbuy||bbuy||dpb)&&RsiMechAllowed(i,rbuy,bbuy,dpb);
+   bool es=range_ok&&dn&&(rsell||bsell||dps)&&RsiMechAllowed(i,rsell,bsell,dps);
    bool hb=HasPos(i,POSITION_TYPE_BUY), hs=HasPos(i,POSITION_TYPE_SELL);
 
    double sld=S[i].useATRstops?atr*S[i].atrSLmult:S[i].slPips*S[i].pip;
@@ -2422,6 +2483,22 @@ void ProcRSI(int i)
 
 // RSI記憶ラボを枠に適用するか。マスク0は「ラボが有効なら全RSI枠」。
 // 枠ごとに効き方が違いうるので、銘柄別に切り分けられるようにしてある。
+// 発火機構ゲート（第16報）。マスク0は現行（全許可）。
+// 3機構は OR で同居し同じ足で同時に成立しうるので、**組み合わせを1つの群として**扱う。
+// 片方に按分すると「単独で勝つ機構」と「合流でだけ勝つ機構」が区別できなくなる。
+bool RsiMechAllowed(const int i,const bool r,const bool b,const bool d)
+{
+   int mask=0;
+   if(S[i].magic==20260610)      mask=RsiMechMask_UJ;   // RSI USDJPY
+   else if(S[i].magic==20260605) mask=RsiMechMask_EU;   // RSI EURUSD
+   else if(S[i].magic==20260774) mask=RsiMechMask_GU;   // RSI GBPUSD
+   else return true;                                    // RSI枠以外は素通し
+   if(mask==0) return true;
+   int code=(r?1:0)|(b?2:0)|(d?4:0);
+   if(code==0) return false;
+   return ((mask>>(code-1))&1)!=0;
+}
+
 // ドテン制御を枠に適用するか（第14報）。マスク0は「モードが立っていれば全RSI枠」。
 bool RsiNoFlipOn(const int i)
 {
@@ -3142,6 +3219,20 @@ double OnTester()
                       DoubleToString(g_capEvEq[e],2),DoubleToString(g_capEvUsed[e],2));
          FileWrite(ch,"event_overflow",0,IntegerToString(g_capEvN>=CAPEV_MAX?1:0),
                    "","","","");
+         // PB 入口の律速（第16報）。kind=pbdiag, magic, 評価バー数, 全条件成立,
+         // 以降は条件0..7 の leave-one-out 件数。
+         if(PbDiagCounters){
+            for(int i=0;i<NS;i++){
+               if(g_pbBars[i]==0) continue;
+               FileWrite(ch,"pbdiag",(long)S[i].magic,IntegerToString(g_pbBars[i]),
+                         IntegerToString(g_pbAll[i]),
+                         IntegerToString(g_pbLOO[i][0])+"|"+IntegerToString(g_pbLOO[i][1])+"|"+
+                         IntegerToString(g_pbLOO[i][2])+"|"+IntegerToString(g_pbLOO[i][3])+"|"+
+                         IntegerToString(g_pbLOO[i][4])+"|"+IntegerToString(g_pbLOO[i][5])+"|"+
+                         IntegerToString(g_pbLOO[i][6])+"|"+IntegerToString(g_pbLOO[i][7]),
+                         "","");
+            }
+         }
          FileClose(ch);
       }
    }
