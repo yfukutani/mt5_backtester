@@ -503,6 +503,29 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 > **4ラウンド・44案・92run で月利は 0.428% → 0.462%（+0.034pt）。
 > そのうち8割は OOS 4往復に乗っている。目標6%までの差は +5.6pt/月で、埋まらない。**
 
+> 🔴 **2026.09.19 第17報つづき（第5ラウンド `ml/fxqual5`・10run）— 撤回。
+> SCA GBPJPY の「09時除外」は両窓とも符号が逆だった:**
+> [oanda_fx_last_axes_20260915.md](oanda_fx_last_axes_20260915.md) §1 の
+> **「09時を切れば枠純益 +31.0%。期間をまたいで再現した数少ない本物の入口フィルタ」**を
+> **撤回する。** MT5 で走らせたら **OOS −6,817円 / IS −3,648円**（切り直しの予測は
+> +13,093 / +7,646）。ブック月利 0.428%→**0.404%** / 0.852%→**0.839%**。
+> **さらに「11時のみ」（X003）は両窓で最悪**（−28,228 / −19,585・月利 0.326% / 0.786%）。
+> **深く切るほど悪くなる**ので、時間帯という軸で見えていたエッジは
+> **丸ごと再入場機構の副産物**だった。`ScaFilHourFrom/To` の軸は完全に閉じる。
+> **機構:** `ProcSCA()` の「1日1発」フラグ `scaTradedL`/`scaTradedS` は
+> **発注が成功したときにしか立たない**ので、09時を止めてもその日の枠は終わらず、
+> **10時・11時に、より高い値段で入り直す**。SL は `scaRangeLow` 固定・利益の大半は
+> 22時の強制決済由来なので素直に不利。**再入場率の実測は 89%（GJ）/ 94%（UJ）**——
+> 切り直しは269件・51件が消えると言ったが、実際に消えたのは **30件・3件**だった。
+> **一般化（並行セッションと合意）: 切り直しが出す数字は「その群の損益」であって
+> 「その群を消したときの差分」ではない。**両者が一致するのは、消した行が他の行に
+> 影響しないときだけ。**判定条件は「そのゲートが日内で解除されるか」**で、
+> 時間帯だけが解除される（⚠️ cap を入れると `Clamp()` が枠をまたぐので全部倒れる）。
+> **副産物: 別枠どうしの効果は両窓とも1円まで足し算だった**（X004 = X001 ＋ V001 が
+> 予測値と完全一致。`ml/fxqual4` の W007 に続き2例目）。
+> 詳細: [oanda_fx_sleeve_quality_round5_20260919.md](oanda_fx_sleeve_quality_round5_20260919.md)。
+> **5ラウンド・52案・102run で、目標6%に対する正味の前進は V001 の +0.008pt だけ。**
+
 ---
 
 ## 6. ドキュメント索引
@@ -525,7 +548,7 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
 | [oanda_broker_specs_20260915.md](oanda_broker_specs_20260915.md) / [oanda_fx_sleeve_removal_20260916.md](oanda_fx_sleeve_removal_20260916.md) | **OANDA実機の銘柄仕様**（FX 1注文上限は **10ロット**・XMは50）と、**枠を外す16案の実測**（E04 中央値 8.65%／E09 8.49%）。`Mult_*` が cap の下で効いていなかったことの発見も含む。**いずれも上限50・cap100 の下の数字で本番では再現しない** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
-| [round1](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) / [round4](oanda_fx_sleeve_quality_round4_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜17報。44案92run で月利 +0.034pt。**PB の律速は ADX ではなく slope**・**締める側に頂上がある（ただし OOS 4往復）**・計測バグの訂正・「未測定のまま結論だけ出ていた案」の発見 |
+| [round1](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) / [round4](oanda_fx_sleeve_quality_round4_20260919.md) / [round5](oanda_fx_sleeve_quality_round5_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜17報。52案102run で正味 +0.008pt。**round5 は oanda_fx_last_axes の「09時除外 +31.0%」を撤回**。**PB の律速は ADX ではなく slope**・**締める側に頂上がある（ただし OOS 4往復）**・計測バグの訂正・「未測定のまま結論だけ出ていた案」の発見 |
 | [codex_oafx_round4_review_20260919.md](codex_oafx_round4_review_20260919.md) | **Codex による設計査読（結果が出る前）**: 5件すべて的中。うち1件は `analyze.py` の恒等式チェックが差分同士を比べていて機能していなかった実装バグ |
 | [codex_oafx_round4_20260919.md](codex_oafx_round4_20260919.md) | **Codex の第4ラウンド案（原文）**: 8案中4案はこちらと独立に一致、3案は棄却済みの軸、1案は未測定だった |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
