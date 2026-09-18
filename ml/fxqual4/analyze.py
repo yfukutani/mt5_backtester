@@ -4,7 +4,12 @@
   1. **回帰試験** — 対照が前ラウンドの対照と一致しているか
   2. **入力が届いたか** — 案が対照と完全同値なら「効かなかった」ではなく「届いていない」
   3. **損益・単利月利・残高DD・equity DD**（IS窓とOOS窓の両方・口座破綻の有無）
-  4. **枠別の差** — ブック純益の差と枠の和が一致するか（第16報の恒等式）
+  4. **恒等式の検査** — 各 run で `sum(枠別純益) == ブック純益` か（第16報の配賦修正）
+  5. **枠別の差** — どの枠が動いたか
+
+> Codex の査読（2026-09-19）: 4 を「候補 − 対照」の差分だけで見てはいけない。
+> **両方に同じ未配賦が残っていても差が 0 になる**ので、恒等式の検査にならない。
+> 各 run について**絶対値で**出す。
 """
 from __future__ import annotations
 
@@ -74,10 +79,27 @@ def main() -> None:
             v = "**⚠️ 完全同値**" if dn == 0 and dt == 0 else "差が出ている"
             print(f"| {pid} | {w} | {dn:+,.0f} | {dt:+d} | {v} |")
 
-    print("\n## 3. 枠別の差（対照比・円）\n")
-    head = "| 案 | 窓 | " + " | ".join(n for _, n in SLEEVES) + " | 枠の和 | ブックΔ | 未配賦 |"
+    # Codex の査読（2026-09-19）で見つかった穴を塞ぐ。
+    # 「候補 − 対照」の差分だけを比べると、**両方に同じ未配賦が残っていても差が 0 になる**ので
+    # 恒等式の検査にならない。各 run について**絶対値で** sum(枠) − ブック純益 を出す。
+    print("\n## 3. 恒等式の検査（各 run の絶対値・第16報の配賦修正が効いているか）\n")
+    print("> `sum(枠別純益) − ブック純益` が 0 でなければ、どこかの deal が枠に配賦されていない。\n")
+    print("| 案 | 窓 | 枠の和 | ブック純益 | 未配賦 |")
+    print("|---|---|---:|---:|---:|")
+    for pid in ids:
+        for w in ("OOS", "IS"):
+            r = by.get((pid, w))
+            if r is None:
+                continue
+            tot = sum(int(r[f"{k}_net"]) for k, _ in SLEEVES)
+            net = float(r["net"])
+            flag = "" if abs(tot - net) < 1 else "  ⚠️"
+            print(f"| {pid} | {w} | {tot:+,} | {net:+,.0f} | {tot - net:+,.0f}{flag} |")
+
+    print("\n## 4. 枠別の差（対照比・円）\n")
+    head = "| 案 | 窓 | " + " | ".join(n for _, n in SLEEVES) + " | 枠Δの和 | ブックΔ |"
     print(head)
-    print("|---|---|" + "---:|" * (len(SLEEVES) + 3))
+    print("|---|---|" + "---:|" * (len(SLEEVES) + 2))
     for pid in ids:
         for w in ("OOS", "IS"):
             r, c = by.get((pid, w)), by.get((ctrl_id, w))
@@ -87,7 +109,7 @@ def main() -> None:
             tot = sum(ds)
             book = float(r["net"]) - float(c["net"])
             print(f"| {pid} | {w} | " + " | ".join(f"{d:+,}" for d in ds)
-                  + f" | {tot:+,} | {book:+,.0f} | {tot - book:+,.0f} |")
+                  + f" | {tot:+,} | {book:+,.0f} |")
 
 
 if __name__ == "__main__":

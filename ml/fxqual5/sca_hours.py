@@ -6,7 +6,7 @@
 
 やること:
   1. `position_id` から建玉時（entry=0）の magic を引いて枠を決める（第16報の修正）
-  2. IN の deal の時刻から「発注時刻」を取る
+  2. IN の deal の時刻から「発注時刻」を取る（**サーバー時刻の hour**・下記の注記を読むこと）
   3. 枠 × 発注時刻 で損益（OUT 側の `profit_jpy` の合計）を積む
 
 ⚠️ **これはバックテストではない。** 「その注文が出なかったら何が起きたか」は分からない。
@@ -41,6 +41,12 @@ def load(path: Path):
         name = SLEEVES.get(magic)
         if name is None:
             continue
+        # ⚠️ ここで取れるのは **UTC ではなくサーバー時刻の hour** である。
+        # MT5 の datetime はサーバーの壁時計をそのまま UNIX 秒に符号化した値なので、
+        # `timezone.utc` で復号すると**サーバー時刻の時**がそのまま返る。
+        # EA 側（`ProcSCA()`）が `ScaFilEntryOK()` に渡す `dt.hour` も
+        # `iTime()`（サーバー時刻）由来なので、両者は一致する。
+        # **「UTC の時」と読み替えると、将来の移植・再集計で壊れる**（Codex の査読・2026-09-19）。
         hour = datetime.fromtimestamp(t0, tz=timezone.utc).hour
         cell = agg[(name, hour)]
         # 集計は `profit`（口座通貨＝円）で行う。`profit_jpy` は USDJPY を掛けた別系列で、
