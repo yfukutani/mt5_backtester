@@ -481,6 +481,28 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 > 詳細: [oanda_fx_sleeve_quality_round3_20260919.md](oanda_fx_sleeve_quality_round3_20260919.md)。
 > **月利6%に対する前進は +0.008pt。実質ゼロである。**
 
+> 📌 **2026.09.19 第17報つづき（第4ラウンド `ml/fxqual4`・16run）— OOS で唯一マイナスだった
+> 枠が黒字になった。ただし4往復である:**
+> **`W001`（PB USDJPY の slope 下限 1.2 → 1.5ATR）が OOS +7,234円 / IS +2,845円。**
+> 枠内では **−1,812 → +5,422** で、**OOS で唯一マイナスだった FX 枠が黒字に反転**し、
+> **OOS の最大DDも下がった**（残高 5.27%→**4.65%**・equity 7.04%→**6.23%**）。
+> 単利月利は OOS 0.428%→**0.455%**・IS 0.852%→**0.861%**。**枠の質のテーマで出た最大の効果。**
+> 勾配も両側を測った内点である（0.9 −9,125 / 1.2 −1,812 / **1.5 +5,422** / 1.8 −3,867）。
+> ⚠️ **それでも採用しない。OOS の PB USDJPY は 8 deal ＝ 4往復**で、
+> 9往復から5往復を落として残った4往復が出した数字である。IS は22往復で +12.6% と控えめ。
+> **4取引の改善は、両窓で符号が揃っていても採用根拠にならない**（Codex も
+> 「30〜60件級の再検証が無い限り採用しない」）。
+> `ml/fxqual6`（16run）で 1.30〜1.65 を刻み、**「台地か尖りか」**で決着させる。
+> **尖り（4取引のまぐれ）だと予想する。**
+> 同時に **PB GBPJPY の slope は締めても緩めても悪化**（1.8 で −19,966/−19,789・
+> 2.1 で −28,213/−29,880）＝**現行1.5が局所最適**、**ADX は2枠とも棄却**
+> （UJ は窓で割れ OOS +4,864 / IS −21,326・GJ は両窓マイナス）。
+> 副産物: **枠をまたぐ効果は1円まで足し算になる**（W007 が W001＋W003 を再現）。
+> **締めるほど律速 slope の支配は強くなる**（順位は入れ替わらない）。
+> 詳細: [oanda_fx_sleeve_quality_round4_20260919.md](oanda_fx_sleeve_quality_round4_20260919.md)。
+> **4ラウンド・44案・92run で月利は 0.428% → 0.462%（+0.034pt）。
+> そのうち8割は OOS 4往復に乗っている。目標6%までの差は +5.6pt/月で、埋まらない。**
+
 ---
 
 ## 6. ドキュメント索引
@@ -503,7 +525,8 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
 | [oanda_broker_specs_20260915.md](oanda_broker_specs_20260915.md) / [oanda_fx_sleeve_removal_20260916.md](oanda_fx_sleeve_removal_20260916.md) | **OANDA実機の銘柄仕様**（FX 1注文上限は **10ロット**・XMは50）と、**枠を外す16案の実測**（E04 中央値 8.65%／E09 8.49%）。`Mult_*` が cap の下で効いていなかったことの発見も含む。**いずれも上限50・cap100 の下の数字で本番では再現しない** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
-| [oanda_fx_sleeve_quality_round1_20260918.md](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜17報。36案76run で両窓改善は1件（月利 +0.01pt）。PB の律速は slope と判明。計測バグの訂正と「未測定のまま結論だけ出ていた案」の発見も含む |
+| [round1](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) / [round4](oanda_fx_sleeve_quality_round4_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜17報。44案92run で月利 +0.034pt。**PB の律速は ADX ではなく slope**・**締める側に頂上がある（ただし OOS 4往復）**・計測バグの訂正・「未測定のまま結論だけ出ていた案」の発見 |
+| [codex_oafx_round4_review_20260919.md](codex_oafx_round4_review_20260919.md) | **Codex による設計査読（結果が出る前）**: 5件すべて的中。うち1件は `analyze.py` の恒等式チェックが差分同士を比べていて機能していなかった実装バグ |
 | [codex_oafx_round4_20260919.md](codex_oafx_round4_20260919.md) | **Codex の第4ラウンド案（原文）**: 8案中4案はこちらと独立に一致、3案は棄却済みの軸、1案は未測定だった |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
 | [../CLAUDE.md](../CLAUDE.md) | **プロジェクト運用ルール**: ドキュメント管理方針（Obsidian Vaultとの二層構造）・開発時の注意 |
