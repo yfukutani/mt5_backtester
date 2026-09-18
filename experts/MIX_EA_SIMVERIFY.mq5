@@ -170,6 +170,26 @@ input int    ScaFilHourFrom  = -1;     // 発注を許す時間の下限（サ�
 input int    ScaFilHourTo    = -1;     // 同・上限。-1で無効
 input bool   ScaFilBuyOnly   = false;  // 買いのみ発注する
 
+input group "=== SCA の建値ストップ（第17報・0=現行で1度も触らない） ==="
+// 【なぜここを触るか】第15報（R倍率の分解）で、**SCA 2枠は TP 到達が 3〜7% しかなく、
+// 利益の大半は22時の強制決済から出ている**ことが分かっている。つまり
+// 「一度伸びたがレンジに戻った」取引が、そのまま22時まで持ち越されている。
+// 退出の軸で第1ラウンドが触ったのは**強制決済の時刻だけ**（Q005〜Q008・現行22時が最良）で、
+// **保有中のストップ管理は一度も測っていない。**
+//
+// 【設計】含み益が R の `ScaBETriggerR` 倍に達したら、SL を
+// 「建値 ＋ `ScaBELockR`×R」へ引き上げる（売りは対称）。
+// **R は初期SL距離である。** 建てた後に SL を動かすと初期値が失われるので、
+// **TP から逆算する**（TP = entry ± rr×R なので R = |TP − entry| / rr）。
+// 状態を持たないので、テスターでもライブでも同じ値になる。
+//
+// 【事前の予想】SCA は「22時まで持つ」ことで利益を出している戦略なので、
+// **建値で切ると勝ち取引の一部も切ってしまう**。両窓でプラスになる確率は高くないと見る。
+// 測る価値があるのは、**退出側の軸がこの枠でまだ1つも測られていない**からである。
+input double ScaBETriggerR = 0.0;   // >0 で発火。含み益が R の何倍に達したら動かすか
+input double ScaBELockR    = 0.0;   // 引き上げ先＝建値 + LockR×R（0 なら建値ちょうど）
+input int    ScaBEMask     = 0;     // bit0=SCA USDJPY bit1=SCA GBPJPY（0＝SCA全枠）
+
 input group "=== SCA 新銘柄横展開（SCANEW・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】SCA（アジア時間のレンジをロンドンオープンで抜ける）は現在 GOLD / USDJPY /
 // GBPJPY の3銘柄でしか使っていない。同じ「アジア時間に狭いレンジを作り、ロンドンで
@@ -920,6 +940,23 @@ int OnInit()
       Print("ScaFilHourFrom must be <= ScaFilHourTo");
       return INIT_PARAMETERS_INCORRECT;
    }
+   // SCA 建値ストップ（第17報）。LockR が TriggerR 以上だと、動かした瞬間に
+   // SL が現値を追い越すので1度も約定できない（測定にならない）。
+   if(ScaBETriggerR<0.0 || ScaBELockR<0.0)
+   {
+      Print("ScaBETriggerR / ScaBELockR must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaBETriggerR>0.0 && ScaBELockR>=ScaBETriggerR)
+   {
+      Print("ScaBELockR must be < ScaBETriggerR");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaBEMask<0 || ScaBEMask>3)
+   {
+      Print("ScaBEMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(Pb2Enable && Pb2Timeframe()==0)
    {
       Print("Pb2TFMinutes must be one of 30/60/120/240");
@@ -1464,6 +1501,7 @@ void OnTick()
       if(!S[i].enabled) continue;
       R6CryptoManageExit(i); // mode=0なら即return。危機退出は毎ティック評価
       GoldLabManagePB(i);    // mode=0なら即return。BE/trailingはtick単位で管理
+      ScaManageBE(i);        // ScaBETriggerR=0なら即return（第17報）。毎ティック評価
       if(S[i].strat==ST_FUNDING){ ProcFunding(i); continue; }   // 自前でバー/リトライ管理
       if(S[i].strat==ST_BFXREV){ ProcBfx(i); continue; }        // 同上
       datetime bt = iTime(S[i].symbol, S[i].tf, 0);
@@ -2183,6 +2221,44 @@ void GoldLabManagePB(const int i)
          nsl=buy ? px-GoldLabPBTrailATR*atr : px+GoldLabPBTrailATR*atr;
       bool improve=buy ? nsl>sl : (sl==0.0 || nsl<sl);
       if(improve && (buy ? nsl<px : nsl>px)) trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),tp);
+   }
+}
+
+// SCA の建値ストップ（第17報）。`ScaBETriggerR<=0` なら1度も触らない。
+// R（初期SL距離）は **TP から逆算する**——建てた後に SL を動かすと初期値が失われるが、
+// TP は動かさないので `R = |TP - entry| / rr` が常に取れる。状態を持たない。
+void ScaManageBE(const int i)
+{
+   if(ScaBETriggerR<=0.0 || S[i].strat!=ST_SCA || S[i].rr<=0.0) return;
+   // マスク 0 は「SCA 全枠」。bit0=USDJPY(20261000) bit1=GBPJPY(20261001)。
+   if(ScaBEMask!=0){
+      int bit=-1;
+      if(S[i].magic==20261000) bit=0;
+      else if(S[i].magic==20261001) bit=1;
+      if(bit<0 || ((ScaBEMask>>bit)&1)==0) return;
+   }
+   for(int k=PositionsTotal()-1;k>=0;k--)
+   {
+      ulong tk=PositionGetTicket(k);
+      if(tk==0) continue;
+      if(PositionGetString(POSITION_SYMBOL)!=S[i].symbol ||
+         PositionGetInteger(POSITION_MAGIC)!=S[i].magic) continue;
+      bool buy=(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY);
+      double op=PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl=PositionGetDouble(POSITION_SL);
+      double tp=PositionGetDouble(POSITION_TP);
+      if(tp<=0.0) continue;                      // TP が無ければ R を復元できない
+      double R=MathAbs(tp-op)/S[i].rr;
+      if(R<=0.0) continue;
+      double px=buy ? SymbolInfoDouble(S[i].symbol,SYMBOL_BID)
+                    : SymbolInfoDouble(S[i].symbol,SYMBOL_ASK);
+      double gain=buy ? px-op : op-px;
+      if(gain < ScaBETriggerR*R) continue;
+      double nsl=buy ? op+ScaBELockR*R : op-ScaBELockR*R;
+      bool improve=buy ? nsl>sl : (sl==0.0 || nsl<sl);
+      // 現値を追い越す引き上げはブローカーが拒否するので出さない。
+      if(improve && (buy ? nsl<px : nsl>px))
+         trade.PositionModify(tk,NormalizeDouble(nsl,S[i].digits),tp);
    }
 }
 
