@@ -1,0 +1,11 @@
+key,value
+net_profit,240201.00
+profit_factor,1.3350
+max_dd_pct,7.2850
+equity_dd_pct,7.9562
+equity_dd_abs,60045.00
+total_trades,1478
+win_trades,648
+loss_trades,830
+initial_deposit,500000.00
+final_balance,740201.00
