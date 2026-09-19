@@ -45,9 +45,9 @@ REPO = Path(__file__).resolve().parents[2]
 SLEEVES = {
     20260622: ("PB USDJPY", 4 * 3600),
     20260627: ("PB GBPJPY", 4 * 3600),
-    20260623: ("RSI USDJPY", 4 * 3600),
-    20260624: ("RSI EURUSD", 1 * 3600),
-    20260625: ("RSI GBPUSD", 4 * 3600),
+    20260610: ("RSI USDJPY", 4 * 3600),
+    20260605: ("RSI EURUSD", 1 * 3600),
+    20260774: ("RSI GBPUSD", 4 * 3600),
     20260629: ("Pair EU/GU", 1 * 3600),
     20260650: ("Carry AUDJPY", 24 * 3600),
     20261000: ("SCA USDJPY", 15 * 60),
