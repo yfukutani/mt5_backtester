@@ -58,7 +58,8 @@ $srcMq5     = Join-Path $repo 'experts\MIX_EA_SIMVERIFY.mq5'
 $deployed   = Join-Path $experts 'MIX_EA_SIMVERIFY.mq5'
 $deployedEx = Join-Path $experts 'MIX_EA_SIMVERIFY.ex5'
 
-foreach ($tok in @('RsiTpMask_UJ','RsiTpMask_EU','RsiTpMult_UJ','RsiTpFactor','ScaFilRangeMin','MarginCapPct')) {
+foreach ($tok in @('RsiTpMask_UJ','RsiTpMask_EU','RsiTpMult_UJ','RsiTpFactor','ScaFilRangeMin','MarginCapPct',
+                   'TrackMarginLevel','margin_level_min','NOT_MEASURED')) {
   if (-not (Select-String -Path $srcMq5 -Pattern $tok -Quiet)) {
     Say ("CHAIN_ABORT リポジトリの .mq5 に {0} が無い" -f $tok); exit 1
   }
@@ -83,10 +84,11 @@ if ($res -notmatch '0 errors') { Say 'CHAIN_ABORT コンパイルに失敗した
 
 $hasA  = Select-String -Path $deployed -Pattern 'RsiTpMask_UJ' -Quiet
 $hasB  = Select-String -Path $deployed -Pattern 'ScaFilRangeMin' -Quiet
+$hasC  = Select-String -Path $deployed -Pattern 'TrackMarginLevel' -Quiet   # 第17報の維持率計装
 $same  = ((Get-FileHash $deployed).Hash -eq (Get-FileHash $srcMq5).Hash)
 $fresh = ((Get-Item $deployedEx).LastWriteTime -ge (Get-Item $deployed).LastWriteTime)
-Say ("DEPLOY_CHECK hasRsiTp={0} hasScaFil={1} sameSrc={2} freshEx={3}" -f $hasA,$hasB,$same,$fresh)
-if (-not ($hasA -and $hasB -and $same -and $fresh)) { Say 'CHAIN_ABORT デプロイ検査に落ちた'; exit 1 }
+Say ("DEPLOY_CHECK hasRsiTp={0} hasScaFil={1} hasMarginTrack={2} sameSrc={3} freshEx={4}" -f $hasA,$hasB,$hasC,$same,$fresh)
+if (-not ($hasA -and $hasB -and $hasC -and $same -and $fresh)) { Say 'CHAIN_ABORT デプロイ検査に落ちた'; exit 1 }
 
 Say 'FXOANDA4 を開始する（15 job・O000 の回帰が先頭）'
 Set-Location $repo

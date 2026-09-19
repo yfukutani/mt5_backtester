@@ -1651,9 +1651,16 @@ void ProfitTrail()
 }
 
 //+------------------------------------------------------------------+
+// 建玉後の維持率の計装（第17報）。実体は Clamp の近く（cap 計装の隣）にある。
+void TrackMarginLevel();
+
 void OnTick()
 {
    if(!MasterEnable) return;
+   // 🔴 **`MasterEnable` の後・何よりも先に読む。** 建玉があるのに
+   //    「今日はもう何もしない」で早期 return する経路に入ると、
+   //    いちばん苦しい瞬間を取り逃がす。読むだけで売買には触れない。
+   TrackMarginLevel();
    GoldPBHoldLimit(); // v2.5: PB GOLDの保有期間上限。毎ティック評価（本番と同一）
    ProfitTrail();   // v1.5（既定OFF）。毎ティック評価してピークを取り逃さない
    // 日次スナップショット（DAILY: f1=equity f2=balance f3=証拠金 f4=保有数）
@@ -1833,6 +1840,49 @@ double   g_capEvWant[CAPEV_MAX];
 double   g_capEvGot[CAPEV_MAX];
 double   g_capEvEq[CAPEV_MAX];      // その時点の equity
 double   g_capEvUsed[CAPEV_MAX];    // その時点の使用証拠金
+
+// --- 建玉後の証拠金維持率（第17報・2026-09-20）--------------------------------
+// **なぜ足したのか**: `MarginCapPct` は**発注の瞬間**に
+// 「使用証拠金 ≦ equity × cap%」を掛けるだけで、**建てた後の維持率を保証しない。**
+// cap90 の建て直後は維持率 ≈111%、cap70 で ≈143%、cap50 で 200%。
+// **OANDA のロスカットは維持率 100%（XM は 20%）**なので、
+// cap90 は 11% の逆行で切られる。それが起きたかどうかを**これまで誰も測っていなかった。**
+//
+// 🔴 上の `g_capEv*`（event 行）は**発注時**の equity と使用証拠金しか持たない。
+//    しかも発注時は cap の定義上どうしても 111% 以上になるので、
+//    **あの行からは最小維持率を復元できない。** だから毎ティック追う必要がある。
+//
+// 計装は受動的である。読むだけで、ロット・発注・決済のどれも変えない。
+// ⚠️ **ガードより先に計装を入れる。** 先にガードを入れると、入れた時点で
+//    最小維持率が閾値で切り上がり、「元の構成がどれだけ危なかったか」が永久に分からなくなる。
+double   g_mlMin    = 0.0;          // 観測した最小の維持率%（0 = 未観測）
+datetime g_mlMinT   = 0;            // それが起きた時刻
+double   g_mlMinEq  = 0.0;          // そのときの equity
+double   g_mlMinUsed= 0.0;          // そのときの使用証拠金
+long     g_mlSamples= 0;            // 建玉があって維持率を読めたティック数
+long     g_mlLt300  = 0;            // 維持率 < 300% だったティック数
+long     g_mlLt200  = 0;            // 同 < 200%
+long     g_mlLt150  = 0;            // 同 < 150%
+long     g_mlLt100  = 0;            // 同 < 100% ＝ **OANDA なら切られている**
+
+void TrackMarginLevel()
+{
+   double used = AccountInfoDouble(ACCOUNT_MARGIN);
+   if(used <= 0.0) return;                      // 建玉が無いときは維持率が無限大
+   double ml = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+   if(ml <= 0.0) return;                        // 読めない口座では何もしない
+   g_mlSamples++;
+   if(ml < 300.0) g_mlLt300++;
+   if(ml < 200.0) g_mlLt200++;
+   if(ml < 150.0) g_mlLt150++;
+   if(ml < 100.0) g_mlLt100++;
+   if(g_mlMin <= 0.0 || ml < g_mlMin){
+      g_mlMin     = ml;
+      g_mlMinT    = TimeCurrent();
+      g_mlMinEq   = AccountInfoDouble(ACCOUNT_EQUITY);
+      g_mlMinUsed = used;
+   }
+}
 
 double Clamp(string sym, double lot, int si=-1)
 {
@@ -3585,6 +3635,31 @@ double OnTester()
                    DoubleToString(TesterStatistics(STAT_EQUITY_DDREL_PERCENT),4),"");
          FileWrite(ch,"balance_dd_pct",0,"","","",
                    DoubleToString(TesterStatistics(STAT_BALANCE_DDREL_PERCENT),4),"");
+         // --- 建玉後の最小維持率（第17報）--------------------------------
+         // 🔴 **これが 100% を割っていたら、その構成は OANDA では死んでいる。**
+         //    XM 端末で走らせた run は 20% でしか切られないので、
+         //    「元本割れなし」は「XM の 20% に当たらなかった」という意味しかない。
+         //    この行は端末に依存せず「どこまで落ちたか」を直接持つ。
+         // 🔴 **標本が0のときは数値を書かない。**
+         //    `g_mlSamples==0` なら `g_mlMin` も `g_mlLt100` も 0 のままで、
+         //    そのまま出すと「維持率 100% 割れは 0回＝安全」と読めてしまう。
+         //    実際は「測れていない」。**満たしていない性質の含意つきで量を出さない。**
+         string ml_min = (g_mlSamples>0) ? DoubleToString(g_mlMin,2)    : "NOT_MEASURED";
+         string ml_eq  = (g_mlSamples>0) ? DoubleToString(g_mlMinEq,2)  : "NOT_MEASURED";
+         string ml_use = (g_mlSamples>0) ? DoubleToString(g_mlMinUsed,2): "NOT_MEASURED";
+         // 列: kind, magic(=0), 最小維持率%, 時刻, そのときの equity, 使用証拠金, 標本数
+         FileWrite(ch,"margin_level_min",0,
+                   ml_min,(long)g_mlMinT,ml_eq,ml_use,
+                   IntegerToString(g_mlSamples));
+         // 危険域にどれだけ長く居たか。列: kind, magic(=0), <300, <200, <150, <100, 標本数
+         if(g_mlSamples>0)
+            FileWrite(ch,"margin_level_hist",0,
+                      IntegerToString(g_mlLt300),IntegerToString(g_mlLt200),
+                      IntegerToString(g_mlLt150),IntegerToString(g_mlLt100),
+                      IntegerToString(g_mlSamples));
+         else
+            FileWrite(ch,"margin_level_hist",0,
+                      "NOT_MEASURED","NOT_MEASURED","NOT_MEASURED","NOT_MEASURED","0");
          // 削られた注文を1件ずつ。kind=event, magic, 時刻, 希望, 通過, equity, 使用証拠金
          for(int e=0;e<g_capEvN;e++)
             FileWrite(ch,"event",g_capEvMagic[e],(long)g_capEvT[e],
