@@ -327,7 +327,15 @@ def run(pid, base, desc, params, window):
         pass
     if v:
         row.update(v)
-        row["monthly_pct"] = round(100 * v["net"] / DEPOSIT / months, 4)
+        # 🔴 **この列は単利である。報告にそのまま使ってはいけない。**
+        #    純益 ÷ 入金 ÷ 月数 なので、複利で運用する構成では**幾何平均の倍近く**に出る。
+        #    実例: fxqual15 W005 OOS は この列 5.6163% / **幾何 2.594%**。
+        #    複利前提の月利は `(最終残高/入金)^(1/月数) − 1` で出すこと
+        #    （`CLAUDE.md`「報告に必ず含める数値」）。集計は
+        #    `ml/fxoanda4/summarize.py` が幾何で出し直す。
+        #    ⚠️ **列名は変えない。** 走行中のラウンドがこの module を読み込んでおり、
+        #    FIELDS を変えると再開時にヘッダと列数が食い違う（既存 CSV の互換も壊れる）。
+        row["monthly_pct"] = round(100 * v["net"] / DEPOSIT / months, 4)  # 単利
     for k in MAGICS.values():
         row[f"{k}_net"] = round(st[k]["net"]) if k in st else ""
         row[f"{k}_n"] = st[k]["n"] if k in st else ""
