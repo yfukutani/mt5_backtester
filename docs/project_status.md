@@ -1,4 +1,4 @@
-﻿# プロジェクト現状サマリー（2026.06.29・ブック確定）
+# プロジェクト現状サマリー（2026.06.29・ブック確定）
 
 mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細は各docへリンク。
 本番リファレンスは [portfolio.md](portfolio.md)、運用統合EAは [portfolio_ea.md](portfolio_ea.md)。
@@ -1056,6 +1056,29 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 
 
 ---
+
+> 📌 **2026.09.19（第29報）全EAの性能をまとめ直した。`ml/fxoanda3` が未集計のまま 2日放置されていた:**
+> ユーザー指示「現状のEAの性能を一度しっかりとまとめなおし、改善できる要素を検討」を受けて
+> [ALL_EA_performance.md](ALL_EA_performance.md) を全面改訂した（XM 15枠・X2 は 09-15 から不変、OANDA FX §3 を書き直し）。
+> 🔴 **書き直しの過程で、2026-09-17 に完走していた `ml/fxoanda3`（OANDA 端末 BT1・1:25・上限10ロット・
+> E04×T036 系・cap 33/50/60/70）が、どの文書にも集計されていないと分かった。**
+> `truncation_check.py` で **13 run すべて完走・ロスカット 0件**。
+> **S050（cap50）は通期 OOS 55か月を 5.537%/月（+9,188,767円・残高DD 44.91%）で走り切り、W 中央値 4.95%。**
+> S070（cap70）は W1〜W3 完走（中央値 6.57%・W3 残高DD 57.8%）、通期 OOS は 14.6秒で起動失敗（未走行）。
+> 事前予想「cap70 は落ちる／完走域は 2〜3%」は**外れた**。
+> ⚠️ **ただし採用候補にはしない**——**IS 窓を一度も測っていない**（RSI 3枠に 3%/取引を集中させる系統で、
+> RSI は IS で最も弱い）し、**equity DD も回収されていない**（S033 W2 の 27.81% のみ）。
+> **全複利ブック（`fxqual14`・XM・IS あり）と T036 系（OANDA・IS なし）は同じ土俵で一度も比べていない。**
+> **「実行可能な最良」は、この 9 run（S070 OOS 再走・S060 残り・S050/S070 の IS・eqDD 回収・V000/V010 の OANDA 端末）が
+> 埋まるまで確定しない。** 改善要素は同 doc §7 に優先順で 9件（A〜I）。
+> 併せて fxqual14 の LOSO は V008（SCA USDJPY 抜き）まで出た: **外しても OOS 2.487%（−0.001pt）＝1円単位で不変**。
+> **RSI EURUSD 抜き（V007）は OOS −0.199pt だが残高DD が両窓で下がる**（23.5→19.5% / 38.9→33.2%）。
+> 月利÷DD は倍率不変量ではないので、**DD を揃えて測るまで採用不可**（§7-C）。
+> 本報は **収益を1円も改善していない**。バックテストは走らせていない（fxqual14 の chain が走行中のため）。
+> 詳細: [oanda_fx_terminal_cap_sweep_20260919.md](oanda_fx_terminal_cap_sweep_20260919.md)。
+
+---
+
 ## 6. ドキュメント索引
 
 | doc | 内容 |
@@ -1088,3 +1111,4 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [codex_oafx_round4_20260919.md](codex_oafx_round4_20260919.md) | **Codex の第4ラウンド案（原文）**: 8案中4案はこちらと独立に一致、3案は棄却済みの軸、1案は未測定だった |
 | [position_sizing.md](position_sizing.md) / [rsi_robustness.md](rsi_robustness.md) / [pair_trade.md](pair_trade.md) / [carry.md](carry.md) / [research_log.md](research_log.md) / [new_ea_strategies.md](new_ea_strategies.md) | 各戦略の詳細検証 |
 | [../CLAUDE.md](../CLAUDE.md) | **プロジェクト運用ルール**: ドキュメント管理方針（Obsidian Vaultとの二層構造）・開発時の注意 |
+| [全EA 性能まとめ（2026-09-19）](ALL_EA_performance.md) / [OANDA 端末 cap 掃引](oanda_fx_terminal_cap_sweep_20260919.md) | **全EAの性能まとめ直し**（2026.09.19・第29報）: XM 15枠 IS 2.72%/OOS 0.75%（単利）、OANDA FX 全複利 倍率2 OOS 3.849%/IS 7.099%（eqDD 62%）、**OANDA 端末で完走した T036 系 cap50 が OOS 5.537%/月（残高DD 44.9%・IS/eqDD 未測定）**——2026-09-17 の `ml/fxoanda3` が未集計だった。改善要素 A〜I を優先順で整理。「実行可能な最良」は 9 run が埋まるまで未確定 |
