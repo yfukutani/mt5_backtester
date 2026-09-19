@@ -147,6 +147,23 @@ input int    FxRiskMask   = 0;     // bit0=RSI_UJ bit1=RSI_EU bit2=RSI_GU bit3=S
 input double FxRiskPct    = 0.5;   // 1取引のリスク（基準資金に対する%）
 input double FxRiskRefCap = 0;     // 基準資金（0=口座equity＝複利、>0で固定）
 
+input group "=== ロット分母フロア（LOTFLOOR・SIMVERIFY専用・既定OFF） ==="
+// 【狙い】risk% では lot = リスク額 ÷ SL距離 なので、**SL距離が小さい取引ほど重くなる。**
+// SCA の分母はアジア時間のレンジ幅、PB の分母は 2×ATR なので、どちらも
+// 「狭い日・低ボラ日ほど大きく賭ける」ことになる。ScaFilRangeMin は
+// **その取引を捨てる**ことでこれを止めるが、本入力は**取引を残したままロットだけを抑える。**
+//
+// 【固定ロット構成では完全に no-op である。】LotRisk() の useRisk 分岐でしか使わないので、
+// 採否も発注時刻も変わらない。**複利の歪みだけを切り分けられる**のが利点。
+// 逆に言えば「固定ロットでの効き幅」ではこの軸の価値を測れない
+// （docs/oanda_fx_sleeve_quality_round10_20260919.md の中心的発見）。
+//
+// 【SL価格そのものは変えない。】クリップするのはロット計算に渡す分母だけで、
+// 実際の損切り価格・TP・退出はいっさい動かない。したがって
+// 「SLを遠ざけて損失を増やす」案ではなく、**1取引のリスク額を下げる**案である。
+input int    LotFloorMask  = 0;    // bit0=PB_UJ bit1=PB_GJ bit2=SCA_UJ bit3=SCA_GJ（0で無効）
+input double LotFloorRatio = 0.0;  // ロット計算に使う SL距離の下限（|dist|/価格）。0で無効
+
 input group "=== SCA 入口フィルタ（SCAFIL・SIMVERIFY専用・既定OFF） ==="
 // 【狙い】X2_HIGH_RISK の V105/V106 が SCA GBPJPY 1枠で測った入口フィルタを、
 // OANDA FX の9枠ブックで測り直す。V106 の実測（弱局面408取引）は次のとおり。
@@ -927,6 +944,23 @@ int OnInit()
    if(ScaFilMask<0 || ScaFilMask>3)
    {
       Print("ScaFilMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(LotFloorMask<0 || LotFloorMask>15)
+   {
+      Print("LotFloorMask must be 0..15");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(LotFloorRatio<0.0)
+   {
+      Print("LotFloorRatio must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(LotFloorMask!=0 && LotFloorRatio<=0.0)
+   {
+      // 片方だけ渡すと**黙って no-op になる**。第16報で「効かなかった」と
+      // 読み違えた形と同じなので、走らせずに止める。
+      Print("LotFloorRatio must be > 0 when LotFloorMask is set");
       return INIT_PARAMETERS_INCORRECT;
    }
    // --- 第14報の3軸（既定はすべて無効）---
@@ -1963,6 +1997,25 @@ double ScaBaseLot(const int i,const double dist)
    return S[i].lot*GlobalLotMult*S[i].lotMult;
 }
 
+// ロット計算に渡す SL距離だけを下限で丸める（LOTFLOOR）。**SL価格は変えない。**
+// 対象は「分母が取引ごとに動く枠」だけ——PB 2枠（2×ATR）と SCA 2枠（レンジ幅）。
+// RSI 3枠は固定pips、Pair と Carry は SL を置かないので、この軸は存在しない。
+double LotFloorDist(const int i,const double slDistPrice)
+{
+   if(LotFloorMask==0 || LotFloorRatio<=0.0 || slDistPrice<=0.0) return slDistPrice;
+   long m=S[i].magic;
+   int bit=-1;
+   if(m==20260622)      bit=0;   // PB USDJPY
+   else if(m==20260627) bit=1;   // PB GBPJPY
+   else if(m==20261000) bit=2;   // SCA USDJPY
+   else if(m==20261001) bit=3;   // SCA GBPJPY
+   if(bit<0 || ((LotFloorMask>>bit)&1)==0) return slDistPrice;
+   double px=SymbolInfoDouble(S[i].symbol,SYMBOL_BID);
+   if(px<=0.0) return slDistPrice;   // 価格が引けないときは何もしない（黙って効かせない）
+   double fl=LotFloorRatio*px;
+   return (slDistPrice<fl) ? fl : slDistPrice;
+}
+
 double LotRisk(int i, double slDistPrice)
 {
    if(GszApplies(i) && slDistPrice>0.0)
@@ -1979,8 +2032,9 @@ double LotRisk(int i, double slDistPrice)
       double rm=eq*S[i].riskPct/100.0;
       double tv=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_VALUE);
       double ts=SymbolInfoDouble(S[i].symbol,SYMBOL_TRADE_TICK_SIZE);
+      double sld=LotFloorDist(i,slDistPrice);   // ロットの分母だけを下限で丸める
       if(tv<=0||ts<=0){ base=S[i].lot; }
-      else{ double mpl=(slDistPrice/ts)*tv; base=(mpl>0)?rm/mpl:S[i].lot; }
+      else{ double mpl=(sld/ts)*tv; base=(mpl>0)?rm/mpl:S[i].lot; }
    }
    double factor=SimVerifyFactor(i);
    if(factor<=0.0) return 0.0;
