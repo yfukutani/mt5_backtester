@@ -18,7 +18,15 @@ $py      = 'C:\Users\f\AppData\Local\Programs\Python\Python314\python.exe'
 $med     = 'C:\Program Files\OANDA MetaTrader 5_BT1\MetaEditor64.exe'
 $experts = 'C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\6142D304BFF2E6AB353977162D6F452C\MQL5\Experts'
 $log     = Join-Path $repo 'ml\fxoanda4\chain.log'
-$prevLog = Join-Path $repo 'ml\fxqual16\chain.log'
+# 🔴 XM 側のラウンドは **ml\fxmargin3\measure.lock を共有**している（m3.ROOT を上書きしていない）。
+#    こちらは m3.ROOT を fxoanda4 にしてロックが独立しているので、
+#    **共有ロックを明示的に見ないと排他されない。**
+$xmLock  = Join-Path $repo 'ml\fxmargin3\measure.lock'
+# 先行チェーン。どれかが未完了なら待つ。あとから足せるように配列で持つ。
+$prevLogs = @(
+  (Join-Path $repo 'ml\fxqual16\chain.log'),
+  (Join-Path $repo 'ml\fxqual17\chain.log')   # 最小維持率の実測（並行セッション・12run）
+)
 
 # ⚠️ ログは **BOM付き UTF-8** で始める。BOM が無いと PS5.1 の Get-Content が CP932 で読み、
 #    あとから読むときに日本語が化ける（2026-09-19 に並行セッションが踏んだ事故と同じ形）。
@@ -31,14 +39,29 @@ function Say([string]$m) {
 }
 function TesterBusy { return $null -ne (Get-Process -Name 'metatester64' -ErrorAction SilentlyContinue) }
 function FreeGB { return (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1MB }
-function PrevDone {
-  if (-not (Test-Path $prevLog)) { return $false }
-  return (Select-String -Path $prevLog -Pattern 'CHAIN_END|CHAIN_ABORT' -Quiet)
+# XM 側の measure.py は走っている間ずっと共有ロックに自分の PID を書いている。
+function XmLockBusy {
+  if (-not (Test-Path $xmLock)) { return $false }
+  $t = (Get-Content $xmLock -Raw -ErrorAction SilentlyContinue)
+  if ($null -eq $t) { return $false }
+  $t = $t.Trim()
+  if ($t -notmatch '^\d+$') { return $false }
+  return $null -ne (Get-Process -Id ([int]$t) -ErrorAction SilentlyContinue)
 }
-function Ready { return (PrevDone) -and (-not (TesterBusy)) -and ((FreeGB) -ge 8.0) }
+# 先行チェーンが**全部**終わっていること。まだログが無いものは「これから走る」とみなして待つ。
+function PrevDone {
+  foreach ($p in $prevLogs) {
+    if (-not (Test-Path $p)) { return $false }
+    if (-not (Select-String -Path $p -Pattern 'CHAIN_END|CHAIN_ABORT' -Quiet)) { return $false }
+  }
+  return $true
+}
+function Ready {
+  return (PrevDone) -and (-not (TesterBusy)) -and (-not (XmLockBusy)) -and ((FreeGB) -ge 8.0)
+}
 
-Say 'CHAIN_START(fxoanda4) fxqual16 の終了・テスター不在・空き8GB を待つ（最大8時間）'
-$deadline = (Get-Date).AddHours(8)
+Say 'CHAIN_START(fxoanda4) fxqual16/17 の終了・テスター不在・共有ロック空き・空き8GB を待つ（最大10時間）'
+$deadline = (Get-Date).AddHours(10)
 $ok = $false
 while ((Get-Date) -lt $deadline) {
   if (Ready) {
@@ -47,8 +70,22 @@ while ((Get-Date) -lt $deadline) {
   }
   Start-Sleep -Seconds 60
 }
-if (-not $ok) { Say 'CHAIN_ABORT 8時間待っても条件がそろわなかった。EAは触らない'; exit 1 }
+if (-not $ok) { Say 'CHAIN_ABORT 10時間待っても条件がそろわなかった。EAは触らない'; exit 1 }
 Say ('GATE_OK freeGB={0:N1}' -f (FreeGB))
+
+# 並行セッションの fxqual17 が、テスターで ACCOUNT_MARGIN_LEVEL を実際に読めるかの
+# 事実上の検証になっている。読めていなければこちらも全 run が NOT_MEASURED になるので、
+# **走る前にログへ残しておく**（止めはしない。IS 窓の測定自体は計装と独立に価値がある）。
+$q17 = Join-Path $repo 'ml\fxqual17\run_deals'
+if (Test-Path $q17) {
+  $nm = @(Get-ChildItem $q17 -Filter '*_cap.csv' -ErrorAction SilentlyContinue |
+          Where-Object { Select-String -Path $_.FullName -Pattern 'margin_level_min.*NOT_MEASURED' -Quiet }).Count
+  $tot = @(Get-ChildItem $q17 -Filter '*_cap.csv' -ErrorAction SilentlyContinue).Count
+  Say ("MARGIN_PROBE fxqual17 の cap ログ {0} 本中 {1} 本が NOT_MEASURED" -f $tot, $nm)
+  if ($tot -gt 0 -and $nm -eq $tot) {
+    Say '⚠️ テスターで ACCOUNT_MARGIN_LEVEL が読めていない。こちらも維持率は取れない見込み。損益の測定は続行する'
+  }
+}
 
 # --- デプロイとコンパイル（OANDA 端末のみ）---------------------------------
 # ⚠️ ここを飛ばすと静かに嘘の実測が残る。OANDA 端末の .ex5 は 2026-09-18 の古い版で、
