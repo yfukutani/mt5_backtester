@@ -34,16 +34,20 @@ function TesterBusy {
 }
 function Quiet { return (-not (LockBusy)) -and (-not (TesterBusy)) }
 
-Say 'CHAIN_START(fxqual9) fxqual8 の完了を待つ（最大10時間）'
-$q8log = Join-Path $repo 'ml\fxqual8\measure.log'
+# ⚠️ 待ち先を fxqual8 から fxqualcfm へ変更した（2026-09-19 09:50・並行セッションの依頼）。
+#    fxqual8 完走直後の空きを向こうの fxqualcfm（24run）が先に取ったため。
+#    FXQUAL8_END は既に出ているので、そのままだと**向こうの run の合間**に
+#    起き出して /compile を打ってしまう（向こうの retry 経路でロックが一瞬空く）。
+Say 'CHAIN_START(fxqual9) fxqualcfm の完了を待つ（最大10時間）'
+$cfmlog = Join-Path $repo 'ml\fxqualcfm\measure.log'
 $deadline = (Get-Date).AddHours(10)
 while ((Get-Date) -lt $deadline) {
-  if ((Test-Path $q8log) -and (Select-String -Path $q8log -Pattern 'FXQUAL8_END|FXQUAL8_ABORT' -Quiet)) {
+  if ((Test-Path $cfmlog) -and (Select-String -Path $cfmlog -Pattern 'FXQUALCFM_END|FXQUALCFM_ABORT' -Quiet)) {
     if (Quiet) { break }
   }
   Start-Sleep -Seconds 60
 }
-if ((Get-Date) -ge $deadline) { Say 'CHAIN_ABORT 10時間待っても fxqual8 が終わらなかった'; exit 1 }
+if ((Get-Date) -ge $deadline) { Say 'CHAIN_ABORT 10時間待っても fxqualcfm が終わらなかった'; exit 1 }
 
 Start-Sleep -Seconds 20
 if (-not (Quiet)) { Say 'CHAIN_ABORT 待機後にロック／テスターが動いていた。EAは触らない'; exit 1 }
