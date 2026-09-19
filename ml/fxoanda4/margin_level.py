@@ -34,6 +34,7 @@ EA 側に毎ティックの計装（`TrackMarginLevel`）を足したのはこ�
 from __future__ import annotations
 
 import csv
+import io
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,6 +54,29 @@ def verdict(ml: float) -> str:
         if ml < thr:
             return text
     return "?"
+
+
+def floor_pct(cap: float) -> float | None:
+    """発注直後の維持率の床。`MarginCapPct=c` なら 10000/c [%]。
+
+    cap は発注の瞬間に `使用証拠金 ≦ equity × c/100` を掛けるだけなので、
+    **建てた直後の維持率はここより下がらない。** cap=0（無効）のときは床が無い。
+    """
+    if not cap or cap <= 0:
+        return None
+    return 10000.0 / cap
+
+
+def r_ratio(ml_min: float, cap: float) -> float | None:
+    """R ≡ 最小維持率 ÷ 床。**建てた後にどれだけ床を割り込んだか。**
+
+    ⚠️ R は倍率・枠構成・窓・端末に不変**ではない**。
+    比べてよいのは「同じブック・同じ窓で cap だけを振ったとき」だけである。
+    """
+    fl = floor_pct(cap)
+    if fl is None or ml_min is None:
+        return None
+    return ml_min / fl
 
 
 def read_cap(path: Path) -> dict | None:
@@ -108,6 +132,20 @@ def read_cap(path: Path) -> dict | None:
     return out or None
 
 
+def cap_by_run(root: Path) -> dict[str, float]:
+    """run_id -> MarginCapPct。R を出すのに要る。"""
+    out: dict[str, float] = {}
+    rc = root / "results.csv"
+    if not rc.exists():
+        return out
+    for r in csv.DictReader(io.open(rc, encoding="utf-8", errors="replace")):
+        try:
+            out[r["run_id"]] = float(r["cap"])
+        except (KeyError, TypeError, ValueError):
+            pass
+    return out
+
+
 def main() -> None:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent
     if not root.is_absolute():
@@ -120,8 +158,9 @@ def main() -> None:
 
     print(f"# 建玉後の最小証拠金維持率 — {root.name}（{len(caps)} run）")
     print()
-    print(f"{'run_id':46} {'最小維持率':>10} {'発生時刻':>12} "
-          f"{'eq':>11} {'使用証拠金':>11} {'<100%':>7} {'判定'}")
+    cap_of = cap_by_run(root)      # ⚠️ `caps`（*_cap.csv のリスト）と混ぜない
+    print(f"{'run_id':46} {'最小維持率':>10} {'床':>7} {'R':>6} {'発生時刻':>12} "
+          f"{'eq':>11} {'<100%':>7} {'判定'}")
     stale, unmeasured, cut = 0, 0, 0
     computed_runs, gap_runs = 0, 0
     for c in caps:
@@ -143,8 +182,12 @@ def main() -> None:
         if "used_ticks" in d and d["used_ticks"] != d.get("ml_n", 0):
             gap_runs += 1
         t = datetime.fromtimestamp(d["ml_t"], tz=timezone.utc).strftime("%Y-%m-%d")
-        print(f"{run_id:46} {d['ml_min']:9.1f}% {t:>12} "
-              f"{d['ml_eq']:11,.0f} {d['ml_used']:11,.0f} "
+        cap = cap_of.get(run_id)
+        fl = floor_pct(cap) if cap is not None else None
+        r = r_ratio(d["ml_min"], cap) if cap is not None else None
+        print(f"{run_id:46} {d['ml_min']:9.1f}% "
+              f"{(f'{fl:.0f}%' if fl else '—'):>7} {(f'{r:.3f}' if r else '—'):>6} "
+              f"{t:>12} {d['ml_eq']:11,.0f} "
               f"{d.get('lt100', 0):7,} {verdict(d['ml_min'])}")
 
     print()
