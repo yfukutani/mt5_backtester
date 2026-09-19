@@ -110,7 +110,7 @@ $deployed   = Join-Path $experts 'MIX_EA_SIMVERIFY.mq5'
 $deployedEx = Join-Path $experts 'MIX_EA_SIMVERIFY.ex5'
 
 foreach ($tok in @('RsiTpMask_UJ','RsiTpMask_EU','RsiTpMult_UJ','RsiTpFactor','ScaFilRangeMin','MarginCapPct',
-                   'TrackMarginLevel','margin_level_min','NOT_MEASURED')) {
+                   'TrackMarginLevel','margin_level_min','NOT_MEASURED','MarginTrackMode')) {
   if (-not (Select-String -Path $srcMq5 -Pattern $tok -Quiet)) {
     Say ("CHAIN_ABORT リポジトリの .mq5 に {0} が無い" -f $tok); exit 1
   }

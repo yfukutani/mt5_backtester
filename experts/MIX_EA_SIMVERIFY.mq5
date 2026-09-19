@@ -1790,6 +1790,13 @@ bool CryptoGuardOK(int i)
 // 段階2のシミュレーションは決済損益ベースだったので、こちらのほうが厳しく・正しい。
 input double MarginCapPct = 0;   // A10: 使用証拠金/equityの上限%（0=無効・段階2の推奨80）
 
+// 第17報。建玉後の維持率の計装をどう取るか。**既定 1 で計装ON。**
+// 0 = 完全に切る（1バイトも読まない）。**旧バイナリの数字を再現したいときはこれ。**
+// 1 = ACCOUNT_MARGIN_LEVEL を読む（通常）
+// 2 = ACCOUNT_MARGIN_LEVEL を呼ばず equity/使用証拠金 から自前計算する（切り分け用）
+// ⚠️ 0 以外では cap に張り付いた注文のロットが 1ステップ動きうる（下の TrackMarginLevel 参照）。
+input int    MarginTrackMode = 1;
+
 double MarginCapLot(const string sym, const double lot)
 {
    if(MarginCapPct<=0.0 || lot<=0.0) return lot;
@@ -1874,10 +1881,22 @@ long     g_mlComputed  = 0;         // equity/margin から**自前で計算し�
 
 void TrackMarginLevel()
 {
+   // 🔴 **MarginTrackMode=0 なら1バイトも読まない。**
+   //    計装は受動的ではなかった——`ACCOUNT_MARGIN_LEVEL` の読み出しがテスター側の
+   //    証拠金再計算を誘発し、**cap に張り付いた注文のロットを1ステップ動かす**
+   //    （並行セッションが deal ログの1件ずつの突き合わせで確定。2026-09-20）。
+   //    そのため計装入りと計装なしでは cap 制約下の損益が 0.04% ほどずれ、
+   //    **既存の全 run（fxqual14 / fxoanda3 など）と月利を直接比べられなくなった。**
+   //    mode=0 は**その橋を架け直すためにある**: 旧バイナリの数字を再現できるか確かめる。
+   if(MarginTrackMode == 0) return;
    double used = AccountInfoDouble(ACCOUNT_MARGIN);
    if(used <= 0.0) return;                      // 建玉が無いときは維持率が無限大
    g_mlUsedTicks++;
-   double ml = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
+   // mode=2 は `ACCOUNT_MARGIN_LEVEL` を**呼ばない**。どちらの読み出しが摂動の原因かを
+   // 切り分けるため（`ACCOUNT_MARGIN` は Clamp() が元々読んでいるので、
+   // mode=2 でも摂動が残るなら原因は `ACCOUNT_MARGIN` 側ということになる）。
+   double ml = (MarginTrackMode == 2)
+                  ? 0.0 : AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
    if(ml > 0.0){
       g_mlFromApi++;
    } else {
