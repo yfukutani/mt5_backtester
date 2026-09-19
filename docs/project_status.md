@@ -630,6 +630,62 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 > （当方が独立に見つけた Pair の回帰βヘッジも 2026-06-27 に実測・棄却済みだった）。
 > **残るのはサイジング側**（`ml/fxqual10`＝SCA 2枠を risk% に入れてよいか）で、**そちらは桁が2つ大きい。**
 
+> 🟢 **2026.09.19 第22報 — 「枠の質」の価値は、それを測ったサイジングの関数だった
+> （`ml/fxqual10` / `fxqualamp` / `fxqualfloor`・計62run）:**
+>
+> **8ラウンド「月利 +0.03pt」と報告してきたのは、固定ロットでしか測っていなかったからである。**
+> 同じ採用候補を**本番が目指す全複利構成**（`FxRiskMask=31`・`RefCap_*=0`）に載せると:
+>
+> | サイジング（OOS・候補2件） | 対照 | 候補込み | **効き幅** |
+> |---|---:|---:|---:|
+> | 本番現行（`RefCap=78,000`・倍率1） | 0.386% | 0.414% | **+0.028pt** |
+> | 全複利・倍率1 | 2.004% | 2.337% | **+0.332pt** |
+> | 全複利・倍率2 | 2.928% | **3.340%** | **+0.411pt** |
+>
+> **極端な例は SCA USDJPY のレンジ幅下限**——固定ロットでは **+3,991 / +3,393**
+> （`oanda_fx_last_axes` の「金額が小さすぎて採否を論じる意味がない」は正しかった）が、
+> **全複利では +150,369 / +409,131（38倍 / 121倍）。**
+> **「±0.02pt 以下だから価値が低い」という従来の足切り基準は、これで崩れた。**
+>
+> **採用候補は3件**（`RsiMechMask_UJ=124` / `PbSlopeATR_UJ=1.40` /
+> `ScaFilMask=1`＋**`ScaFilRangeMin=0.0048`**）。
+> **`0.0060` は IS のスパイク**（両隣より 11〜25万円高い単独の突出）なので採らず、
+> **隣り合う2点がほぼ同値で取引数も最大の 0.0042〜0.0048（台地の内側）**を採る。
+>
+> | 構成 | OOS 幾何月利 | IS | FULL | OOS DD |
+> |---|---:|---:|---:|---:|
+> | 本番現行 ＋ 候補3件 | **0.425%** | 0.718% | 0.513% | 4.34% |
+> | 全複利・倍率1 ＋ 候補3件 | **2.488%** | 4.028% | — | **23.45%** |
+> | 全複利・倍率2 ＋ 候補2件 | **3.340%** | 7.216% | 5.417% | 51.47% |
+>
+> **3窓すべてで損益・残高DD・equityDD が同時に改善している。全 run 口座破綻なし。**
+>
+> 🔴 **副産物1: 複利では枠別損益がブックの分解ではない。**
+> SCA GBPJPY の枠純益は複利 IS で **−653,833** だが、**その枠を risk% から外すと
+> ブックは 250,202 悪化する**（`ml/fxqual10` の `G008`/`G009`）。
+> risk% では全枠が同じ equity を共有するので、**ある枠が OOS で稼いだ +396,463 が
+> 他の8枠のロットを大きくしている。**
+> **枠別の `*_net` を「その枠を外したときの差分」と読めるのは固定ロットのときだけ。**
+>
+> 🔴 **副産物2: 複利では加算性の符号すら予測できない。**
+> 候補3件の合成は **OOS で劣加算（−6.2%）・IS で超加算（+28.3%）・FULL で超加算（+3.5%）**。
+> **固定ロットでは枠をまたぐ効果が1円まで足し算だった（本日7例）。**
+> **採用候補の価値を「単独で測った値の合計」で見積もってはいけない。合成そのものを測ること。**
+>
+> ⚠️ **ただし実行可能性（使用証拠金）は未検証である。** `R037` は
+> 「時間の 3.5〜5.2% を含み益に依存して建てている＝実行不可」と判定されており、
+> **本構成はそれより強い**（SCA 2枠にも risk% が掛かる）。`ml/fxqualexec` で
+> **`MarginCapPct=100` を入れて cap=0 と一致するか**を測る。
+>
+> 詳細: [round10](oanda_fx_sleeve_quality_round10_20260919.md) /
+> [複利の配賦](oanda_fx_compounding_attribution_20260919.md) /
+> [複利の増幅](oanda_fx_compounding_amplification_20260919.md) /
+> [レンジ幅下限の全曲線](oanda_fx_sca_range_floor_20260919.md)。
+>
+> **目標6%までは、倍率1 で 2.4倍・倍率2 で 1.8倍。**
+> **前進はしたが届いていない。そして 2.5〜3.3% を出しているのはサイジングであって
+> 候補ではない**（対照だけで 2.004% / 2.928%）。**次の律速は実行可能性である。**
+
 ---
 ## 6. ドキュメント索引
 
@@ -651,7 +707,8 @@ RSI2逆張り/守りのオーバーレイ3形態/キャリー横展開/RSI14ク�
 | [X2_HIGH_RISK_requirements.md](X2_HIGH_RISK_requirements.md) / [X2_HIGH_RISK_verification.md](X2_HIGH_RISK_verification.md) | **別軸EA「X2_HIGH_RISK」**: 資金2倍化・DD無制約を目的とした検証（要件定義＋検証記録V001〜V037）。**期限2〜6ヶ月は探索終了** |
 | [oanda_broker_specs_20260915.md](oanda_broker_specs_20260915.md) / [oanda_fx_sleeve_removal_20260916.md](oanda_fx_sleeve_removal_20260916.md) | **OANDA実機の銘柄仕様**（FX 1注文上限は **10ロット**・XMは50）と、**枠を外す16案の実測**（E04 中央値 8.65%／E09 8.49%）。`Mult_*` が cap の下で効いていなかったことの発見も含む。**いずれも上限50・cap100 の下の数字で本番では再現しない** |
 | [rejected_strategies.md](rejected_strategies.md) | 棄却戦略の記録 |
-| [round1](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) / [round4](oanda_fx_sleeve_quality_round4_20260919.md) / [round5](oanda_fx_sleeve_quality_round5_20260919.md) / [round6](oanda_fx_sleeve_quality_round6_20260919.md) / [round7](oanda_fx_sleeve_quality_round7_20260919.md) / [round8](oanda_fx_sleeve_quality_round8_20260919.md) / [確認](oanda_fx_sleeve_quality_confirm_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜17報・**168run**。**採用候補3件が3窓すべてで損益とDDを同時改善**（本番現行 OOS +0.040pt・全複利倍率2 では +0.411pt）。**round5 は「09時除外 +31.0%」を撤回**。**切り直しが使える条件（そのゲートが日内で解除されるか）を両側の実測で確定**。**PB の律速は ADX ではなく slope**・**締める側に頂上がある（ただし OOS 4往復）**・計測バグの訂正・「未測定のまま結論だけ出ていた案」の発見 |
+| [round10](oanda_fx_sleeve_quality_round10_20260919.md) / [複利の配賦](oanda_fx_compounding_attribution_20260919.md) / [複利の増幅](oanda_fx_compounding_amplification_20260919.md) / [レンジ幅下限](oanda_fx_sca_range_floor_20260919.md) | **複利で測り直した群**（2026.09.19・第22報）: **同じ改善が固定ロットの 12〜121倍**になる。**枠別損益はブックの分解ではない**（枠を外すとその枠の損益以上に減る）。**加算性の符号すら窓で変わる**。採用候補3件で全複利・倍率1 が OOS **2.488%** |
+| [round1](oanda_fx_sleeve_quality_round1_20260918.md) / [round2](oanda_fx_sleeve_quality_round2_20260918.md) / [round3](oanda_fx_sleeve_quality_round3_20260919.md) / [round4](oanda_fx_sleeve_quality_round4_20260919.md) / [round5](oanda_fx_sleeve_quality_round5_20260919.md) / [round6](oanda_fx_sleeve_quality_round6_20260919.md) / [round7](oanda_fx_sleeve_quality_round7_20260919.md) / [round8](oanda_fx_sleeve_quality_round8_20260919.md) / [確認](oanda_fx_sleeve_quality_confirm_20260919.md) | **枠ごとの質の改善ラウンド**（2026.09.18-19）: 第15〜22報・**246run**。**採用候補3件が3窓すべてで損益とDDを同時改善**（本番現行 OOS +0.040pt・**全複利倍率1 では +0.484pt**）。**round5 は「09時除外 +31.0%」を撤回**。**切り直しが使える条件（そのゲートが日内で解除されるか）を両側の実測で確定**。**PB の律速は ADX ではなく slope**（締める側に台地・OOS 8往復）・計測バグの訂正・「未測定のまま結論だけ出ていた案」の発見2件 |
 | [round9](oanda_fx_sleeve_quality_round9_20260919.md) / [round10](oanda_fx_sleeve_quality_round10_20260919.md) / [round11](oanda_fx_sleeve_quality_round11_20260919.md) / [複利の帰属](oanda_fx_compounding_attribution_20260919.md) | **枠の質・第9〜11ラウンド**（2026.09.19）: 第19〜21報。**固定ロットでの効き幅では軸の価値を測れない**（同じ EA 変更が複利で 6.3〜155倍）。SCA USDJPY のレンジ幅下限が**両窓プラス・両窓ともDD低下**で本日最大（幾何月利 +0.15/+0.175pt）。**複利では枠別損益がブックの分解にならない**（SCA GBPJPY を risk% から外すと枠自身は改善するのにブックは悪化）。**円建ての枠別損益は「いつ負けたか」を測っている**——残高比 R に直すと sca_gj は2番目の稼ぎ頭で sca_uj は円建てより悪い。第11ラウンドは「取引を捨てず**ロットの分母だけ**を下限で丸める」軸（固定ロットでは no-op） |
 | [codex_oafx_round11_20260919.md](codex_oafx_round11_20260919.md) | **Codex の第11ラウンド案（原文）**: 複利レンズでの再棚卸し。分母フロアという形は独立に一致したが、**SCA GBPJPY と PB 2枠の見立てはこちらの実測と割れた**（分位の符号が逆） |
 | [codex_oafx_round4_review_20260919.md](codex_oafx_round4_review_20260919.md) | **Codex による設計査読（結果が出る前）**: 5件すべて的中。うち1件は `analyze.py` の恒等式チェックが差分同士を比べていて機能していなかった実装バグ |
