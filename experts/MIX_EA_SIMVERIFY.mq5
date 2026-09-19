@@ -1864,13 +1864,32 @@ long     g_mlLt300  = 0;            // 維持率 < 300% だったティック数
 long     g_mlLt200  = 0;            // 同 < 200%
 long     g_mlLt150  = 0;            // 同 < 150%
 long     g_mlLt100  = 0;            // 同 < 100% ＝ **OANDA なら切られている**
+// 「測れなかった」の切り分け用（並行セッションの提案）。
+// `g_mlUsedTicks` と `g_mlSamples` を比べれば、**建玉はあったのに維持率が取れなかった**
+// ティックが何回あったかが一発で分かる。これが無いと
+// 「建玉が無かった」と「API が読めなかった」を区別できない。
+long     g_mlUsedTicks = 0;         // ACCOUNT_MARGIN > 0 だったティック数
+long     g_mlFromApi   = 0;         // ACCOUNT_MARGIN_LEVEL がそのまま使えた回数
+long     g_mlComputed  = 0;         // equity/margin から**自前で計算した**回数
 
 void TrackMarginLevel()
 {
    double used = AccountInfoDouble(ACCOUNT_MARGIN);
    if(used <= 0.0) return;                      // 建玉が無いときは維持率が無限大
+   g_mlUsedTicks++;
    double ml = AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
-   if(ml <= 0.0) return;                        // 読めない口座では何もしない
+   if(ml > 0.0){
+      g_mlFromApi++;
+   } else {
+      // 🔴 **読めなければ自前で出す。** 維持率の定義は equity / 使用証拠金 × 100 なので、
+      //    `ACCOUNT_MARGIN_LEVEL` が 0 を返すテスターでも、
+      //    `ACCOUNT_EQUITY` と `ACCOUNT_MARGIN` が取れれば同じ値が出る。
+      //    **「読めなかったので測れませんでした」で終わらせない。**
+      double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+      if(eq <= 0.0) return;                     // ここまで取れなければ本当に測れない
+      ml = eq / used * 100.0;
+      g_mlComputed++;
+   }
    g_mlSamples++;
    if(ml < 300.0) g_mlLt300++;
    if(ml < 200.0) g_mlLt200++;
@@ -3660,6 +3679,13 @@ double OnTester()
          else
             FileWrite(ch,"margin_level_hist",0,
                       "NOT_MEASURED","NOT_MEASURED","NOT_MEASURED","NOT_MEASURED","0");
+         // 維持率をどこから得たかの内訳。**`used_ticks` と `samples` がずれていたら、
+         // 建玉はあったのに測れなかったティックがある**ということ。
+         // `computed` が 0 でなければ ACCOUNT_MARGIN_LEVEL はこのテスターで使えていない。
+         // 列: kind, magic(=0), used_ticks, from_api, computed, samples, ""
+         FileWrite(ch,"margin_level_src",0,
+                   IntegerToString(g_mlUsedTicks),IntegerToString(g_mlFromApi),
+                   IntegerToString(g_mlComputed),IntegerToString(g_mlSamples),"");
          // 削られた注文を1件ずつ。kind=event, magic, 時刻, 希望, 通過, equity, 使用証拠金
          for(int e=0;e<g_capEvN;e++)
             FileWrite(ch,"event",g_capEvMagic[e],(long)g_capEvT[e],

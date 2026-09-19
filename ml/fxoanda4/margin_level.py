@@ -90,6 +90,16 @@ def read_cap(path: Path) -> dict | None:
                 out["lt150"], out["lt100"] = int(r[4]), int(r[5])
             except ValueError:
                 pass
+        elif r[0] == "margin_level_src" and len(r) >= 6:
+            # used_ticks と samples がずれていたら、建玉はあったのに測れなかったティックがある。
+            # computed > 0 なら ACCOUNT_MARGIN_LEVEL がこのテスターで使えていない
+            # （equity/margin から自前で出している）。
+            try:
+                out["used_ticks"] = int(r[2])
+                out["from_api"] = int(r[3])
+                out["computed"] = int(r[4])
+            except ValueError:
+                pass
         elif r[0] == "equity_dd_pct" and len(r) >= 7:
             try:
                 out["eq_dd"] = float(r[5])
@@ -113,6 +123,7 @@ def main() -> None:
     print(f"{'run_id':46} {'最小維持率':>10} {'発生時刻':>12} "
           f"{'eq':>11} {'使用証拠金':>11} {'<100%':>7} {'判定'}")
     stale, unmeasured, cut = 0, 0, 0
+    computed_runs, gap_runs = 0, 0
     for c in caps:
         d = read_cap(c)
         run_id = c.name[:-len("_cap.csv")]
@@ -127,6 +138,10 @@ def main() -> None:
             continue
         if d["ml_min"] < 100.0:
             cut += 1
+        if d.get("computed", 0) > 0:
+            computed_runs += 1
+        if "used_ticks" in d and d["used_ticks"] != d.get("ml_n", 0):
+            gap_runs += 1
         t = datetime.fromtimestamp(d["ml_t"], tz=timezone.utc).strftime("%Y-%m-%d")
         print(f"{run_id:46} {d['ml_min']:9.1f}% {t:>12} "
               f"{d['ml_eq']:11,.0f} {d['ml_used']:11,.0f} "
@@ -141,6 +156,13 @@ def main() -> None:
     if unmeasured:
         print(f"🔴 {unmeasured} run は **NOT_MEASURED**（標本0）。")
         print("   **「100% 割れ 0回＝安全」と読んではいけない。「測れていない」である。**")
+    if computed_runs:
+        print(f"ℹ️ {computed_runs} run は `ACCOUNT_MARGIN_LEVEL` が使えず、"
+              f"**equity/使用証拠金 から自前で計算**している。")
+        print("   値としては同じ（維持率の定義そのもの）なので、判定にはそのまま使える。")
+    if gap_runs:
+        print(f"⚠️ {gap_runs} run で **建玉があったティック数と標本数がずれている**"
+              f"＝測れなかったティックがある。最小値が本当の谷でない可能性がある。")
     if cut:
         print(f"🔴 {cut} run が **維持率 100% を割っている＝OANDA なら切られていた。**")
         print("   ⚠️ **XM 端末の run については、割った時刻 T 以降の損益・DD・月利は")
