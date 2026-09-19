@@ -650,6 +650,24 @@ input double PbSlopeATR_UJ  = 0.0;   // >0 で同 slope下限を上書き（現�
 input double PbAdxThr_GJ    = 0.0;   // >0 で PB GBPJPY の ADX閾値を上書き（現行30.0）
 input double PbSlopeATR_GJ  = 0.0;   // >0 で同 slope下限を上書き（現行1.5）
 
+input group "=== PB の armed の寿命 / Pair の Z 転換（第19報・0とfalseで現行）==="
+// 【なぜ入れたか】第17報の leave-one-out で、PB 入口の律速は slope、次点が ADX、
+// その次が armed だった（PB USDJPY・IS で 126〜170バー）。ところが armedBuy/Sell は
+// `up`/`dn` が崩れるまで**無期限に残る**実装で、100本前の押し目でも生きている。
+// 「押し目を付けてから N バー以内でしか入らない」という寿命は一度も測っていない。
+//
+// ⚠️ 齢の起点は「押し目条件の**立ち上がり**」である（Codex の事前査読）。
+//    押し目条件が続いている間に齢を 0 に戻すと、測れるのは寿命ではなく
+//    「最後に押し目を付けてから N バー」になってしまう。
+// 0 で無期限（現行と完全同値）。単位はその枠の足（PB 2枠は H4）。
+input int    PbArmMaxBars_UJ = 0;    // >0 で PB USDJPY の armed の寿命（バー）
+input int    PbArmMaxBars_GJ = 0;    // >0 で PB GBPJPY の armed の寿命（バー）
+// Pair は |z|>=entryZ になった足でその場で両脚を建てる。乖離がまだ開いている
+// 途中でも建つので、「前バーより |z| が縮んでいること」を足せるか。
+// ⚠️ 縮小を見るのは価格スプレッドではなく **Z**（ローリング平均・標準偏差の更新を含む）。
+// false で現行と完全同値（false のとき zPrev を書かない）。
+input bool   PairRequireZTurning = false;
+
 input group "=== SCA リバーサル部分集合のゲート（第18報・0=現行）==="
 // 【なぜ入れたか】第18報で取引ログを Boost の有無で割ったところ、
 // **SCA GBPJPY の損益はリバーサル条件（scaDrift がブレイク方向と逆）が成立した
@@ -721,6 +739,11 @@ struct SLEEVE
    bool            useHigherTF; ENUM_TIMEFRAMES higherTF; int higherTFMA; int hHigherTrend;
    // PB 状態
    bool            armedBuy, armedSell;
+   // PB armed の寿命（第19報）。armMaxBars=0 で無期限＝現行。
+   // armAgeB/S は「押し目条件が立ち上がってからのバー数」。−1 はエピソード無し。
+   // pbPrevB/S は前バーの押し目条件（立ち上がりの検出用）。
+   int             armMaxBars, armAgeB, armAgeS;
+   bool            pbPrevB, pbPrevS;
    // RSI
    double          bbDev, rsiOBX, rsiOB, rsiOSX, rsiOS; int bbPeriod;
    bool            useDP; int swingLB, dpBars; double dpTolATR;
@@ -731,6 +754,9 @@ struct SLEEVE
    int             maSide;   // +1=MA上 / -1=MA下 / 0=未初期化
    // PAIR
    string          second; int lookback; double entryZ, exitZ, stopZ;
+   // 前バーの z（第19報・PairRequireZTurning 用）。valid は初回バーと
+   // z を作れなかったバーの後を弾くため。
+   double          zPrev; bool zPrevValid;
    // CARRY
    int             trendPeriod; bool reqPosSwap;
    bool            useHyst; double hystMult;   // MAクロス・ヒステリシス帯（AUDJPYのみ採用）
@@ -961,6 +987,11 @@ int OnInit()
       Print("Pb*_UJ / Pb*_GJ overrides must be >= 0");
       return INIT_PARAMETERS_INCORRECT;
    }
+   if(PbArmMaxBars_UJ<0 || PbArmMaxBars_GJ<0)
+   {
+      Print("PbArmMaxBars_* must be >= 0");
+      return INIT_PARAMETERS_INCORRECT;
+   }
    if(ScaFilRangeMin<0.0)
    {
       Print("ScaFilRangeMin must be >= 0");
@@ -1036,6 +1067,7 @@ int OnInit()
      x.adxThr=27.5;
      if(PbAdxThr_UJ>0.0)   x.adxThr=PbAdxThr_UJ;         // 第14報（0=現行）
      if(PbSlopeATR_UJ>0.0) x.slopeMinATR=PbSlopeATR_UJ;
+     if(PbArmMaxBars_UJ>0) x.armMaxBars=PbArmMaxBars_UJ;   // 第19報（0=無期限＝現行）
      AddSleeve(x); }
    // 2. PB GBPJPY (risk2%) — MTF合流フィルター採用（D1トレンド一致必須）
    //    v1.6: MA_Slope_Min_ATR 1.2→1.5, RR_Ratio 2.0→3.5（応答曲面M366・本番同一条件tier2確認:
@@ -1065,6 +1097,7 @@ int OnInit()
      x.fastEMA=25; x.slowEMA=35;
      if(PbAdxThr_GJ>0.0)   x.adxThr=PbAdxThr_GJ;         // 第14報（0=現行）
      if(PbSlopeATR_GJ>0.0) x.slopeMinATR=PbSlopeATR_GJ;
+     if(PbArmMaxBars_GJ>0) x.armMaxBars=PbArmMaxBars_GJ;   // 第19報（0=無期限＝現行）
      AddSleeve(x); }
    // 3. PB AUDJPY (固定・除外枠)
    //    v2.2: RR_Ratio 2.0→5.0（トレードオフ8案の組合せ検証#5・ほぼ利益の出ていなかった枠が
@@ -1335,6 +1368,8 @@ void ZeroSleeve(SLEEVE &x)
    x.useStructTP=false; x.structLB=50; x.structMinRR=0.5;
    x.useHigherTF=false; x.higherTF=PERIOD_D1; x.higherTFMA=200; x.hHigherTrend=INVALID_HANDLE;
    x.armedBuy=false; x.armedSell=false;
+   x.armMaxBars=0; x.armAgeB=-1; x.armAgeS=-1; x.pbPrevB=false; x.pbPrevS=false;
+   x.zPrev=0.0; x.zPrevValid=false;
    x.bbDev=2.0; x.bbPeriod=20; x.rsiOBX=0; x.rsiOB=0; x.rsiOSX=0; x.rsiOS=0;
    x.useDP=false; x.swingLB=3; x.dpBars=100; x.dpTolATR=0.5;
    x.useRange=false; x.rangeMaxATR=0; x.rangeLB=20;
@@ -2380,6 +2415,26 @@ void ProcPullback(int i)
    bool qb=(lp>=slowema), qs=(hp<=slowema);
    if(up && lp<=fastema && qb) S[i].armedBuy=true;
    if(dn && hp>=fastema && qs) S[i].armedSell=true;
+   // --- 第19報: armed の寿命（armMaxBars=0 なら丸ごと実行されない＝現行と同値）---
+   // 齢の起点は「押し目条件の**立ち上がり**」である。押し目が続いている間に
+   // 0 へ戻すと、測れるのは寿命ではなく「最後に押し目を付けてから N バー」になる。
+   // ProcPullback() は新バーで1回だけ呼ばれる（1539行）が、CopyBuffer 失敗で
+   // 早期 return したバーは齢が進まない（テスターでは起きない）。
+   if(S[i].armMaxBars>0){
+      bool pbNowB=(up && lp<=fastema && qb);
+      bool pbNowS=(dn && hp>=fastema && qs);
+      if(!up)                       S[i].armAgeB=-1;            // トレンドが壊れたら終わり
+      else if(pbNowB && !S[i].pbPrevB) S[i].armAgeB=0;          // 立ち上がり
+      else if(S[i].armAgeB>=0)      S[i].armAgeB++;
+      if(!dn)                       S[i].armAgeS=-1;
+      else if(pbNowS && !S[i].pbPrevS) S[i].armAgeS=0;
+      else if(S[i].armAgeS>=0)      S[i].armAgeS++;
+      S[i].pbPrevB=pbNowB; S[i].pbPrevS=pbNowS;
+      // 齢 0 は「立ち上がった足」なので、amb=1 は「立ち上がり足＋次の1足」まで。
+      // 齢 −1（エピソード無し・ライブ復元直後）も使わせない。
+      if(S[i].armedBuy  && (S[i].armAgeB<0 || S[i].armAgeB>S[i].armMaxBars)) S[i].armedBuy=false;
+      if(S[i].armedSell && (S[i].armAgeS<0 || S[i].armAgeS>S[i].armMaxBars)) S[i].armedSell=false;
+   }
 
    bool bull=(cp>op), bear=(cp<op);
    bool mb=(cp>h2), ms=(cp<l2);
@@ -2651,13 +2706,24 @@ void ProcPair(int i)
 {
    string sym=S[i].symbol, sec=S[i].second; ENUM_TIMEFRAMES tf=S[i].tf; int LB=S[i].lookback;
    double mc[],sc[]; ArraySetAsSeries(mc,true); ArraySetAsSeries(sc,true);
-   if(CopyClose(sym,tf,1,LB,mc)<LB) return;
-   if(CopyClose(sec,tf,1,LB,sc)<LB) return;
+   // 第19報: z を作れなかったバーは前バーの z を無効にする。古い z と比べて
+   // 「縮小した」と誤判定しないため（Codex の事前査読）。既定 false では触らない。
+   if(CopyClose(sym,tf,1,LB,mc)<LB) { if(PairRequireZTurning) S[i].zPrevValid=false; return; }
+   if(CopyClose(sec,tf,1,LB,sc)<LB) { if(PairRequireZTurning) S[i].zPrevValid=false; return; }
    double sp0=mc[0]-sc[0], mean=0;
    for(int k=0;k<LB;k++) mean+=(mc[k]-sc[k]); mean/=LB;
    double var=0; for(int k=0;k<LB;k++){ double s=mc[k]-sc[k]; var+=(s-mean)*(s-mean);} var/=LB;
-   double sd=MathSqrt(var); if(sd<=0) return;
+   double sd=MathSqrt(var); if(sd<=0) { if(PairRequireZTurning) S[i].zPrevValid=false; return; }
    double z=(sp0-mean)/sd;
+   // 第19報: 乖離が縮小へ転じた足でしか建てない（既定 false で現行と完全同値）。
+   // zPrev は保有中も含めて毎バー更新する（この関数の末尾）。保有中に止めると、
+   // 決済後の判定が数週間前の z と比べられてしまう。
+   bool turning_ok=true;
+   if(PairRequireZTurning){
+      if(!S[i].zPrevValid)   turning_ok=false;             // 初回バーは判定できない
+      else if(z>0.0)         turning_ok=(z < S[i].zPrev);  // 正側から縮んでいる
+      else if(z<0.0)         turning_ok=(z > S[i].zPrev);  // 負側から縮んでいる
+   }
    bool ml=HasPos(i,POSITION_TYPE_BUY), msh=HasPos(i,POSITION_TYPE_SELL);
    int st=ml?1:(msh?-1:0);
    trade.SetExpertMagicNumber(S[i].magic);
@@ -2691,7 +2757,7 @@ void ProcPair(int i)
          if(lot2u < vmin) lot2u = 0.0;
       }
    }
-   if(st==0 && lot>0.0 && lot2u>0.0 && zone_ok){
+   if(st==0 && lot>0.0 && lot2u>0.0 && zone_ok && turning_ok){
       if(z>=entZ){ // 主売り・従買い
          trade.Sell(lot,sym,SymbolInfoDouble(sym,SYMBOL_BID),0,0,pMain);
          trade.Buy(lot2u,sec,SymbolInfoDouble(sec,SYMBOL_ASK),0,0,pSec);
@@ -2704,6 +2770,9 @@ void ProcPair(int i)
    } else if(st==-1){
       if(z<=S[i].exitZ || z>=S[i].stopZ || PairHeldTooLong(i,tf)) CloseSleeveAll(i);
    }
+   // 第19報: z を計算できた評価バーで必ず更新する（保有中も含む）。
+   // 既定 false では1バイトも書かない。
+   if(PairRequireZTurning){ S[i].zPrev=z; S[i].zPrevValid=true; }
 }
 
 // 保有上限（第15報・既定0で無効）。枠のどれかの建玉が上限本数を超えたら真。
