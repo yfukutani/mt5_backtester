@@ -342,13 +342,28 @@ def check(row):
     exp, got = EXPECT[key], float(row["net"])
     rel = abs(got - exp) / abs(exp)
     verdict = "EXACT" if abs(got - exp) < 1.0 else f"rel={rel:.5%}"
+    # 🔴 **主は pt（幾何月利の差）。純益% は括弧で併記する。**
+    #    純益% は採否を判断する単位ではない。`M003` は純益% で OOS −0.041% / IS +3.877%
+    #    ＝95倍に見えるが、**pt では −0.0007pt / +0.0693pt** で、
+    #    「OOS は無視できる / IS は候補の効き幅と同オーダー」という別の話になる。
+    #    （`T001` の +0.011pt の6倍、合成 `W005` の +0.106pt と同オーダー。
+    #     **摂動が候補の効き幅と同じ大きさだから、許容幅では吸収できない。**）
+    months = m3.WINDOWS[row["window"]][2]
+    pt = ""
+    try:
+        fb_got = float(row["final_balance"])
+        gg = ((fb_got / m3.DEPOSIT) ** (1.0 / months) - 1.0) * 100.0
+        ge = (((exp + m3.DEPOSIT) / m3.DEPOSIT) ** (1.0 / months) - 1.0) * 100.0
+        pt = f" 幾何月利 {gg:.5f}%(期待{ge:.5f}%) diff={gg - ge:+.4f}pt"
+    except (TypeError, ValueError, KeyError):
+        pass
     # **取引数も必ず出す。** 純益だけ見ていると「丸め差」と「注文が反転した」を区別できない。
     t_exp = EXPECT_TRADES.get(key)
     t_got = int(float(row.get("trades") or 0))
     t_note = "" if t_exp is None else (
         f" trades={t_got}(期待{t_exp}, 差{t_got - t_exp:+d})")
-    m3.log(f"REGRESSION {key} expected={exp} got={got} diff={got - exp:+.0f} "
-           f"-> {verdict}{t_note}")
+    m3.log(f"REGRESSION {key}{pt} | 純益 expected={exp} got={got} "
+           f"diff={got - exp:+.0f} -> {verdict}{t_note}")
     if t_exp is not None and t_got != t_exp:
         m3.log("REGRESSION_TRADES 🔴 取引数が動いた＝丸め差ではなく注文が反転している。"
                "原因（EA差 / テスターの非決定性）はこの1本では切り分けられない")
