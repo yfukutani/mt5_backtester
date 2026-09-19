@@ -640,6 +640,32 @@ input int    RsiMechMask_UJ = 0;
 input int    RsiMechMask_EU = 0;
 input int    RsiMechMask_GU = 0;
 
+input group "=== RSI の機構別 TP（第25報・0=現行）==="
+// 【なぜ入れたか】Codex の棚卸し（docs/codex_oafx_inventory_20260919.md）に残っている
+// 最後の未測定軸。現行は R/B/D の3機構が OR で入口に同居し、**退出は共通の固定 TP ひとつ**
+// しか持っていない（EA の tpd）。「BB 回帰で入った玉と、ダブルボトムで入った玉が、
+// 同じ距離で利確する理由は無い」というのが動機である。
+//
+// 【第1段階は TP だけ。SL は触らない。】Codex の助言に従う——
+// SL を動かすと `risk%` の分母（lot = リスク額 ÷ SL距離）が変わるので、
+// **「退出設計の効果」と「重みづけの変化」が混ざって因果が読めなくなる。**
+// SL を固定したままなら、変わるのは勝率と実現RR だけである。
+//
+// 【使い方】`RsiTpMask_*` に**組み合わせコードのビットマスク**（`RsiMechMask_*` と同じ規約）
+// を入れると、**そのコードで発火した玉だけ** TP を `RsiTpMult_*` 倍にする。
+//   コード = (R?1:0) | (B?2:0) | (D?4:0)   マスク = OR( 1 << (コード-1) )
+//   例: D を含む全部(4,5,6,7) = 120 / B 単独 = 2 / 全部 = 127
+// **マスク 0 で完全に無効**（1ビットも挙動が変わらない）。
+//
+// ⚠️ **マスク127（全コード）の点を必ず対照に置くこと。** それが無いと、
+//    「機構別にしたから効いた」のか「単にこの枠の TP を伸ばしたから効いた」のかが分離できない。
+input int    RsiTpMask_UJ = 0;      // 0で無効。1..127
+input double RsiTpMult_UJ = 1.0;    // マスクに当たった玉の TP 倍率
+input int    RsiTpMask_EU = 0;
+input double RsiTpMult_EU = 1.0;
+input int    RsiTpMask_GU = 0;
+input double RsiTpMult_GU = 1.0;
+
 input group "=== PB 入口の律速を割る計装（第16報・false=現行）==="
 // 第14報で PB GBPJPY の ADX を 30→22.5 まで下げても 115か月で取引が5件しか増えなかった。
 // **律速は ADX ではない。** だが「では何か」を推測で潰すのは第14報で21案を空振りした形なので、
@@ -1076,6 +1102,18 @@ int OnInit()
    if(ScaBEMask<0 || ScaBEMask>3)
    {
       Print("ScaBEMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(RsiTpMask_UJ<0 || RsiTpMask_UJ>127 ||
+      RsiTpMask_EU<0 || RsiTpMask_EU>127 ||
+      RsiTpMask_GU<0 || RsiTpMask_GU>127)
+   {
+      Print("RsiTpMask_* must be 0..127 (0=無効)");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(RsiTpMult_UJ<=0.0 || RsiTpMult_EU<=0.0 || RsiTpMult_GU<=0.0)
+   {
+      Print("RsiTpMult_* must be > 0");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(ScaRR_UJ<0.0 || ScaRR_GJ<0.0)
@@ -2741,6 +2779,13 @@ void ProcRSI(int i)
       tagS="RSI:"; if(rsell) tagS+="R"; if(bsell) tagS+="B"; if(dps) tagS+="D";
    }
 
+   // 機構別 TP（第25報）。**SL距離 `sld` は触らない**ので risk% の分母は不変。
+   // 既定（マスク0）では倍率 1.0 が返るので `tpd` と完全に同じ値になる。
+   int    codeB=(rbuy?1:0)|(bbuy?2:0)|(dpb?4:0);
+   int    codeS=(rsell?1:0)|(bsell?2:0)|(dps?4:0);
+   double tpdB =tpd*RsiTpFactor(i,codeB);
+   double tpdS =tpd*RsiTpFactor(i,codeS);
+
    if(eb && !hb){
       if(hs && nf==1){
          // 何もしない。保有を続け、このシグナルは消費しない（次のバーで再判定される）。
@@ -2749,7 +2794,7 @@ void ProcRSI(int i)
          if(!(hs && nf==2)){
             double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
             double lot=LotRisk(i,sld);
-            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpd,S[i].digits),tagB);
+            if(lot>0.0) trade.Buy(lot,sym,ask,NormalizeDouble(ask-sld,S[i].digits),NormalizeDouble(ask+tpdB,S[i].digits),tagB);
          }
          if(rbuy) S[i].wasOS=false; if(bbuy) S[i].belowBB=false;
       }
@@ -2762,7 +2807,7 @@ void ProcRSI(int i)
          if(!(hb && nf==2)){
             double bid=SymbolInfoDouble(sym,SYMBOL_BID);
             double lot=LotRisk(i,sld);
-            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpd,S[i].digits),tagS);
+            if(lot>0.0) trade.Sell(lot,sym,bid,NormalizeDouble(bid+sld,S[i].digits),NormalizeDouble(bid-tpdS,S[i].digits),tagS);
          }
          if(rsell) S[i].wasOB=false; if(bsell) S[i].aboveBB=false;
       }
@@ -2793,6 +2838,20 @@ bool RsiMechAllowed(const int i,const bool r,const bool b,const bool d)
    int code=(r?1:0)|(b?2:0)|(d?4:0);
    if(code==0) return false;
    return ((mask>>(code-1))&1)!=0;
+}
+
+// RSI の機構別 TP 倍率（第25報）。マスク 0 のあいだは 1.0 を返し、1バイトも挙動を変えない。
+// **SL は呼び出し側で触らない**ので、`risk%` の分母（＝1取引の重み）は不変である。
+double RsiTpFactor(const int i,const int code)
+{
+   int    mask=0;
+   double mult=1.0;
+   if(S[i].magic==20260610)      { mask=RsiTpMask_UJ; mult=RsiTpMult_UJ; }
+   else if(S[i].magic==20260605) { mask=RsiTpMask_EU; mult=RsiTpMult_EU; }
+   else if(S[i].magic==20260774) { mask=RsiTpMask_GU; mult=RsiTpMult_GU; }
+   else return 1.0;                                   // RSI枠以外は素通し
+   if(mask==0 || mult<=0.0 || code<1 || code>7) return 1.0;
+   return (((mask>>(code-1))&1)!=0) ? mult : 1.0;
 }
 
 // ドテン制御を枠に適用するか（第14報）。マスク0は「モードが立っていれば全RSI枠」。
