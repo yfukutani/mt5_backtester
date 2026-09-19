@@ -18,9 +18,23 @@ $py      = 'C:\Users\f\AppData\Local\Programs\Python\Python314\python.exe'
 $med     = 'C:\Program Files\OANDA MetaTrader 5_BT1\MetaEditor64.exe'
 $experts = 'C:\Users\f\AppData\Roaming\MetaQuotes\Terminal\6142D304BFF2E6AB353977162D6F452C\MQL5\Experts'
 $log     = Join-Path $repo 'ml\fxoanda4\chain.log'
-# 🔴 XM 側のラウンドは **ml\fxmargin3\measure.lock を共有**している（m3.ROOT を上書きしていない）。
-#    こちらは m3.ROOT を fxoanda4 にしてロックが独立しているので、
-#    **共有ロックを明示的に見ないと排他されない。**
+# XM 側のラウンドは ml\fxmargin3\measure.lock を共有している（m3.ROOT を上書きしていない）。
+# こちらは m3.ROOT を fxoanda4 にしてロックが独立しているので、共有ロックを明示的に見る。
+#
+# ⚠️ **独立ロックは「バグ」ではない。意図的な設計であり、根拠も正しい。**
+#    `fxmargin3.kill()` は `$_.Path -like '<EXEのフォルダ>\*'` で絞っており、
+#    **同一インストールのテスターしか落とさない。** XM と OANDA は別インストールなので
+#    **kill のスコープが重ならず、独立ロックで並行して走らせて安全**である
+#    （`ml/fxoanda3/measure.py` 62行目の設計意図どおり）。
+#
+# 🔴 **いま直列化しているのは、ロック設計の問題ではなく物理メモリが足りないから。**
+#    FX 9枠・115か月の1テスターが 12.5GB 使い、空きは 2.2〜3.2GB しかない。
+#    **メモリに余裕ができたら、この共有ロック待ちは外して並行に戻してよい。**
+#
+# なお `acquire_lock()` は `main()` の先頭で取って `finally` で外すまで
+# **ラウンド全体を通して保持される**ので、run と run の間に滑り込むことはできない。
+# **空くのはラウンドとラウンドの間**（chain.ps1 が次を起こすまで）なので、
+# 先行チェーンの CHAIN_END も併せて見る必要がある。
 $xmLock  = Join-Path $repo 'ml\fxmargin3\measure.lock'
 # 先行チェーン。どれかが未完了なら待つ。あとから足せるように配列で持つ。
 $prevLogs = @(
