@@ -87,7 +87,7 @@ if (-not ($hasA -and $hasB -and $same -and $fresh)) {
 Remove-Item $lock -Force -ErrorAction SilentlyContinue
 Say 'LOCK_RELEASED measure.py に渡す'
 
-Say 'FXQUAL17 を開始する（倍率1/2/3 x Carry あり/抜き・cap90・12run・全 run が回帰試験）'
+Say 'FXQUAL17 を開始する（倍率1/2/3 x Carry あり/抜き・cap90・16run・全 run が回帰試験）'
 Set-Location $repo
 & $py 'ml\fxqual17\measure.py' 2>&1 | Add-Content -Path $log -Encoding utf8
 Say ("CHAIN_END exit={0}" -f $LASTEXITCODE)

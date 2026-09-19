@@ -107,12 +107,13 @@ CAND = {
 }
 
 
-def cfg(mult, carry=True):
+def cfg(mult, carry=True, cap=90, **over):
     p = dict(BASE, FxRiskMask=31, FxRiskPct=0.5, FxRiskRefCap=0,
              GlobalLotMult=mult, RefCap_PB_USDJPY=0, RefCap_PB_GBPJPY=0,
-             RefCap_CARRY=0, MarginCapPct=90, **CAND)
+             RefCap_CARRY=0, MarginCapPct=cap, **CAND)
     if not carry:
         p["En_CARRY"] = False
+    p.update(over)
     return p
 
 
@@ -130,10 +131,23 @@ PROPOSALS = [
      {"OOS": 2282372, "IS": 6539921}),
     ("M006", "fxqual14/V013", "倍率3・cap90・Carry 抜き（= V013）", cfg(3, False),
      {"OOS": 3017380, "IS": 20310786}),
+
+    # --- 第15ラウンドで唯一生き残った候補（`W005`）とその対照。cap=0 で測る ---
+    # ⚠️ `ml/fxqual15` は `MarginCapPct=0` で走っているので、**cap90 にすると
+    #    別構成になって回帰試験にならない。** 期待値を持たせるため cap=0 で揃える。
+    # **cap=0 は「発注時の制約すら無い」ので、維持率はここでいちばん低く出るはず。**
+    ("M007", "fxqual15/W000", "対照・倍率1・**cap=0**（= W000）", cfg(1, cap=0),
+     {"OOS": 1431459, "IS": 4845523}),
+    ("M008", "fxqual15/W005",
+     "**合成 T001＋T008・倍率1・cap=0（= W005）。唯一の生存候補の維持率**",
+     cfg(1, cap=0, RsiTpMask_UJ=120, RsiTpMult_UJ=1.5,
+         RsiTpMask_EU=2, RsiTpMult_EU=1.5),
+     {"OOS": 1544482, "IS": 4873585}),
 ]
 
 # 倍率3 から測る。いちばん割っている可能性が高く、判定に効くのが先に出る。
-ORDER = ["M003", "M006", "M002", "M005", "M001", "M004"]
+# 候補（M007/M008）は最後。倍率1・cap=0 なので割る可能性はいちばん低い。
+ORDER = ["M003", "M006", "M002", "M005", "M001", "M004", "M007", "M008"]
 
 
 def main():
