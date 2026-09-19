@@ -283,6 +283,14 @@ JOBS = [
 
 # 回帰の期待値（fxoanda3/results.csv 実測）。Carry を外しているのでスワップ・ドリフトは無い。
 EXPECT = {("O000", "OOS"): 9188767.0}
+EXPECT_TRADES = {("O000", "OOS"): 1236}
+# 🔴 **「1円一致」は期待しない。** 並行セッションの `M003 OOS` が、
+#    受動的なはずの計装を入れただけで **−2,234円（0.041%）・取引 1179→1178** になった。
+#    **取引数が1件動いている**ので、これは丸め差ではなく**注文が1件反転している。**
+#    （仮説: `AccountInfoDouble(ACCOUNT_MARGIN_LEVEL)` の読み出しが
+#      テスター側の証拠金再計算を誘発し、cap 境界の注文の可否が反転した。
+#      **未確認。** 切り分けは「同じバイナリで同じ run をもう一度走らせる」——
+#      再現すればテスターは決定的で原因は EA 差、ばらつけばテスター側の非決定性。）
 TOL = 0.005
 
 
@@ -296,7 +304,16 @@ def check(row):
     exp, got = EXPECT[key], float(row["net"])
     rel = abs(got - exp) / abs(exp)
     verdict = "EXACT" if abs(got - exp) < 1.0 else f"rel={rel:.5%}"
-    m3.log(f"REGRESSION {key} expected={exp} got={got} -> {verdict}")
+    # **取引数も必ず出す。** 純益だけ見ていると「丸め差」と「注文が反転した」を区別できない。
+    t_exp = EXPECT_TRADES.get(key)
+    t_got = int(float(row.get("trades") or 0))
+    t_note = "" if t_exp is None else (
+        f" trades={t_got}(期待{t_exp}, 差{t_got - t_exp:+d})")
+    m3.log(f"REGRESSION {key} expected={exp} got={got} diff={got - exp:+.0f} "
+           f"-> {verdict}{t_note}")
+    if t_exp is not None and t_got != t_exp:
+        m3.log("REGRESSION_TRADES 🔴 取引数が動いた＝丸め差ではなく注文が反転している。"
+               "原因（EA差 / テスターの非決定性）はこの1本では切り分けられない")
     if rel > TOL:
         # ⚠️ 止めない。原因が (a)EA版 か (b)非決定性 か、この1本では切り分けられないため、
         #    残りを走らせて**本ラウンド内で閉じた比較**を作るほうが価値が高い。
