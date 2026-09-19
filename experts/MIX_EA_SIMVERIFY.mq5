@@ -704,6 +704,31 @@ input int    ScaRevOnlyMask    = 0;   // bitを立てた枠は「リバーサル
 input int    ScaRevDropMask    = 0;   // 逆に「リバーサル条件が成立した足」だけ建てない（反証対照）
                                       // 両方とも bit0=SCA USDJPY(20261000) bit1=SCA GBPJPY(20261001)
 
+input group "=== SCA の TP の R倍率と入口 overshoot 上限（第23報・0=現行）==="
+// 【なぜ入れたか】親枠2つの `rr` は 2.0 のハードコードで input が無く、一度も掃引していない
+// （Codex の棚卸し docs/codex_oafx_inventory_20260919.md）。入口も「レンジ端＋buffer を
+// 超えたか」の**下限しか見ておらず上限が無い**ので、行き過ぎた初動をそのまま買う。
+//
+// 【測る前に分かっていること（`ml/fxqualexec` の E000 deal ログ・第23報）】
+// SCA の退出は 22時の強制決済が主で、**TP(2R) が発火するのは 1.0〜7.1% しかない。**
+// 実現 R倍率の最大値は TP の 2.000R ちょうどで、**2R を超えて走った取引は1件も無い。**
+// したがって **rr を上げる方向は 93〜99% の取引に対して no-op** であり、
+// 効くのは「いま 2R で利確している 1〜7%」だけである。
+// rr を下げる方向は、実現 R倍率を k で切った下界が両窓ともマイナス
+// （OOS GBPJPY 426,099 → −304,632 @1R）。**事前期待は上下とも 0 付近から下。**
+//
+// 【overshoot の符号について】overshoot が大きい取引は `dist=|entry−SL|` も大きく、
+// risk% では **lot が小さくなる**。つまりこの上限は「重みの軽い取引」を落とす。
+// `ScaFilRangeMin`（重みの重い取引を落とす）とは**逆向き**で、ブックへの効きは小さいはず。
+//
+// どちらも既定 0 で**1バイトも挙動を変えない**（回帰試験で確認すること）。
+input double ScaRR_UJ       = 0.0;   // >0 で SCA USDJPY(20261000) の TP を rr×SL距離 に上書き。0=現行2.0
+input double ScaRR_GJ       = 0.0;   // 同 SCA GBPJPY(20261001)
+input double ScaOvsATR_UJ   = 0.0;   // >0 で「ブレイク終値のレンジ端からの超過幅 ÷ ATR」の上限。0で無効
+input double ScaOvsATR_GJ   = 0.0;   // 同 GBPJPY
+                                     // ⚠️ 超過幅は buffer を含む。USDJPY は buffer=0.10×ATR なので
+                                     //    0.10 以下を指定すると全取引が消える。GBPJPY は buffer=0。
+
 input group "=== 出力（検証用・ライブでは空でOK）==="
 input string ResultFileName = "";
 input string EquityLogFile  = "";
@@ -1051,6 +1076,22 @@ int OnInit()
    if(ScaBEMask<0 || ScaBEMask>3)
    {
       Print("ScaBEMask must be 0..3");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaRR_UJ<0.0 || ScaRR_GJ<0.0)
+   {
+      Print("ScaRR_UJ / ScaRR_GJ must be >= 0 (0=枠の既定2.0を使う)");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   if(ScaOvsATR_UJ<0.0 || ScaOvsATR_GJ<0.0)
+   {
+      Print("ScaOvsATR_UJ / ScaOvsATR_GJ must be >= 0 (0で無効)");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   // USDJPY の buffer は 0.10×ATR。上限がそれ以下だと1本も通らないので、事故を止める。
+   if(ScaOvsATR_UJ>0.0 && ScaOvsATR_UJ<=0.10)
+   {
+      Print("ScaOvsATR_UJ must be > 0.10 (buffer と同値以下では全取引が消える)");
       return INIT_PARAMETERS_INCORRECT;
    }
    if(Pb2Enable && Pb2Timeframe()==0)
@@ -1981,6 +2022,27 @@ bool ScaRevGateOK(const int i,const bool rev)
    if(((ScaRevOnlyMask>>bit)&1)!=0 && !rev) return false;   // 逆張り足だけ建てる
    if(((ScaRevDropMask>>bit)&1)!=0 &&  rev) return false;   // 逆張り足だけ建てない（反証対照）
    return true;
+}
+
+// SCA の TP の R倍率（第23報）。input が 0 のあいだは枠の既定 `S[i].rr` をそのまま返す。
+double ScaRROver(const int i)
+{
+   long m=S[i].magic;
+   if(m==20261000 && ScaRR_UJ>0.0) return ScaRR_UJ;
+   if(m==20261001 && ScaRR_GJ>0.0) return ScaRR_GJ;
+   return S[i].rr;
+}
+
+// SCA の入口 overshoot 上限（第23報）。`ovs` はブレイク終値のレンジ端からの超過幅（価格）。
+// **buffer を含む**ので、上限は buffer より大きくないと1本も通らない。
+bool ScaOvsOK(const int i,const double ovs,const double atrd)
+{
+   long m=S[i].magic;
+   double cap=0.0;
+   if(m==20261000)      cap=ScaOvsATR_UJ;
+   else if(m==20261001) cap=ScaOvsATR_GJ;
+   if(cap<=0.0 || atrd<=0.0) return true;   // 0 で無効。ATRが引けないときは黙って通す
+   return (ovs <= cap*atrd);
 }
 
 // SCAの基本ロット。FXRISK(useRisk) / GSZ で risk% 化されていればそちらを使う。
@@ -3379,6 +3441,7 @@ void ProcSCA(int i)
 
    // 上抜けブレイク → 買い
    if(close1>S[i].scaRangeHigh+buffer && !hasB && !S[i].scaTradedL &&
+      ScaOvsOK(i,close1-S[i].scaRangeHigh,atrd) &&
       GoldLabSCADirectionOK(i,true,atrd) && GoldLabEntryOK(i,POSITION_TYPE_BUY)){
       double ask=SymbolInfoDouble(sym,SYMBOL_ASK);
       double sl=S[i].scaRangeLow, dist=ask-sl;
@@ -3387,7 +3450,7 @@ void ProcSCA(int i)
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift<0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;   // リバーサル型
-         double tp=NormalizeDouble(ask+S[i].rr*dist,S[i].digits);
+         double tp=NormalizeDouble(ask+ScaRROver(i)*dist,S[i].digits);
          double lotL=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
          if(lotL>0.0 && trade.Buy(lotL,sym,ask,NormalizeDouble(sl,S[i].digits),tp,"SCA-L"))
             S[i].scaTradedL=true;
@@ -3395,6 +3458,7 @@ void ProcSCA(int i)
    }
    // 下抜けブレイク → 売り
    if(close1<S[i].scaRangeLow-buffer && !hasS && !S[i].scaTradedS &&
+      ScaOvsOK(i,S[i].scaRangeLow-close1,atrd) &&
       GoldLabSCADirectionOK(i,false,atrd) && GoldLabEntryOK(i,POSITION_TYPE_SELL)){
       double bid=SymbolInfoDouble(sym,SYMBOL_BID);
       double sl=S[i].scaRangeHigh, dist=sl-bid;
@@ -3403,7 +3467,7 @@ void ProcSCA(int i)
          double lot=ScaBaseLot(i,dist);
          if(S[i].scaRevBoost && S[i].scaDrift>0 &&
             (!GszApplies(i) || GszApplyBoost)) lot*=S[i].scaBoostMult;
-         double tp=NormalizeDouble(bid-S[i].rr*dist,S[i].digits);
+         double tp=NormalizeDouble(bid-ScaRROver(i)*dist,S[i].digits);
          double lotS=Clamp(sym,lot,i);                // A10: capで0になったら発注しない
          if(lotS>0.0 && trade.Sell(lotS,sym,bid,NormalizeDouble(sl,S[i].digits),tp,"SCA-S"))
             S[i].scaTradedS=true;
