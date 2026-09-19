@@ -3,6 +3,11 @@
 mt5_backtester の検証プロジェクトの到達点を1枚に集約。詳細は各docへリンク。
 本番リファレンスは [portfolio.md](portfolio.md)、運用統合EAは [portfolio_ea.md](portfolio_ea.md)。
 
+> 📊 **全EAの性能まとめ（2026-09-15）:** [ALL_EA_performance.md](ALL_EA_performance.md)
+> ——本番ポートフォリオ・枠別・OANDA版・X2_HIGH_RISK・棄却EAを、
+> **損益・想定月利・最大DD**付きで1枚に集約。
+> X2_HIGH_RISK単体は [X2_HIGH_RISK_performance.md](X2_HIGH_RISK_performance.md)。
+
 > ✅ **2026.06.29 ブック確定:** 徹底した探索の末、新規無相関源の追加は収穫逓減の底に到達。
 > 仕切り直し後の補完（守りのオーバーレイ／キャリー横展開／RSI14クロス展開）も全て不成立で、
 > **11枠の本番ブックを最終構成として確定**する（[rejected_strategies.md](rejected_strategies.md)）。
